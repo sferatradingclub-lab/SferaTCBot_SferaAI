@@ -489,14 +489,24 @@ async def display_user_card(update: Update, context: ContextTypes.DEFAULT_TYPE, 
 # =============================================================================
 
 def main() -> None:
+    """Главная функция, которая собирает и запускает бота."""
     if not all([TELEGRAM_TOKEN, ADMIN_CHAT_ID]):
         logger.critical("КРИТИЧЕСКАЯ ОШИБКА: Отсутствуют TELEGRAM_TOKEN или ADMIN_CHAT_ID.")
         return
 
     persistence = PicklePersistence(filepath="bot_data.pickle")
     
-    application = Application.builder().token(TELEGRAM_TOKEN).persistence(persistence).build()
+    # --- НАЧАЛО ИСПРАВЛЕНИЯ ---
+    # Создаем Application Builder
+    builder = Application.builder().token(TELEGRAM_TOKEN).persistence(persistence)
+    
+    # Правильно инициализируем JobQueue
+    job_queue = JobQueue()
+    application = builder.job_queue(job_queue).build()
+    # --- КОНЕЦ ИСПРАВЛЕНИЯ ---
 
+    # --- РЕГИСТРАЦИЯ ОБРАБОТЧИКОВ ---
+    
     # Команды
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("approve", approve_user))
@@ -521,18 +531,24 @@ def main() -> None:
     application.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, handle_message))
 
     # Задачи
-    if not hasattr(application, 'job_queue') or not application.job_queue:
-        job_queue = JobQueue()
-        job_queue.set_application(application)
-        application.job_queue = job_queue
-        
     application.job_queue.run_daily(daily_stats_job, time=time(0, 0), name="daily_stats_report")
     
+    # --- ЗАПУСК БОТА ---
     if WEBHOOK_URL:
         url_path = TELEGRAM_TOKEN.split(':')[-1]
         webhook_full_url = f"{WEBHOOK_URL.rstrip('/')}/{url_path}"
         logger.info(f"Бот @{BOT_USERNAME} запускается через Webhook.")
-        application.run_webhook(listen="0.0.0.0", port=WEBHOOK_PORT, url_path=url_path, webhook_url=webhook_full_url)
+        
+        # Настраиваем вебхук перед запуском
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(application.bot.set_webhook(url=webhook_full_url))
+        
+        application.run_webhook(
+            listen="0.0.0.0",
+            port=WEBHOOK_PORT,
+            url_path=url_path,
+            webhook_url=webhook_full_url
+        )
     else:
         logger.info(f"Бот @{BOT_USERNAME} запускается в режиме Polling.")
         application.run_polling()
