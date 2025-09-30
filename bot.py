@@ -44,12 +44,12 @@ GEM_BOT_2_URL = "https://ссылка_на_полный_курс_будет_зд
 TELEGRAM_CHANNEL_URL = "https://t.me/SferaTC"
 
 # --- ССЫЛКИ НА КАРТИНКИ ---
-WELCOME_IMAGE_URL = "https://i.imgur.com/3mr0sbY.jpeg"
-TRAINING_IMAGE_URL = "https://i.imgur.com/ouBdDqL.jpeg"
-PSYCHOLOGIST_IMAGE_URL = "https://i.imgur.com/zQo6wFX.jpeg"
-CHATGPT_IMAGE_URL = "https://i.imgur.com/vkfnaoi.jpeg"
-SUPPORT_IMAGE_URL = "https://i.imgur.com/hO5twnQ.jpeg"
-TOOLS_IMAGE_URL = "https://i.imgur.com/TljXZ62.jpeg"
+WELCOME_IMAGE_URL = "AgACAgQAAxkBAAEYXopo29bYcM4EuWJk5up3WiGKG8nSoQACI8wxGxD-4VJch-qWOaiCRgEAAwIAA3gAAzYE"
+TRAINING_IMAGE_URL = "AgACAgQAAxkBAAEYXoxo29b6PW1IgwKq3zJdf4kq-qmliAACIswxGxD-4VJbIAOhKve3PAEAAwIAA3gAAzYE"
+PSYCHOLOGIST_IMAGE_URL = "AgACAgQAAxkBAAEYXpJo29clOS-FSN8zZgpuSbQ3-2F2qQACJ8wxGxD-4VKkpaN9NhAhAQEAAwIAA3gAAzYE"
+CHATGPT_IMAGE_URL = "AgACAgQAAxkBAAEYXppo29dHeV5ZgZVp0M5KarNZLgQ1RQACJMwxGxD-4VKAYjqZKk-unwEAAwIAA20AAzYE"
+SUPPORT_IMAGE_URL = "AgACAgQAAxkBAAEYXpxo29dmWSoymKeq_1vdKRLSQP6A6AACJswxGxD-4VJ2lQVtGF7rXQEAAwIAA3gAAzYE"
+TOOLS_IMAGE_URL = "AgACAgQAAxkBAAEYXp5o29eOtpJkbX2hPj8INFCgstrofwACJcwxGxD-4VLOOxrXlyJhpQEAAwIAA3gAAzYE"
 
 # --- ДАННЫЕ ДЛЯ РАЗДЕЛА "ПОЛЕЗНЫЕ ИНСТРУМЕНТЫ" ---
 TOOLS_DATA = {
@@ -57,9 +57,9 @@ TOOLS_DATA = {
         'title': "💰 Скидки на комиссии",
         'intro_text': "В этом разделе собраны лучшие биржи и брокеры. Откройте счет по этим ссылкам, чтобы получить максимальные скидки и экономить на комиссиях!",
         'items': [
-            { 'name': 'Крипто Брокер Tiger.com', 'callback': 'tool_tiger', 'description': 'Единая платформа для торговли на нескольких биржах. Экономьте на комиссиях, ведите автоматический дневник сделок и управляйте рисками.', 'image_url': 'https://i.imgur.com/3RNcZM5.jpeg', 'site_url': 'https://account.tiger.com/signup?referral=sferatc', 'video_url': 'https://www.youtube.com/@sferaTC' },
-            { 'name': 'Крипто Брокер Vataga', 'callback': 'tool_vataga', 'description': 'Торгуйте на всех крупных биржах через одну платформу: продвинутые графики, мультиаккаунт и круглосуточная поддержка.', 'image_url': 'https://i.imgur.com/K2QczWr.jpeg', 'site_url': 'https://app.vataga.trading/register', 'video_url': 'https://www.youtube.com/@sferaTC' },
-            { 'name': 'Крипто Брокер Whitelist', 'callback': 'tool_whitelist', 'description': 'Онлайн-офис для скальперов с мощным торговым терминалом Scalpee для ПК и большим сообществом трейдеров.', 'image_url': 'https://i.imgur.com/JkzwZen.png', 'site_url': 'https://passport.whitelist.capital/', 'video_url': 'https://www.youtube.com/@sferaTC' }
+            { 'name': 'Крипто Брокер Tiger.com', 'callback': 'tool_tiger', 'description': 'Единая платформа для торговли на нескольких биржах. Экономьте на комиссиях, ведите автоматический дневник сделок и управляйте рисками.', 'image_url': 'AgACAgQAAxkBAAEYXoRo29RV6Y8woIgthw_GeQMDqyySPAACIMwxGxD-4VKFGycvX6gGqgEAAwIAA3kAAzYE', 'site_url': 'https://account.tiger.com/signup?referral=sferatc', 'video_url': 'https://www.youtube.com/@sferaTC' },
+            { 'name': 'Крипто Брокер Vataga', 'callback': 'tool_vataga', 'description': 'Торгуйте на всех крупных биржах через одну платформу: продвинутые графики, мультиаккаунт и круглосуточная поддержка.', 'image_url': 'AgACAgQAAxkBAAEYXoZo29XlQX4Dxn8RpSzW8Ll8_HVLIgACKcwxGxD-4VJ9sXI9HQjOVwEAAwIAA3kAAzYE', 'site_url': 'https://app.vataga.trading/register', 'video_url': 'https://www.youtube.com/@sferaTC' },
+            { 'name': 'Крипто Брокер Whitelist', 'callback': 'tool_whitelist', 'description': 'Онлайн-офис для скальперов с мощным торговым терминалом Scalpee для ПК и большим сообществом трейдеров.', 'image_url': 'AgACAgQAAxkBAAEYXoho29YYXxz4Dl58octNx3UHxnyvwwACKMwxGxD-4VIwYsTzQolnnAEAAwIAA3MAAzYE', 'site_url': 'https://passport.whitelist.capital/', 'video_url': 'https://www.youtube.com/@sferaTC' }
         ]
     },
     'screeners': {'title': "📈 Скринеры", 'intro_text': "Выберите скринер:", 'items': []},
@@ -328,7 +328,7 @@ async def tools_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         if selected_tool:
             caption = f"*{selected_tool['name']}*\n\n{selected_tool['description']}"
             keyboard = [[InlineKeyboardButton("🔗 Открыть счет", url=selected_tool['site_url']), InlineKeyboardButton("🎬 Посмотреть обзор", url=selected_tool['video_url'])], [InlineKeyboardButton("⬅️ Назад к списку", callback_data=parent_category_callback)]]
-            media = InputMediaPhoto(media=selected_tool['image_url'], caption=caption, parse_mode='Markdown')
+            media = InputMediaPhoto(media=selected_tool['image_id'], caption=caption, parse_mode='Markdown')
             try:
                 await query.edit_message_media(media=media, reply_markup=InlineKeyboardMarkup(keyboard))
             except TelegramError as e:
