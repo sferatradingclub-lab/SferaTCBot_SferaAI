@@ -44,12 +44,12 @@ GEM_BOT_2_URL = "https://ссылка_на_полный_курс_будет_зд
 TELEGRAM_CHANNEL_URL = "https://t.me/SferaTC"
 
 # --- ССЫЛКИ НА КАРТИНКИ ---
-WELCOME_IMAGE_URL = "AgACAgQAAxkBAAEYXopo29bYcM4EuWJk5up3WiGKG8nSoQACI8wxGxD-4VJch-qWOaiCRgEAAwIAA3gAAzYE"
-TRAINING_IMAGE_URL = "AgACAgQAAxkBAAEYXoxo29b6PW1IgwKq3zJdf4kq-qmliAACIswxGxD-4VJbIAOhKve3PAEAAwIAA3gAAzYE"
-PSYCHOLOGIST_IMAGE_URL = "AgACAgQAAxkBAAEYXpJo29clOS-FSN8zZgpuSbQ3-2F2qQACJ8wxGxD-4VKkpaN9NhAhAQEAAwIAA3gAAzYE"
-CHATGPT_IMAGE_URL = "AgACAgQAAxkBAAEYXppo29dHeV5ZgZVp0M5KarNZLgQ1RQACJMwxGxD-4VKAYjqZKk-unwEAAwIAA20AAzYE"
-SUPPORT_IMAGE_URL = "AgACAgQAAxkBAAEYXpxo29dmWSoymKeq_1vdKRLSQP6A6AACJswxGxD-4VJ2lQVtGF7rXQEAAwIAA3gAAzYE"
-TOOLS_IMAGE_URL = "AgACAgQAAxkBAAEYXp5o29eOtpJkbX2hPj8INFCgstrofwACJcwxGxD-4VLOOxrXlyJhpQEAAwIAA3gAAzYE"
+WELCOME_IMAGE_ID = "AgACAgQAAxkBAAEYXopo29bYcM4EuWJk5up3WiGKG8nSoQACI8wxGxD-4VJch-qWOaiCRgEAAwIAA3gAAzYE"
+TRAINING_IMAGE_ID = "AgACAgQAAxkBAAEYXoxo29b6PW1IgwKq3zJdf4kq-qmliAACIswxGxD-4VJbIAOhKve3PAEAAwIAA3gAAzYE"
+PSYCHOLOGIST_IMAGE_ID = "AgACAgQAAxkBAAEYXpJo29clOS-FSN8zZgpuSbQ3-2F2qQACJ8wxGxD-4VKkpaN9NhAhAQEAAwIAA3gAAzYE"
+CHATGPT_IMAGE_ID = "AgACAgQAAxkBAAEYXppo29dHeV5ZgZVp0M5KarNZLgQ1RQACJMwxGxD-4VKAYjqZKk-unwEAAwIAA20AAzYE"
+SUPPORT_IMAGE_ID = "AgACAgQAAxkBAAEYXpxo29dmWSoymKeq_1vdKRLSQP6A6AACJswxGxD-4VJ2lQVtGF7rXQEAAwIAA3gAAzYE"
+TOOLS_IMAGE_ID = "AgACAgQAAxkBAAEYXp5o29eOtpJkbX2hPj8INFCgstrofwACJcwxGxD-4VLOOxrXlyJhpQEAAwIAA3gAAzYE"
 
 # --- ДАННЫЕ ДЛЯ РАЗДЕЛА "ПОЛЕЗНЫЕ ИНСТРУМЕНТЫ" ---
 TOOLS_DATA = {
@@ -117,7 +117,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         
         keyboard = [[InlineKeyboardButton("✅ Подписаться на канал", url=TELEGRAM_CHANNEL_URL)]]
         await update.message.reply_photo(
-            photo=WELCOME_IMAGE_URL,
+            photo=WELCOME_IMAGE_ID,
             caption=(
                 f"Привет, {user.first_name}!\n\n"
                 "Добро пожаловать в экосистему SferaTC. Здесь ты найдешь все для успешного старта в трейдинге.\n\n"
