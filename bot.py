@@ -44,7 +44,7 @@ AI_PSYCHOLOGIST_URL = "https://chatgpt.com/g/g-68bb703f9a3881918d51f97375d7d128-
 GEM_BOT_2_URL = "https://ссылка_на_полный_курс_будет_здесь"
 TELEGRAM_CHANNEL_URL = "https://t.me/SferaTC"
 
-# --- FILE_ID ДЛЯ КАРТИНОК (ЗАМЕНИТЬ НА РЕАЛЬНЫЕ) ---
+# --- FILE_ID ДЛЯ КАРТИНОК ---
 WELCOME_IMAGE_ID = "AgACAgQAAxkBAAEYXopo29bYcM4EuWJk5up3WiGKG8nSoQACI8wxGxD-4VJch-qWOaiCRgEAAwIAA3gAAzYE"
 TRAINING_IMAGE_ID = "AgACAgQAAxkBAAEYXoxo29b6PW1IgwKq3zJdf4kq-qmliAACIswxGxD-4VJbIAOhKve3PAEAAwIAA3gAAzYE"
 PSYCHOLOGIST_IMAGE_ID = "AgACAgQAAxkBAAEYXpJo29clOS-FSN8zZgpuSbQ3-2F2qQACJ8wxGxD-4VKkpaN9NhAhAQEAAwIAA3gAAzYE"
@@ -58,9 +58,9 @@ TOOLS_DATA = {
         'title': "💰 Скидки на комиссии",
         'intro_text': "В этом разделе собраны лучшие биржи и брокеры. Откройте счет по этим ссылкам, чтобы получить максимальные скидки и экономить на комиссиях!",
         'items': [
-            {'name': 'Крипто Брокер Tiger.com', 'callback': 'tool_tiger', 'description': 'Единая платформа для торговли на нескольких биржах. Экономьте на комиссиях, ведите автоматический дневник сделок и управляйте рисками.', 'image_id': 'AgACAgQAAxkBAAEYXoRo29RV6Y8woIgthw_GeQMDqyySPAACIMwxGxD-4VKFGycvX6gGqgEAAwIAA3kAAzYE', 'site_url': 'https://account.tiger.com/signup?referral=sferatc', 'video_url': 'https://www.youtube.com/@sferaTC'},
-            {'name': 'Крипто Брокер Vataga', 'callback': 'tool_vataga', 'description': 'Торгуйте на всех крупных биржах через одну платформу: продвинутые графики, мультиаккаунт и круглосуточная поддержка.', 'image_id': 'AgACAgQAAxkBAAEYXoZo29XlQX4Dxn8RpSzW8Ll8_HVLIgACKcwxGxD-4VJ9sXI9HQjOVwEAAwIAA3kAAzYE', 'site_url': 'https://app.vataga.trading/register', 'video_url': 'https://www.youtube.com/@sferaTC'},
-            {'name': 'Крипто Брокер Whitelist', 'callback': 'tool_whitelist', 'description': 'Онлайн-офис для скальперов с мощным торговым терминалом Scalpee для ПК и большим сообществом трейдеров.', 'image_id': 'AgACAgQAAxkBAAEYXoho29YYXxz4Dl58octNx3UHxnyvwwACKMwxGxD-4VIwYsTzQolnnAEAAwIAA3MAAzYE', 'site_url': 'https://passport.whitelist.capital/', 'video_url': 'https://www.youtube.com/@sferaTC'}
+            { 'name': 'Крипто Брокер Tiger.com', 'callback': 'tool_tiger', 'description': 'Единая платформа для торговли на нескольких биржах. Экономьте на комиссиях, ведите автоматический дневник сделок и управляйте рисками.', 'image_id': 'AgACAgQAAxkBAAEYXoRo29RV6Y8woIgthw_GeQMDqyySPAACIMwxGxD-4VKFGycvX6gGqgEAAwIAA3kAAzYE', 'site_url': 'https://account.tiger.com/signup?referral=sferatc', 'video_url': 'https://www.youtube.com/@sferaTC' },
+            { 'name': 'Крипто Брокер Vataga', 'callback': 'tool_vataga', 'description': 'Торгуйте на всех крупных биржах через одну платформу: продвинутые графики, мультиаккаунт и круглосуточная поддержка.', 'image_id': 'AgACAgQAAxkBAAEYXoZo29XlQX4Dxn8RpSzW8Ll8_HVLIgACKcwxGxD-4VJ9sXI9HQjOVwEAAwIAA3kAAzYE', 'site_url': 'https://app.vataga.trading/register', 'video_url': 'https://www.youtube.com/@sferaTC' },
+            { 'name': 'Крипто Брокер Whitelist', 'callback': 'tool_whitelist', 'description': 'Онлайн-офис для скальперов с мощным торговым терминалом Scalpee для ПК и большим сообществом трейдеров.', 'image_id': 'AgACAgQAAxkBAAEYXoho29YYXxz4Dl58octNx3UHxnyvwwACKMwxGxD-4VIwYsTzQolnnAEAAwIAA3MAAzYE', 'site_url': 'https://passport.whitelist.capital/', 'video_url': 'https://www.youtube.com/@sferaTC' }
         ]
     },
     'screeners': {'title': "📈 Скринеры", 'intro_text': "Выберите скринер:", 'items': []},
@@ -521,9 +521,11 @@ def main() -> None:
     application.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, handle_message))
 
     # Задачи
-    if not application.job_queue:
-        application.job_queue = JobQueue()
-        application.job_queue.set_application(application)
+    if not hasattr(application, 'job_queue') or not application.job_queue:
+        job_queue = JobQueue()
+        job_queue.set_application(application)
+        application.job_queue = job_queue
+        
     application.job_queue.run_daily(daily_stats_job, time=time(0, 0), name="daily_stats_report")
     
     if WEBHOOK_URL:
