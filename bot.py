@@ -11,7 +11,8 @@ from telegram.ext import (
     filters,
     ContextTypes,
     CallbackQueryHandler,
-    PicklePersistence
+    PicklePersistence,
+    JobQueue
 )
 from telegram.error import TelegramError
 from dotenv import load_dotenv
@@ -37,13 +38,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# --- ССЫЛКИ НА ВНЕШНИЕ РЕСУРСЫ И МЕДИА ---
+# --- ССЫЛКИ И FILE_ID ---
 GEM_BOT_1_URL = "https://chatgpt.com/g/g-68d9b0f1d07c8191bba533ecfb9d1689-sferatc-lessons"
 AI_PSYCHOLOGIST_URL = "https://chatgpt.com/g/g-68bb703f9a3881918d51f97375d7d128-sferatc-ai"
 GEM_BOT_2_URL = "https://ссылка_на_полный_курс_будет_здесь"
 TELEGRAM_CHANNEL_URL = "https://t.me/SferaTC"
 
-# --- ССЫЛКИ НА КАРТИНКИ ---
+# --- FILE_ID ДЛЯ КАРТИНОК (ЗАМЕНИТЬ НА РЕАЛЬНЫЕ) ---
 WELCOME_IMAGE_ID = "AgACAgQAAxkBAAEYXopo29bYcM4EuWJk5up3WiGKG8nSoQACI8wxGxD-4VJch-qWOaiCRgEAAwIAA3gAAzYE"
 TRAINING_IMAGE_ID = "AgACAgQAAxkBAAEYXoxo29b6PW1IgwKq3zJdf4kq-qmliAACIswxGxD-4VJbIAOhKve3PAEAAwIAA3gAAzYE"
 PSYCHOLOGIST_IMAGE_ID = "AgACAgQAAxkBAAEYXpJo29clOS-FSN8zZgpuSbQ3-2F2qQACJ8wxGxD-4VKkpaN9NhAhAQEAAwIAA3gAAzYE"
@@ -57,9 +58,9 @@ TOOLS_DATA = {
         'title': "💰 Скидки на комиссии",
         'intro_text': "В этом разделе собраны лучшие биржи и брокеры. Откройте счет по этим ссылкам, чтобы получить максимальные скидки и экономить на комиссиях!",
         'items': [
-            { 'name': 'Крипто Брокер Tiger.com', 'callback': 'tool_tiger', 'description': 'Единая платформа для торговли на нескольких биржах. Экономьте на комиссиях, ведите автоматический дневник сделок и управляйте рисками.', 'image_url': 'AgACAgQAAxkBAAEYXoRo29RV6Y8woIgthw_GeQMDqyySPAACIMwxGxD-4VKFGycvX6gGqgEAAwIAA3kAAzYE', 'site_url': 'https://account.tiger.com/signup?referral=sferatc', 'video_url': 'https://www.youtube.com/@sferaTC' },
-            { 'name': 'Крипто Брокер Vataga', 'callback': 'tool_vataga', 'description': 'Торгуйте на всех крупных биржах через одну платформу: продвинутые графики, мультиаккаунт и круглосуточная поддержка.', 'image_url': 'AgACAgQAAxkBAAEYXoZo29XlQX4Dxn8RpSzW8Ll8_HVLIgACKcwxGxD-4VJ9sXI9HQjOVwEAAwIAA3kAAzYE', 'site_url': 'https://app.vataga.trading/register', 'video_url': 'https://www.youtube.com/@sferaTC' },
-            { 'name': 'Крипто Брокер Whitelist', 'callback': 'tool_whitelist', 'description': 'Онлайн-офис для скальперов с мощным торговым терминалом Scalpee для ПК и большим сообществом трейдеров.', 'image_url': 'AgACAgQAAxkBAAEYXoho29YYXxz4Dl58octNx3UHxnyvwwACKMwxGxD-4VIwYsTzQolnnAEAAwIAA3MAAzYE', 'site_url': 'https://passport.whitelist.capital/', 'video_url': 'https://www.youtube.com/@sferaTC' }
+            {'name': 'Крипто Брокер Tiger.com', 'callback': 'tool_tiger', 'description': 'Единая платформа для торговли на нескольких биржах. Экономьте на комиссиях, ведите автоматический дневник сделок и управляйте рисками.', 'image_id': 'AgACAgQAAxkBAAEYXoRo29RV6Y8woIgthw_GeQMDqyySPAACIMwxGxD-4VKFGycvX6gGqgEAAwIAA3kAAzYE', 'site_url': 'https://account.tiger.com/signup?referral=sferatc', 'video_url': 'https://www.youtube.com/@sferaTC'},
+            {'name': 'Крипто Брокер Vataga', 'callback': 'tool_vataga', 'description': 'Торгуйте на всех крупных биржах через одну платформу: продвинутые графики, мультиаккаунт и круглосуточная поддержка.', 'image_id': 'AgACAgQAAxkBAAEYXoZo29XlQX4Dxn8RpSzW8Ll8_HVLIgACKcwxGxD-4VJ9sXI9HQjOVwEAAwIAA3kAAzYE', 'site_url': 'https://app.vataga.trading/register', 'video_url': 'https://www.youtube.com/@sferaTC'},
+            {'name': 'Крипто Брокер Whitelist', 'callback': 'tool_whitelist', 'description': 'Онлайн-офис для скальперов с мощным торговым терминалом Scalpee для ПК и большим сообществом трейдеров.', 'image_id': 'AgACAgQAAxkBAAEYXoho29YYXxz4Dl58octNx3UHxnyvwwACKMwxGxD-4VIwYsTzQolnnAEAAwIAA3MAAzYE', 'site_url': 'https://passport.whitelist.capital/', 'video_url': 'https://www.youtube.com/@sferaTC'}
         ]
     },
     'screeners': {'title': "📈 Скринеры", 'intro_text': "Выберите скринер:", 'items': []},
@@ -75,7 +76,42 @@ main_menu_keyboard = [
 ]
 
 # =============================================================================
-# ОСНОВНЫЕ ОБРАБОТЧИКИ
+# РАЗДЕЛЕННЫЕ ОБРАБОТЧИКИ ДЛЯ КНОПОК ГЛАВНОГО МЕНЮ
+# =============================================================================
+
+async def show_training_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if context.user_data.get('is_approved', False):
+         await update.message.reply_text("Ты уже получил доступ к полному курсу!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Перейти к полному курсу", url=GEM_BOT_2_URL)]]))
+    else:
+        await update.message.reply_photo(photo=TRAINING_IMAGE_ID, caption="Наше бесплатное обучение проходит в специальном чат-боте на платформе ChatGPT.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🚀 Начать обучение", url=GEM_BOT_1_URL)]]))
+
+async def show_psychologist_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_photo(photo=PSYCHOLOGIST_IMAGE_ID, caption="Наш ИИ-психолог поможет справиться со стрессом в трейдинге.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Перейти к ИИ-психологу", url=AI_PSYCHOLOGIST_URL)]]))
+
+async def show_tools_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    keyboard = [[InlineKeyboardButton(data['title'], callback_data=f'tools_{key}')] for key, data in TOOLS_DATA.items()]
+    await update.message.reply_photo(photo=TOOLS_IMAGE_ID, caption="Здесь мы собрали полезные инструменты для трейдера. Выберите нужный раздел:", reply_markup=InlineKeyboardMarkup(keyboard))
+
+async def show_chatgpt_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_photo(photo=CHATGPT_IMAGE_ID, caption="Этот раздел пока в разработке. Следи за обновлениями!")
+
+async def show_support_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    context.user_data['state'] = 'awaiting_support_message'
+    await update.message.reply_photo(photo=SUPPORT_IMAGE_ID, caption="Слушаю твой вопрос. Просто отправь его следующим сообщением (можно текст, фото, видео или голосовое).")
+
+async def show_admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if str(update.effective_user.id) == ADMIN_CHAT_ID:
+        admin_keyboard = [
+            [InlineKeyboardButton("📊 Статистика", callback_data='admin_stats')],
+            [InlineKeyboardButton("📤 Сделать рассылку", callback_data='admin_broadcast')],
+            [InlineKeyboardButton("👤 Управление пользователями", callback_data='admin_users')]
+        ]
+        await update.message.reply_text("Добро пожаловать в админ-панель:", reply_markup=InlineKeyboardMarkup(admin_keyboard))
+    else:
+        await update.message.reply_text("Извините, эта команда вам недоступна.")
+
+# =============================================================================
+# ОСНОВНЫЕ ФУНКЦИИ (START, HANDLE_MESSAGE, И Т.Д.)
 # =============================================================================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -130,122 +166,49 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             reply_markup=ReplyKeyboardMarkup(current_menu, resize_keyboard=True)
         )
 
-# =============================================================================
-# ОБРАБОТЧИКИ КНОПОК ГЛАВНОГО МЕНЮ
-# =============================================================================
-
-async def show_training_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if context.user_data.get('is_approved', False):
-         await update.message.reply_text("Ты уже получил доступ к полному курсу!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Перейти к полному курсу", url=GEM_BOT_2_URL)]]))
-    else:
-        await update.message.reply_photo(photo=TRAINING_IMAGE_URL, caption="Отлично! Наше бесплатное обучение проходит в специальном чат-боте на платформе ChatGPT.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🚀 Начать обучение", url=GEM_BOT_1_URL)]]))
-
-async def show_psychologist_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_photo(photo=PSYCHOLOGIST_IMAGE_URL, caption="Наш ИИ-психолог поможет справиться со стрессом в трейдинге.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Перейти к ИИ-психологу", url=AI_PSYCHOLOGIST_URL)]]))
-
-async def show_tools_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    keyboard = []
-    for key, data in TOOLS_DATA.items():
-        keyboard.append([InlineKeyboardButton(data['title'], callback_data=f'tools_{key}')])
-    await update.message.reply_photo(photo=TOOLS_IMAGE_URL, caption="Здесь мы собрали полезные инструменты для трейдера. Выберите нужный раздел:", reply_markup=InlineKeyboardMarkup(keyboard))
-
-async def show_chatgpt_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_photo(photo=CHATGPT_IMAGE_URL, caption="Этот раздел пока в разработке. Следи за обновлениями!")
-
-async def show_support_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    context.user_data['state'] = 'awaiting_support_message'
-    await update.message.reply_photo(photo=SUPPORT_IMAGE_URL, caption="Слушаю твой вопрос. Просто отправь его следующим сообщением (можно текст, фото, видео или голосовое).")
-
-async def show_admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if str(update.effective_user.id) == ADMIN_CHAT_ID:
-        admin_keyboard = [
-            [InlineKeyboardButton("📊 Статистика", callback_data='admin_stats')],
-            [InlineKeyboardButton("📤 Сделать рассылку", callback_data='admin_broadcast')],
-            [InlineKeyboardButton("👤 Управление пользователями", callback_data='admin_users')]
-        ]
-        await update.message.reply_text("Добро пожаловать в админ-панель:", reply_markup=InlineKeyboardMarkup(admin_keyboard))
-    else:
-        await update.message.reply_text("Извините, эта команда вам недоступна.")
-
-# =============================================================================
-# ОБЩИЙ ОБРАБОТЧИК СООБЩЕНИЙ (ДЛЯ СЦЕНАРИЕВ)
-# =============================================================================
-
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Обрабатывает все сообщения, которые не являются командами или кнопками меню."""
     user = update.effective_user
-
-    if context.user_data.get('is_banned', False):
-        return
-        
+    if context.user_data.get('is_banned', False): return
     context.user_data['last_seen'] = datetime.now()
     
     admin_state = context.user_data.get('admin_state')
     user_state = context.user_data.get('state')
     
-    # --- СЦЕНАРИЙ: ПОЛЬЗОВАТЕЛЬ ПИШЕТ В ПОДДЕРЖКУ ---
     if user_state == 'awaiting_support_message' and str(user.id) != ADMIN_CHAT_ID:
         context.user_data['state'] = None 
-        
-        # Мы НЕ пересылаем сообщение, а просто запоминаем его ID
         original_message_id = update.message.message_id
-
         await update.message.reply_text("Спасибо, ваше сообщение отправлено в поддержку. Мы скоро ответим.")
 
-        # Копируем сообщение админу, чтобы получить ID копии в чате админа
-        forwarded_message_copy = await context.bot.copy_message(
-            chat_id=ADMIN_CHAT_ID,
-            from_chat_id=user.id,
-            message_id=original_message_id
-        )
-
+        copied_message = await context.bot.copy_message(chat_id=ADMIN_CHAT_ID, from_chat_id=user.id, message_id=original_message_id)
+        
         user_fullname = escape_markdown(user.full_name or "Имя не указано", version=2)
         user_username = f"@{escape_markdown(user.username, version=2)}" if user.username else "Нет"
-
-        admin_info_text = (
-            f"❗️ Новый вопрос от *{user_fullname}* \\({user_username}\\)\\.\nUser ID: `{user.id}`\n\n"
-            f"Нажмите кнопку ниже, чтобы ответить на это сообщение\\."
-        )
         
-        # ИЗМЕНЕНИЕ: В кнопку передаем ID ОРИГИНАЛЬНОГО сообщения
-        reply_button = [[
-            InlineKeyboardButton(
-                "💬 Ответить", 
-                callback_data=f'user_reply_{user.id}_{original_message_id}'
-            )
-        ]]
+        admin_info_text = (f"❗️ Новый вопрос от *{user_fullname}* \\({user_username}\\)\\.\nID: `{user.id}`")
+        reply_button = [[InlineKeyboardButton("💬 Ответить", callback_data=f'user_reply_{user.id}_{original_message_id}')]]
         
-        # Отправляем инфо админу как ответ на скопированное сообщение
         await context.bot.send_message(
             chat_id=ADMIN_CHAT_ID,
             text=admin_info_text,
-            reply_to_message_id=forwarded_message_copy.message_id,
+            reply_to_message_id=copied_message.message_id,
             reply_markup=InlineKeyboardMarkup(reply_button),
             parse_mode='MarkdownV2'
         )
         return
 
-    # --- СЦЕНАРИЙ: АДМИН ОТВЕЧАЕТ ПОЛЬЗОВАТЕЛЮ ---
     if str(user.id) == ADMIN_CHAT_ID and admin_state == 'users_awaiting_dm':
         target_user_id = context.user_data.pop('dm_target_user_id', None)
         context.user_data['admin_state'] = None
         if target_user_id:
             try:
                 message_id_to_reply = context.user_data.pop('reply_to_message_id', None)
-                await context.bot.copy_message(
-                    chat_id=target_user_id,
-                    from_chat_id=ADMIN_CHAT_ID,
-                    message_id=update.message.message_id,
-                    reply_to_message_id=message_id_to_reply
-                )
+                await context.bot.copy_message(chat_id=target_user_id, from_chat_id=ADMIN_CHAT_ID, message_id=update.message.message_id, reply_to_message_id=message_id_to_reply)
                 await update.message.reply_text("✅ Сообщение успешно отправлено!")
-
             except TelegramError as e:
                 logger.error(f"Не удалось отправить DM пользователю {target_user_id}: {e.message}")
                 await update.message.reply_text(f"❌ Не удалось отправить сообщение. Ошибка: {e.message}")
         return
 
-    # --- СЦЕНАРИИ ЗАЯВОК И АДМИН-ДЕЙСТВИЙ (без изменений) ---
     if user_state == 'awaiting_id_submission' and str(user.id) != ADMIN_CHAT_ID:
         text = update.message.text or ""
         context.user_data['awaiting_verification'] = True
@@ -284,10 +247,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             else: await update.message.reply_text(f"❌ Пользователь '{target_id_str}' не найден.")
             return
 
-# =============================================================================
-# ОБРАБОТЧИКИ ИНЛАЙН-КНОПОК (CALLBACKS)
-# =============================================================================
-
 async def tools_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
@@ -295,7 +254,7 @@ async def tools_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     if query_data == 'tools_main':
         keyboard = [[InlineKeyboardButton(data['title'], callback_data=f'tools_{key}')] for key, data in TOOLS_DATA.items()]
-        media = InputMediaPhoto(media=TOOLS_IMAGE_URL, caption="Здесь мы собрали полезные инструменты для трейдера. Выберите нужный раздел:")
+        media = InputMediaPhoto(media=TOOLS_IMAGE_ID, caption="Здесь мы собрали полезные инструменты для трейдера. Выберите нужный раздел:")
         try:
             await query.edit_message_media(media=media, reply_markup=InlineKeyboardMarkup(keyboard))
         except TelegramError as e:
@@ -367,14 +326,12 @@ async def broadcast_confirmation_handler(update: Update, context: ContextTypes.D
         context.user_data.pop('broadcast_message_id', None)
 
 async def user_actions_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Обрабатывает все действия с пользователями из админки."""
     query = update.callback_query
     await query.answer()
     parts = query.data.split('_')
     action, user_id = parts[1], int(parts[2])
     user_data = context.application.user_data.get(user_id, {})
 
-    # ИЗМЕНЕНИЕ: Определяем display_name для всех действий
     target_user_data = context.application.user_data.get(user_id, {})
     display_name = f"@{target_user_data.get('username')}" if target_user_data.get('username') else target_user_data.get('full_name', f"ID: {user_id}")
 
@@ -383,44 +340,33 @@ async def user_actions_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         context.user_data.update({'admin_state': 'users_awaiting_dm', 'dm_target_user_id': user_id, 'reply_to_message_id': reply_to_msg_id})
         await query.edit_message_text(f"Введите ответ для пользователя {display_name}:")
         return
-
     elif action == "approve":
         user_data.update({'is_approved': True, 'approval_date': datetime.now(), 'awaiting_verification': False})
         logger.info(f"Админ ({query.from_user.id}) одобрил {user_id}")
         await context.bot.send_message(chat_id=user_id, text="🎉 Поздравляем! Администратор одобрил вашу заявку.")
-    
     elif action == "revoke":
         user_data.update({'is_approved': False})
         user_data.pop('approval_date', None)
         logger.info(f"Админ ({query.from_user.id}) отозвал одобрение у {user_id}")
         await context.bot.send_message(chat_id=user_id, text="❗️Ваш доступ к полному курсу был отозван администратором.")
-    
     elif action == "message":
         context.user_data.update({'admin_state': 'users_awaiting_dm', 'dm_target_user_id': user_id})
         context.user_data.pop('reply_to_message_id', None)
         await query.edit_message_text(f"Введите сообщение для {display_name}:")
         return
-
     elif action == "block":
         await query.edit_message_text(f"Вы уверены, что хотите заблокировать {display_name}?", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("ДА, заблокировать", callback_data=f'user_blockconfirm_{user_id}')], [InlineKeyboardButton("Отмена", callback_data=f'user_showcard_{user_id}')]]))
         return
-        
     elif action == "blockconfirm":
         user_data['is_banned'] = True
         logger.info(f"Админ ({query.from_user.id}) заблокировал {user_id}")
         await query.answer("Пользователь заблокирован.", show_alert=True)
-
     elif action == "unblock":
         user_data.pop('is_banned', None)
         logger.info(f"Админ ({query.from_user.id}) разблокировал {user_id}")
         await query.answer("Пользователь разблокирован.", show_alert=True)
     
-    # После любого действия (кроме message/reply/block) обновляем карточку
     await display_user_card(update, context, user_id)
-
-# =============================================================================
-# АДМИН-КОМАНДЫ И ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
-# =============================================================================
 
 async def approve_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if str(update.effective_user.id) != ADMIN_CHAT_ID: return
@@ -509,8 +455,8 @@ async def display_user_card(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     user_data = context.application.user_data.get(user_id, {})
     status = "🚫 Заблокирован" if user_data.get('is_banned') else "⏳ Ожидает" if user_data.get('awaiting_verification') else "✅ Одобрен" if user_data.get('is_approved') else "Новый"
     
-    first_seen = user_data.get('first_seen', 'Неизвестно').strftime('%d.%m.%Y %H:%M')
-    last_seen = user_data.get('last_seen', 'Неизвестно').strftime('%d.%m.%Y %H:%M')
+    first_seen_str = user_data.get('first_seen').strftime('%d.%m.%Y %H:%M') if user_data.get('first_seen') else 'Неизвестно'
+    last_seen_str = user_data.get('last_seen').strftime('%d.%m.%Y %H:%M') if user_data.get('last_seen') else 'Неизвестно'
     
     safe_name = escape_markdown(user_data.get('full_name', 'Неизвестно'), version=2)
     safe_user = escape_markdown(user_data.get('username', 'Нет'), version=2)
@@ -518,7 +464,7 @@ async def display_user_card(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     card_text = (
         f"👤 *Карточка пользователя*\n\n"
         f"*ID:* `{user_id}`\n*Имя:* {safe_name}\n*Username:* @{safe_user}\n\n"
-        f"*Статус:* {status}\n*Первый визит:* {first_seen}\n*Активность:* {last_seen}"
+        f"*Статус:* {status}\n*Первый визит:* {escape_markdown(first_seen_str, version=2)}\n*Активность:* {escape_markdown(last_seen_str, version=2)}"
     )
     
     action_buttons = []
@@ -543,31 +489,20 @@ async def display_user_card(update: Update, context: ContextTypes.DEFAULT_TYPE, 
 # =============================================================================
 
 def main() -> None:
-    """Главная функция, которая собирает и запускает бота."""
     if not all([TELEGRAM_TOKEN, ADMIN_CHAT_ID]):
         logger.critical("КРИТИЧЕСКАЯ ОШИБКА: Отсутствуют TELEGRAM_TOKEN или ADMIN_CHAT_ID.")
         return
 
     persistence = PicklePersistence(filepath="bot_data.pickle")
-
-    # Создаем Application Builder
-    builder = Application.builder().token(TELEGRAM_TOKEN).persistence(persistence)
-
-    # Правильно инициализируем JobQueue, если она нужна
-    if builder.job_queue:
-        application = builder.build()
-    else:
-        job_queue = JobQueue()
-        application = builder.job_queue(job_queue).build()
-
-    # --- РЕГИСТРАЦИЯ ОБРАБОТЧИКОВ ---
+    
+    application = Application.builder().token(TELEGRAM_TOKEN).persistence(persistence).build()
 
     # Команды
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("approve", approve_user))
     application.add_handler(CommandHandler("stats", show_stats))
     application.add_handler(CommandHandler("reset_user", reset_user))
-
+    
     # Инлайн-кнопки
     application.add_handler(CallbackQueryHandler(user_actions_handler, pattern='^user_'))
     application.add_handler(CallbackQueryHandler(tools_menu_handler, pattern='^tool'))
@@ -586,9 +521,11 @@ def main() -> None:
     application.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, handle_message))
 
     # Задачи
+    if not application.job_queue:
+        application.job_queue = JobQueue()
+        application.job_queue.set_application(application)
     application.job_queue.run_daily(daily_stats_job, time=time(0, 0), name="daily_stats_report")
-
-    # --- ЗАПУСК БОТА ---
+    
     if WEBHOOK_URL:
         url_path = TELEGRAM_TOKEN.split(':')[-1]
         webhook_full_url = f"{WEBHOOK_URL.rstrip('/')}/{url_path}"
