@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Путь Трейдера — Урок 1 (OFFLINE v1.2.0)</title>
+  <!--
+    OFFLINE BUILD v1.2.0
+    - Без CDN и внешних запросов
+    - Звук: Web Audio API (без Tone.js)
+    - График: кастомный Canvas (без Chart.js)
+    - Стиль: минимальный CSS, имитирующий используемые классы Tailwind (только нужный поднабор)
+    - Хуки: window events 'lessonComplete' / 'lessonFailed'; window.gameAPI
+  -->
+  <style>
+    /* ===== Мини-утилиты (поднабор tailwind-like) ===== */
+    :root {
+      --c-bg-900: #111827; --c-white: #fff; --c-black: #000;
+      --c-gray-300:#d1d5db; --c-gray-400:#9ca3af; --c-gray-600:#4b5563; --c-gray-700:#374151; --c-gray-800:#1f2937;
+      --c-indigo-200:#c7d2fe; --c-indigo-500:#6366f1; --c-indigo-600:#4f46e5; --c-indigo-700:#4338ca;
+      --c-sky-400:#38bdf8; --c-sky-500:#0ea5e9; --c-sky-600:#0284c7;
+      --c-green-400:#34d399; --c-red-600:#dc2626; --c-red-500:#ef4444; --c-green-500:#22c55e;
+      --shadow-lg: 0 10px 15px -3px rgba(0,0,0,.1), 0 4px 6px -2px rgba(0,0,0,.05);
+      --shadow-sm: 0 4px 6px -1px rgba(0,0,0,.1), 0 2px 4px -2px rgba(0,0,0,.1);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;background:var(--c-bg-900);color:var(--c-white);font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans","Apple Color Emoji","Segoe UI Emoji",sans-serif;overflow-y:auto;touch-action:manipulation}
+    .hide{display:none!important}
+    .w-full{width:100%} .h-full{height:100%} .min-h-screen{min-height:100vh}
+    .flex{display:flex} .flex-col{flex-direction:column} .flex-wrap{flex-wrap:wrap}
+    .items-center{align-items:center} .justify-center{justify-content:center} .justify-between{justify-content:space-between}
+    .gap-4{gap:1rem}
+    .p-3{padding:.75rem} .p-4{padding:1rem} .p-6{padding:1.5rem} .p-8{padding:2rem}
+    .px-6{padding-left:1.5rem;padding-right:1.5rem} .px-8{padding-left:2rem;padding-right:2rem}
+    .py-3{padding-top:.75rem;padding-bottom:.75rem} .py-4{padding-top:1rem;padding-bottom:1rem} .py-6{padding-top:1.5rem;padding-bottom:1.5rem}
+    .rounded-lg{border-radius:.5rem} .rounded-xl{border-radius:.75rem} .rounded-2xl{border-radius:1rem} .rounded-full{border-radius:999px}
+    .text-center{text-align:center}
+    .text-xs{font-size:.75rem} .text-sm{font-size:.875rem} .text-base{font-size:1rem}
+    .text-lg{font-size:1.125rem} .text-xl{font-size:1.25rem} .text-2xl{font-size:1.5rem}
+    .text-3xl{font-size:1.875rem} .text-4xl{font-size:2.25rem} .text-5xl{font-size:3rem}
+    .font-bold{font-weight:700} .font-black{font-weight:900}
+    .mb-2{margin-bottom:.5rem} .mb-4{margin-bottom:1rem} .mb-6{margin-bottom:1.5rem} .mb-8{margin-bottom:2rem} .mb-10{margin-bottom:2.5rem}
+    .max-w-md{max-width:28rem} .max-w-lg{max-width:32rem} .max-w-4xl{max-width:56rem}
+    .mx-auto{margin-left:auto;margin-right:auto}
+    .grid{display:grid} .grid-cols-1{grid-template-columns:1fr} .md\:grid-cols-2{grid-template-columns:1fr}
+    .backdrop-blur-sm{backdrop-filter:blur(4px)}
+    .border{border:1px solid rgba(255,255,255,.1)} .border-2{border:2px solid} .border-white\/10{border-color:rgba(255,255,255,.1)}
+    .bg-black\/30{background:rgba(0,0,0,.3)} .bg-gray-700\/50{background:rgba(55,65,81,.5)}
+    .bg-gray-700{background:#374151} .bg-red-600{background:var(--c-red-600)} .bg-sky-500{background:var(--c-sky-500)}
+    .text-sky-400{color:#38bdf8} .text-green-400{color:#34d399} .text-gray-300{color:var(--c-gray-300)} .text-gray-400{color:var(--c-gray-400)}
+    .text-indigo-200{color:var(--c-indigo-200)}
+    .shadow-lg{box-shadow:var(--shadow-lg)} .shadow-indigo-500\/30{box-shadow:0 10px 25px -5px rgba(56,189,248,.3)}
+    .hover\:bg-sky-600:hover{background:var(--c-sky-600)} .hover\:bg-red-600:hover{background:var(--c-red-600)}
+    .hover\:from-sky-600:hover{--grad-from:var(--c-sky-600)} .hover\:to-indigo-700:hover{--grad-to:#4338ca}
+    .rounded{border-radius:.25rem}
+    .h-2\.5{height:.625rem} .w-20{width:5rem} .w-24{width:6rem}
+    .text-transparent{color:transparent} .bg-clip-text{-webkit-background-clip:text;background-clip:text}
+    .bg-gradient-to-r{background-image:linear-gradient(to right,var(--grad-from,#38bdf8),var(--grad-to,#6366f1))}
+    .from-sky-400{--grad-from:#38bdf8} .from-sky-500{--grad-from:#0ea5e9}
+    .to-indigo-500{--grad-to:#6366f1} .to-indigo-600{--grad-to:#4f46e5} .to-indigo-700{--grad-to:#4338ca}
+    .shadow-2xl{box-shadow:0 25px 50px -12px rgba(0,0,0,.25)}
+    .transition-all{transition:all .5s ease} .duration-500{transition-duration:.5s}
+    .level-1-bg{background:radial-gradient(circle, rgba(23,37,84,1) 0%, rgba(12,20,45,1) 100%)}
+    .level-2-bg{background:radial-gradient(circle, rgba(55,48,163,1) 0%, rgba(20,15,60,1) 100%)}
+    .level-3-bg{background:radial-gradient(circle, rgba(20,83,45,1) 0%, rgba(10,40,20,1) 100%)}
+    .level-4-bg{background:radial-gradient(circle, rgba(120,29,29,1) 0%, rgba(50,10,10,1) 100%)}
+    .level-5-bg{background:radial-gradient(circle, rgba(150,150,170,1) 0%, rgba(40,40,50,1) 100%)}
+    .answer-btn{transition:all .2s ease-out;box-shadow:var(--shadow-sm);border:1px solid rgba(255,255,255,.12);background:rgba(55,65,81,.5);color:#fff}
+    .answer-btn:hover{transform:translateY(-4px) scale(1.02);box-shadow:0 10px 15px -3px rgba(0,0,0,.1), 0 4px 6px -2px rgba(0,0,0,.1);background:rgba(75,85,99,.5)}
+    .answer-btn:disabled{cursor:not-allowed;opacity:.7}
+    .btn-correct{background:#22c55e!important;border-color:#16a34a!important;color:#fff;transform:scale(1.05)}
+    .btn-wrong{background:#ef4444!important;border-color:#dc2626!important;color:#fff;opacity:.8}
+    /* Animations */
+    @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+    @keyframes fadeInUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
+    @keyframes screenShake{0%,100%{transform:translateX(0)}20%{transform:translateX(-5px)}40%{transform:translateX(5px)}60%{transform:translateX(-5px)}80%{transform:translateX(5px)}}
+    .fade-in{animation:fadeIn .5s ease-in-out forwards}
+    .fade-in-up{animation:fadeInUp .5s ease-in-out forwards}
+    .pulse-btn{animation:pulse 2s infinite ease-in-out}
+    .screen-shake{animation:screenShake .3s linear}
+    /* Responsive (под sm=640px, md=768px) */
+    @media (min-width:640px){ .sm\:p-4{padding:1rem}.sm\:px-8{padding-left:2rem;padding-right:2rem}.sm\:text-lg{font-size:1.125rem}.sm\:text-xl{font-size:1.25rem} }
+    @media (min-width:768px){ .md\:text-7xl{font-size:4.5rem}.md\:grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))} }
+    /* DEV helpers */
+    .dev-badge{position:fixed;top:.5rem;left:.5rem;z-index:60;background:#0ea5e9;color:#fff;font-weight:700;font-size:.75rem;padding:.25rem .5rem;border-radius:.375rem;box-shadow:0 2px 8px rgba(0,0,0,.2);display:none}
+    .dev-panel{position:fixed;bottom:0;left:0;right:0;z-index:60;background:rgba(17,24,39,.98);border-top:1px solid rgba(255,255,255,.08);backdrop-filter:saturate(140%) blur(6px);padding:.75rem 1rem;display:none}
+    .dev-panel *{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace}
+    .dev-panel h3{font-size:.9rem;margin:0 0 .5rem 0;color:#93c5fd}
+    .dev-row{display:flex;gap:.5rem;align-items:center;margin-bottom:.5rem}
+    .dev-log{max-height:30vh;overflow:auto;font-size:.75rem;line-height:1.2;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:.5rem;padding:.5rem;color:#d1d5db}
+    .dev-btn{font-size:.75rem;padding:.35rem .6rem;border-radius:.375rem;border:1px solid rgba(255,255,255,.12);background:#111827;color:#e5e7eb}
+    .dev-btn:hover{background:#0b1220}
+  </style>
+</head>
+<body class="bg-gray-900 text-white">
+  <div id="game-container" class="w-full min-h-screen flex flex-col items-center justify-center p-4 transition-all duration-500 level-1-bg">
+    <div id="start-screen" class="text-center fade-in">
+      <h1 class="text-5xl md:text-7xl font-black mb-2 text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-indigo-500">Путь Трейдера</h1>
+      <p class="text-2xl font-bold mb-6 text-indigo-200">Урок 1: Реальность Профессии</p>
+      <p class="text-gray-300 mb-10 max-w-lg mx-auto">Закрепите знания из первого урока. Каждое решение основано на правилах из PDF. Готовы проверить себя?</p>
+      <button id="start-btn" class="bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 text-white font-bold py-4 px-8 sm:px-8 rounded-xl text-xl shadow-lg shadow-indigo-500/30 pulse-btn">Начать проверку</button>
+    </div>
+
+    <div id="main-game" class="w-full max-w-4xl mx-auto h-full flex flex-col hide">
+      <div class="w-full bg-gray-700/50 rounded-full h-2.5 mb-4 border border-white/10">
+        <div id="global-progress-bar" class="bg-sky-500 h-full rounded-full" style="width:0%;transition:width .5s ease-in-out;"></div>
+      </div>
+
+      <div id="stats-bar" class="flex flex-wrap justify-between items-center gap-4 bg-black/30 p-3 sm:p-4 rounded-xl mb-4 border border-white/10 fade-in-up">
+        <div>
+          <span class="text-xs sm:text-sm text-gray-400">Уровень</span>
+          <p class="text-base sm:text-xl font-bold text-sky-400" id="level-display"></p>
+        </div>
+        <div>
+          <span class="text-xs sm:text-sm text-gray-400">Капитал</span>
+          <p class="text-base sm:text-xl font-bold text-green-400" id="capital-display"></p>
+        </div>
+        <div>
+          <span class="text-xs sm:text-sm text-gray-400">Риск</span>
+          <div class="w-20 sm:w-24 bg-gray-700 rounded-full h-2.5">
+            <div id="risk-bar" class="bg-red-600 h-2.5 rounded-full" style="width:0%"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="chart-container" class="flex-grow bg-black/30 p-4 rounded-xl border border-white/10 mb-4 fade-in-up" style="animation-delay:.1s;min-height:250px;">
+        <canvas id="equity-chart"></canvas>
+      </div>
+
+      <div class="bg-black/30 p-6 rounded-xl border border-white/10 fade-in-up" style="animation-delay:.2s;">
+        <p id="scenario-text" class="text-center text-lg md:text-xl font-medium mb-6 min-h-[80px] flex items-center justify-center"></p>
+        <div id="answer-buttons" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+      </div>
+    </div>
+
+    <div id="modal-overlay" class="hide fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <div id="level-up-modal" class="hide text-center bg-gray-800 p-6 sm:p-8 rounded-2xl shadow-2xl border-2 border-sky-500 max-w-md mx-auto w-full">
+        <h2 class="text-3xl font-black text-sky-400 mb-4">УРОВЕНЬ ПРОЙДЕН!</h2>
+        <p id="level-up-text" class="text-gray-300 text-base sm:text-lg mb-6 sm:mb-8"></p>
+        <button id="next-level-btn" class="bg-sky-500 hover:bg-sky-600 text-white font-bold py-3 px-6 sm:px-8 rounded-lg text-base sm:text-lg w-full">Продолжить</button>
+      </div>
+      <div id="game-over-modal" class="hide text-center bg-gray-800 p-6 sm:p-8 rounded-2xl shadow-2xl border-2 border-red-500 max-w-md mx-auto w-full">
+        <h2 class="text-3xl font-black text-red-500 mb-4">ЛИКВИДАЦИЯ</h2>
+        <p class="text-gray-300 text-base sm:text-lg mb-6 sm:mb-8">Ваш капитал исчерпан. Нарушение базовых правил привело к закономерному итогу. Проанализируйте ошибки и попробуйте снова!</p>
+        <button id="restart-btn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-6 sm:px-8 rounded-lg text-base sm:text-lg w-full">Начать заново</button>
+      </div>
+      <div id="game-win-modal" class="hide text-center bg-gray-800 p-6 sm:p-8 rounded-2xl shadow-2xl border-2 border-green-500 max-w-md mx-auto w-full">
+        <h2 class="text-3xl font-black text-green-400 mb-4">УРОК 1 УСВОЕН!</h2>
+        <p class="text-gray-300 text-base sm:text-lg mb-6 sm:mb-8">Вы безупречно освоили теорию! Теперь вы понимаете, что трейдинг — это профессия, требующая дисциплины и системы. Готовы к следующему уроку?</p>
+        <button id="restart-win-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 sm:px-8 rounded-lg text-base sm:text-lg w-full">Пройти снова</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* ========= Конфиг уровней и сценариев ========= */
+    const levels = [
+      { name: "Жесткая правда и принципы", startCapital: 10000, scenarios: 10, marginCall: 8000, class: 'level-1-bg', levelUpMsg: "Вы усвоили жесткую правду и базовые принципы. Теперь пора формализовать свой подход." },
+      { name: "Контракт и инфраструктура", startCapital: 15000, scenarios: 10, marginCall: 11000, class: 'level-2-bg', levelUpMsg: "Ваши правила и инструменты готовы. Готовы ли вы столкнуться с главными заблуждениями рынка?" },
+      { name: "Борьба с иллюзиями", startCapital: 20000, scenarios: 10, marginCall: 15000, class: 'level-3-bg', levelUpMsg: "Вы больше не ищете 'грааль'. Теперь предстоит самое сложное — битва с собственными эмоциями." },
+      { name: "Антитильт и психология", startCapital: 30000, scenarios: 10, marginCall: 22000, class: 'level-4-bg', levelUpMsg: "Вы научились контролировать тильт и принимать взвешенные решения. Остался финальный шаг к мышлению профи." },
+      { name: "Мышление профессионала", startCapital: 50000, scenarios: 10, marginCall: 35000, class: 'level-5-bg', levelUpMsg: "ПОБЕДА!" },
+    ];
+
+    const scenariosByLevel = {
+      1: [
+        { text: 'Согласно 1 уроку, трейдинг — это в первую очередь...', choices: [ { text: 'Способ быстро разбогатеть.', correct: false, impact: -1000 }, { text: 'Профессия, требующая 12-24 месяцев на освоение.', correct: true, impact: 500 }, { text: 'Игра на удачу, похожая на казино.', correct: false, impact: -800 }, { text: 'Поиск секретного индикатора.', correct: false, impact: -500 } ] },
+        { text: 'Почему, согласно 1 уроку, большинство трейдеров теряет деньги?', choices: [ { text: 'Им не хватает удачи.', correct: false, impact: -500 }, { text: 'Они игнорируют базовые действия: дневник, разбор ошибок, дисциплину.', correct: true, impact: 700 }, { text: 'Рынок манипулируют крупные игроки.', correct: false, impact: -800 }, { text: 'У них нет нужного индикатора.', correct: false, impact: -1000 } ] },
+        { text: 'Вы хотите начать торговать на полную ставку. Что 1 урок называет ОБЯЗАТЕЛЬНЫМ условием?', choices: [ { text: 'Найти прибыльного робота.', correct: false, impact: -1000 }, { text: 'Создать финансовую подушку на 6-12 месяцев расходов.', correct: true, impact: 1000 }, { text: 'Взять кредит на депозит побольше.', correct: false, impact: -2000 }, { text: 'Получить диплом экономиста.', correct: false, impact: -200 } ] },
+        { text: 'Что является настоящим капиталом трейдера, который не может отнять рынок?', choices: [ { text: 'Размер его депозита.', correct: false, impact: -500 }, { text: 'Навык, построенный на системе и статистике.', correct: true, impact: 1000 }, { text: 'Количество подписчиков в соцсетях.', correct: false, impact: -200 }, { text: 'Секретный индикатор.', correct: false, impact: -800 } ] },
+        { text: 'Что 1 урок называет "фантомом", за которым не стоит гнаться?', choices: [ { text: 'Стабильная ежемесячная прибыль.', correct: false, impact: -500 }, { text: '"Джекпот" или одна большая удачная сделка.', correct: true, impact: 400 }, { text: 'Собственная торговая система.', correct: false, impact: -800 }, { text: 'Финансовая подушка.', correct: false, impact: -200 } ] },
+        { text: 'Для чего нужно сформулировать личные принципы (фильтры решений)?', choices: [ { text: 'Чтобы опубликовать их в соцсетях и выглядеть умным.', correct: false, impact: -300 }, { text: 'Чтобы в моменты эмоций не думать, а выполнять заранее принятые решения.', correct: true, impact: 800 }, { text: 'Чтобы никогда их не нарушать, даже если ситуация изменилась.', correct: false, impact: -500 }, { text: 'Это формальность, которая не влияет на результат.', correct: false, impact: -1000 } ] },
+        { text: 'Вы достигли заранее установленного дневного лимита просадки (DD). Ваши действия по правилам?', choices: [ { text: 'Уменьшаю размер позиции и продолжаю, чтобы отыграться.', correct: false, impact: -1500 }, { text: 'Немедленно останавливаю торговлю на сегодня.', correct: true, impact: 1000 }, { text: 'Ищу "сверхнадежную" сделку, чтобы вернуть потери.', correct: false, impact: -2000 }, { text: 'Перехожу на демо-счет до конца дня.', correct: false, impact: -200 } ] },
+        { text: 'Как, согласно 1 уроку, связаны физиология и трейдинг?', choices: [ { text: 'Спортсмены — лучшие трейдеры.', correct: false, impact: -300 }, { text: 'Плохая физиология (недосып, стресс) ведет к плохим торговым решениям.', correct: true, impact: 700 }, { text: 'Чем меньше спишь, тем больше времени на торговлю.', correct: false, impact: -1500 }, { text: 'Никак не связаны, главное — ум.', correct: false, impact: -800 } ] },
+        { text: 'Что такое "предрешённые решения", о которых говорится в 1 уроке?', choices: [ { text: 'Слепое копирование чужих сделок.', correct: false, impact: -700 }, { text: 'Заранее прописанные принципы и правила, которые выполняются в момент эмоций.', correct: true, impact: 900 }, { text: 'Торговля по интуиции.', correct: false, impact: -1000 }, { text: 'Решения, принятые за вас вашим ментором.', correct: false, impact: -400 } ] },
+        { text: 'Если у вас нет финансовой подушки, какой стиль торговли будет правильным?', choices: [ { text: 'Агрессивный, чтобы быстрее ее создать.', correct: false, impact: -2500 }, { text: 'Никаких агрессивных рисков, фокус на обучении и симуляции.', correct: true, impact: 500 }, { text: 'Торговля с максимальным плечом.', correct: false, impact: -3000 }, { text: 'Торговля на заемные средства.', correct: false, impact: -4000 } ] }
+      ],
+      2: [
+        { text: 'Какова главная цель "Контракта трейдера на 90 дней"?', choices: [ { text: 'Заработать максимальную прибыль за 90 дней.', correct: false, impact: -1500 }, { text: 'Превратить намерение в обязательные, измеримые действия с фокусом на навык и дисциплину.', correct: true, impact: 1000 }, { text: 'Протестировать 20 разных стратегий.', correct: false, impact: -800 }, { text: 'Доказать всем, что ты можешь быть трейдером.', correct: false, impact: -500 } ] },
+        { text: 'Какой стартовый риск на сделку рекомендуется в "Контракте"?', choices: [ { text: '5-10% от депозита, чтобы быстро расти.', correct: false, impact: -2000 }, { text: '0.25-0.5% от депозита.', correct: true, impact: 800 }, { text: '1-2% от депозита.', correct: false, impact: -500 }, { text: 'Фиксированная сумма, например, 100$.', correct: false, impact: -800 } ] },
+        { text: 'Что включает в себя утренний ритуал трейдера?', choices: [ { text: 'Чтение чатов и новостей, чтобы понять, куда пойдет рынок.', correct: false, impact: -800 }, { text: 'Скан активов, определение ключевых уровней и построение сценариев.', correct: true, impact: 900 }, { text: 'Медитацию и визуализацию больших денег.', correct: false, impact: -400 }, { text: 'Кофе и просмотр котировок в телефоне.', correct: false, impact: -600 } ] },
+        { text: 'Какова задача вечернего ритуала?', choices: [ { text: 'Забыть о неудачном дне как можно скорее.', correct: false, impact: -700 }, { text: 'Разбор сделок (скриншоты/видео) и фиксация уроков в дневнике.', correct: true, impact: 1000 }, { text: 'Поиск сделок на следующий день.', correct: false, impact: -500 }, { text: 'Подсчет прибыли или убытков.', correct: false, impact: -300 } ] },
+        { text: 'Какова итоговая цель первых 90 дней по контракту?', choices: [ { text: 'Удвоить депозит.', correct: false, impact: -2000 }, { text: 'Получить статистику (WinRate, Avg Win/Loss) и добиться нулевой тильт-активности.', correct: true, impact: 1200 }, { text: 'Найти 5 новых прибыльных сетапов.', correct: false, impact: -800 }, { text: 'Совершить не менее 500 сделок.', correct: false, impact: -1000 } ] },
+        { text: 'Какая основная задача дневника сделок?', choices: [ { text: 'Отчет для налоговой.', correct: false, impact: -300 }, { text: 'Собрать данные для анализа, выявления ошибок и поиска точек роста.', correct: true, impact: 1000 }, { text: 'Хвастаться прибыльными сделками.', correct: false, impact: -200 }, { text: 'Просто формальность, которую требуют все курсы.', correct: false, impact: -800 } ] },
+        { text: 'Для чего нужна папка "Разборы" с видео/скринкастами сессий?', choices: [ { text: 'Для создания контента для YouTube-канала.', correct: false, impact: -500 }, { text: 'Чтобы объективно увидеть свои действия со стороны и зафиксировать уроки.', correct: true, impact: 1100 }, { text: 'Чтобы было что показать ментору, если он появится.', correct: false, impact: -400 }, { text: 'Для хранения архива на случай споров с брокером.', correct: false, impact: -700 } ] },
+        { text: 'Какова цель чек-листов "Перед входом", "После сделки", "Конец дня"?', choices: [ { text: 'Замедлить торговлю и пропустить все хорошие входы.', correct: false, impact: -1000 }, { text: 'Снять нагрузку с памяти и повысить дисциплину, гарантируя выполнение всех шагов.', correct: true, impact: 1200 }, { text: 'Усложнить процесс трейдинга.', correct: false, impact: -800 }, { text: 'Это нужно только для новичков, профессионалы держат все в голове.', correct: false, impact: -1500 } ] },
+        { text: 'Что 1 урок рекомендует делать с периодами "тишины" на рынке, когда нет сетапов?', choices: [ { text: 'Искать сделки на младших таймфреймах.', correct: false, impact: -1500 }, { text: 'Ничего не делать. Ждать — это тоже стратегия.', correct: true, impact: 1000 }, { text: 'Рисовать новые линии на графике, пока что-то не появится.', correct: false, impact: -500 }, { text: 'Открывать сделки с меньшим риском, чтобы "почувствовать" рынок.', correct: false, impact: -1800 } ] },
+        { text: 'Понятие "активы в игре" означает, что нужно торговать...', choices: [ { text: 'Всеми активами подряд.', correct: false, impact: -1000 }, { text: 'Только активами, которые показывают направленное движение и высокий объем.', correct: true, impact: 900 }, { text: 'Самыми дешевыми активами.', correct: false, impact: -700 }, { text: 'Активами, которые советуют в новостях.', correct: false, impact: -1200 } ] }
+      ],
+      3: [
+        { text: 'Вы наткнулись на заблуждение "Нужен правильный индикатор и всё". Какова реальность согласно 1 уроку?', choices: [ { text: 'Это правда, осталось только найти этот индикатор.', correct: false, impact: -2000 }, { text: 'Индикаторы вторичны. Важнее контекст, ликвидность и дисциплина.', correct: true, impact: 1000 }, { text: 'Чем больше индикаторов на графике, тем точнее прогноз.', correct: false, impact: -1500 }, { text: 'Индикаторы вообще не работают.', correct: false, impact: -800 } ] },
+        { text: 'Ваш друг говорит: "Возьму кредит, закину на биржу и быстро отобью". Какова реальность такого подхода?', choices: [ { text: 'Отличный план, если он уверен в стратегии.', correct: false, impact: -1500 }, { text: 'Давление заемных денег ломает психику, рождает тильт и гарантированно ведет к ошибкам.', correct: true, impact: 1200 }, { text: 'Это сработает, если торговать с минимальным плечом.', correct: false, impact: -1000 }, { text: 'Нужно просто найти хорошего аналитика и следовать его сигналам.', correct: false, impact: -1800 } ] },
+        { text: 'Вы торгуете весь день и совершили 20 сделок, но остались при своих. Какое заблуждение вы реализуете?', choices: [ { text: 'Принцип "Практика ведет к совершенству".', correct: false, impact: -500 }, { text: 'Заблуждение "Чем больше торгую, тем больше зарабатываю".', correct: true, impact: 900 }, { text: 'Стратегию скальпинга.', correct: false, impact: -300 }, { text: 'Диверсификацию рисков.', correct: false, impact: -800 } ] },
+        { text: 'Рынок стоит в "боковике", нет явного движения. Какая сделка будет лучшей в таких условиях?', choices: [ { text: 'Покупка на пробой верхней границы.', correct: false, impact: -1000 }, { text: 'Продажа на пробой нижней границы.', correct: false, impact: -1000 }, { text: 'Сделка, которую вы не сделали, дождавшись лучших условий.', correct: true, impact: 800 }, { text: 'Торговля внутри диапазона с плечом х20.', correct: false, impact: -2500 } ] },
+        { text: 'Вы не ведете дневник. Почему, согласно 1 уроку, вы не можете улучшить свои результаты?', choices: [ { text: 'Потому что без дневника нельзя платить налоги.', correct: false, impact: -300 }, { text: 'Потому что вы не видите свои повторяющиеся ошибки и не можете их исправить.', correct: true, impact: 1000 }, { text: 'Потому что ментор не сможет вас проверить.', correct: false, impact: -500 }, { text: 'Потому что это плохая примета.', correct: false, impact: -100 } ] },
+        { text: 'Какой вопрос нужно задать себе, чтобы понять контекст сделки?', choices: [ { text: 'Сколько я могу заработать?', correct: false, impact: -1000 }, { text: 'Кто находится по ту сторону сделки? Где стопы толпы?', correct: true, impact: 900 }, { text: 'Что говорят об этом активе в Telegram-каналах?', correct: false, impact: -1200 }, { text: 'Какой индикатор сейчас в зеленой зоне?', correct: false, impact: -800 } ] },
+        { text: 'В чем ключевое отличие профессионального подхода от любительского?', choices: [ { text: 'Профессионалы никогда не ошибаются.', correct: false, impact: -800 }, { text: 'Профессионал строит систему, ведет статистику и работает над ошибками, любитель ищет джекпот.', correct: true, impact: 1100 }, { text: 'Профессионалы используют более сложные индикаторы.', correct: false, impact: -1000 }, { text: 'Профессионалы торгуют на большие суммы.', correct: false, impact: -500 } ] },
+        { text: 'Что является гарантией результата в трейдинге, согласно Q&A из 1 урока?', choices: [ { text: 'Высокий интеллект.', correct: false, impact: -800 }, { text: 'Система + дисциплина + время в рынке.', correct: true, impact: 900 }, { text: 'Большой депозит.', correct: false, impact: -1000 }, { text: 'Удача.', correct: false, impact: -1200 } ] },
+        { text: 'Торговля "по ощущениям" и перемещение стопов без плана — это...', choices: [ { text: 'Проявление профессиональной интуиции.', correct: false, impact: -1200 }, { text: 'Системное нарушение простых правил, ведущее к убыткам.', correct: true, impact: 600 }, { text: 'Гибкий подход к рынку.', correct: false, impact: -800 }, { text: 'Нормально для начинающих.', correct: false, impact: -500 } ] },
+        { text: 'Зачем нужно понимать механику рынка (заявки, ликвидность)?', choices: [ { text: 'Чтобы предсказывать будущее со 100% точностью.', correct: false, impact: -1000 }, { text: 'Без этого любой паттерн на графике превращается в подбрасывание монетки.', correct: true, impact: 700 }, { text: 'Чтобы хвастаться сложными терминами в чатах.', correct: false, impact: -200 }, { text: 'Это не обязательно, главное — индикаторы.', correct: false, impact: -1500 } ] },
+      ],
+      4: [
+        { text: 'Вы поймали тильт после серии убытков. Как его лечить согласно "жесткой правде" из 1 урока?', choices: [ { text: 'Собрать волю в кулак и отыграться.', correct: false, impact: -1500 }, { text: 'Заранее прописанными ограничениями, например, лимитом дневной просадки.', correct: true, impact: 800 }, { text: 'Посмотреть мотивирующее видео и снова в бой.', correct: false, impact: -500 }, { text: 'Увеличить размер позиции, чтобы быстрее вернуть убыток.', correct: false, impact: -2000 } ] },
+        { text: 'Вы получили убыток. Ваш первый импульс — "отбить" его. Что предписывает антитильт-протокол?', choices: [ { text: 'Немедленно найти новую сделку с удвоенным риском.', correct: false, impact: -3000 }, { text: 'Сделать паузу, закрыть терминал, перечитать контракт.', correct: true, impact: 1500 }, { text: 'Пожаловаться в чате на манипуляторов.', correct: false, impact: -500 }, { text: 'Продолжать торговать, но с большей агрессией.', correct: false, impact: -2500 } ] },
+        { text: 'Вы чувствуете эйфорию после 5 прибыльных сделок подряд и хотите увеличить риск без причины. Это...', choices: [ { text: 'Признак того, что вы "почувствовали" рынок.', correct: false, impact: -2000 }, { text: 'Триггер тильта, который нужно распознать и остановить согласно протоколу.', correct: true, impact: 1200 }, { text: 'Отличная возможность, чтобы заработать больше.', correct: false, impact: -2500 }, { text: 'Сигнал к тому, чтобы начать обучать других.', correct: false, impact: -800 } ] },
+        { text: 'Вы вернулись в рынок после паузы по антитильт-протоколу. С каким размером лота вы должны войти?', choices: [ { text: 'С удвоенным, чтобы компенсировать время простоя.', correct: false, impact: -2800 }, { text: 'Только с микро-лотом.', correct: true, impact: 1000 }, { text: 'Со стандартным, как будто ничего не было.', correct: false, impact: -1500 }, { text: 'Не входить в рынок до конца дня.', correct: false, impact: -500 } ] },
+        { text: 'Как бороться с тильтом согласно 1 уроку?', choices: [ { text: 'Силой воли и самовнушением.', correct: false, impact: -1500 }, { text: 'Заранее прописанными правилами: лимит дня, стоп-торговля, пауза, перезапуск с микро-размером.', correct: true, impact: 1300 }, { text: 'Просмотром котировок в реальном времени без остановки.', correct: false, impact: -1000 }, { text: 'Принятием успокоительных.', correct: false, impact: -800 } ] },
+        { text: 'Вы достигли дневного лимита просадки, но видите "верняковый" сетап. Что делать?', choices: [ { text: 'Войти, ведь это шанс вернуть все потери.', correct: false, impact: -3500 }, { text: 'Соблюдать правило "стоп-торговля" из контракта. Правила важнее одного сетапа.', correct: true, impact: 1500 }, { text: 'Войти с половиной риска.', correct: false, impact: -2000 }, { text: 'Попросить друга войти в эту сделку за вас.', correct: false, impact: -1000 } ] },
+        { text: 'Что из перечисленного является триггером тильта, согласно 1 уроку?', choices: [ { text: 'Строгое следование плану.', correct: false, impact: 200 }, { text: 'Желание "отбить" убыток и серия импульсивных входов.', correct: true, impact: -1000 }, { text: 'Ведение дневника сделок.', correct: false, impact: 100 }, { text: 'Утренний анализ рынка.', correct: false, impact: 50 } ] },
+        { text: 'Вы не выспались и чувствуете себя уставшим. Как это должно повлиять на вашу торговлю сегодня?', choices: [ { text: 'Никак, профессионал торгует в любом состоянии.', correct: false, impact: -2000 }, { text: 'Стоит пропустить торговый день или торговать микро-лотом, так как "плохая физиология = плохие решения".', correct: true, impact: 800 }, { text: 'Нужно торговать более агрессивно, чтобы взбодриться.', correct: false, impact: -2500 }, { text: 'Выпить много кофе и торговать как обычно.', correct: false, impact: -1500 } ] },
+        { text: 'Ключевая идея "Контракта" и "Протоколов" заключается в том, чтобы...', choices: [ { text: 'Сделать трейдинг максимально сложным и забюрократизированным.', correct: false, impact: -1000 }, { text: 'Перенести принятие ключевых решений из эмоционального состояния (в моменте) в рациональное (заранее).', correct: true, impact: 1500 }, { text: 'Создать иллюзию контроля над рынком.', correct: false, impact: -1200 }, { text: 'Впечатлить своего ментора.', correct: false, impact: -500 } ] },
+        { text: 'Что такое "Антитильт-протокол"?', choices: [ { text: 'Заклинание для успокоения нервов.', correct: false, impact: -200 }, { text: 'Заранее прописанный план действий при появлении триггеров тильта (например, желание отыграться).', correct: true, impact: 1200 }, { text: 'Таблетки, которые помогают сохранять спокойствие.', correct: false, impact: -500 }, { text: 'Кнопка "паника" в терминале.', correct: false, impact: -800 } ] }
+      ],
+      5: [
+        { text: 'Какой ориентир по развитию дает 1 урок на первые 3 месяца?', choices: [ { text: 'Заработать первые 1000$.', correct: false, impact: -1500 }, { text: 'Освоить механику, дисциплину, 2 базовых сетапа и сделать 50-100 микро-сделок с ведением дневника.', correct: true, impact: 1000 }, { text: 'Изучить 10 разных сетапов.', correct: false, impact: -1000 }, { text: 'Начать управлять деньгами инвесторов.', correct: false, impact: -3000 } ] },
+        { text: 'На каком этапе, согласно ориентиру пути, можно начинать постепенное увеличение размера позиции?', choices: [ { text: 'С первого дня, чтобы быстрее расти.', correct: false, impact: -2500 }, { text: 'На этапе 6-12 месяцев, после получения доказанного математического ожидания.', correct: true, impact: 1200 }, { text: 'После 0-3 месяцев.', correct: false, impact: -1500 }, { text: 'Никогда, всегда нужно торговать микро-лотом.', correct: false, impact: -500 } ] },
+        { text: 'Что такое "Expectancy" (математическое ожидание), которое упоминается в ориентире?', choices: [ { text: 'Ваши ожидания по прибыли на месяц.', correct: false, impact: -800 }, { text: 'Статистический показатель, который показывает, сколько вы в среднем зарабатываете или теряете на каждой сделке.', correct: true, impact: 1000 }, { text: 'Надежда на то, что сделка будет прибыльной.', correct: false, impact: -1200 }, { text: 'Прогноз аналитика.', correct: false, impact: -500 } ] },
+        { text: 'Вы на правильном пути, если...', choices: [ { text: 'Каждый ваш день закрывается в плюс.', correct: false, impact: -1500 }, { text: 'У вас есть "Контракт на 90 дней", вы знаете свой дневной DD и ведете разбор сделок.', correct: true, impact: 1300 }, { text: 'Вы нашли трейдера, чьи сигналы копируете.', correct: false, impact: -2000 }, { text: 'Вы прочитали 20 книг по трейдингу.', correct: false, impact: -800 } ] },
+        { text: 'Когда можно увольняться с основной работы, согласно Q&A?', choices: [ { text: 'Как только закрыл первую прибыльную неделю.', correct: false, impact: -2500 }, { text: 'Когда есть финансовая подушка и стабильная положительная статистика за несколько месяцев.', correct: true, impact: 1500 }, { text: 'Когда начальник тебя достал.', correct: false, impact: -500 }, { text: 'Никогда, трейдинг — это не работа.', correct: false, impact: -1000 } ] },
+        { text: 'Вся суть первого урока сводится к тому, чтобы...', choices: [ { text: 'Научить вас конкретному сетапу для входа.', correct: false, impact: -1200 }, { text: 'Перестроить мышление: от охоты за "ракетами" к освоению профессии через систему и дисциплину.', correct: true, impact: 1500 }, { text: 'Напугать вас и отговорить от трейдинга.', correct: false, impact: -500 }, { text: 'Продать вам продвинутый курс.', correct: false, impact: -800 } ] },
+        { text: 'Вы подписали "Контракт". Теперь ваши торговые решения принимаются через...', choices: [ { text: 'Эмоции и интуицию.', correct: false, impact: -2000 }, { text: 'Призмы этого контракта, а не через эмоции.', correct: true, impact: 1200 }, { text: 'Советы из Telegram-каналов.', correct: false, impact: -1800 }, { text: 'Подбрасывание монетки.', correct: false, impact: -1000 } ] },
+        { text: 'Профессиональный трейдер в "тихий" день, скорее всего...', choices: [ { text: 'Совершит ноль сделок.', correct: true, impact: 800 }, { text: 'Потеряет деньги из-за овертрейдинга.', correct: false, impact: -1500 }, { text: 'Будет искать экзотические активы для торговли.', correct: false, impact: -1200 }, { text: 'Заработает больше обычного.', correct: false, impact: -1000 } ] },
+        { text: 'Какова цель этапа 12-24 месяцев?', choices: [ { text: 'Наконец-то начать зарабатывать.', correct: false, impact: -1000 }, { text: 'Достичь устойчивости, расширить набор сетапов и системно масштабировать свой размер позиции.', correct: true, impact: 1400 }, { text: 'Начать обучать других.', correct: false, impact: -800 }, { text: 'Вернуть все деньги, потерянные в первый год.', correct: false, impact: -1500 } ] },
+        { text: 'Итоговая мысль первого урока: "С этого момента решения принимаешь через контракт, а не через эмоции". Это означает...', choices: [ { text: 'Трейдинг — это скучная работа по правилам.', correct: false, impact: -500 }, { text: 'Ваша система и заранее принятые решения должны иметь приоритет над сиюминутными импульсами.', correct: true, impact: 1500 }, { text: 'Эмоциям нет места в трейдинге.', correct: false, impact: -800 }, { text: 'Нужно стать роботом.', correct: false, impact: -1000 } ] }
+      ]
+    };
+
+    /* ========= DOM ========= */
+    const gameContainer = document.getElementById('game-container');
+    const startScreen = document.getElementById('start-screen');
+    const mainGame = document.getElementById('main-game');
+    const startBtn = document.getElementById('start-btn');
+    const answerButtonsContainer = document.getElementById('answer-buttons');
+    const levelDisplay = document.getElementById('level-display');
+    const capitalDisplay = document.getElementById('capital-display');
+    const riskBar = document.getElementById('risk-bar');
+    const globalProgressBar = document.getElementById('global-progress-bar');
+    const scenarioText = document.getElementById('scenario-text');
+    const modalOverlay = document.getElementById('modal-overlay');
+    const levelUpModal = document.getElementById('level-up-modal');
+    const levelUpText = document.getElementById('level-up-text');
+    const nextLevelBtn = document.getElementById('next-level-btn');
+    const gameOverModal = document.getElementById('game-over-modal');
+    const restartBtn = document.getElementById('restart-btn');
+    const gameWinModal = document.getElementById('game-win-modal');
+    const restartWinBtn = document.getElementById('restart-win-btn');
+    const chartContainer = document.getElementById('chart-container');
+    const chartCanvas = document.getElementById('equity-chart');
+
+    /* ========= Состояние ========= */
+    let gameState = {};
+    let isAudioEnabled = false;
+    let audioCtx = null;
+
+    /* ========= Инициализация ========= */
+    function initGame(){
+      startScreen.classList.remove('hide');
+      mainGame.classList.add('hide');
+      modalOverlay.classList.add('hide');
+
+      gameState.correctCount = 0;
+      gameState.wrongCount = 0;
+      gameState.startedAt = Date.now();
+
+      // Подготовка Canvas размеров
+      resizeCanvas();
+      window.addEventListener('resize', resizeCanvas);
+    }
+
+    function resizeCanvas(){
+      if(!chartCanvas) return;
+      const rect = chartContainer.getBoundingClientRect();
+      chartCanvas.width = Math.floor(rect.width) - 2;
+      chartCanvas.height = Math.max(250, Math.floor(rect.height) - 2);
+      drawChart();
+    }
+
+    async function startGame(){
+      // Инициализация звука по первому клику (автоплей-политика)
+      try{
+        if(!audioCtx){ audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }
+        if(audioCtx.state !== 'running'){ await audioCtx.resume(); }
+        isAudioEnabled = true;
+      }catch(e){ isAudioEnabled = false; }
+
+      playSound('click');
+      startScreen.classList.add('hide');
+      mainGame.classList.remove('hide');
+      loadLevel(0);
+    }
+
+    function loadLevel(levelIndex){
+      const levelData = levels[levelIndex];
+      const scenarioPool = scenariosByLevel[levelIndex + 1];
+
+      gameState = {
+        level: levelIndex,
+        capital: levelData.startCapital,
+        marginCall: levelData.marginCall,
+        scenarios: shuffleArray([...scenarioPool]).slice(0, levelData.scenarios),
+        currentScenario: 0,
+        equityData: [levelData.startCapital],
+        correctCount: gameState.correctCount || 0,
+        wrongCount: gameState.wrongCount || 0,
+        startedAt: gameState.startedAt || Date.now()
+      };
+
+      levelDisplay.textContent = `${levelIndex + 1}: ${levelData.name}`;
+      updateCapitalDisplay();
+      updateGlobalProgress();
+      gameContainer.className = `w-full min-h-screen flex flex-col items-center justify-center p-4 transition-all duration-500 ${levelData.class}`;
+
+      drawChart();
+      displayScenario();
+    }
+
+    function displayScenario(){
+      if (gameState.currentScenario >= gameState.scenarios.length){
+        levelUp();
+        return;
+      }
+      const scenario = gameState.scenarios[gameState.currentScenario];
+      scenarioText.textContent = scenario.text;
+
+      const shuffledChoices = shuffleArray([...scenario.choices]);
+      answerButtonsContainer.innerHTML = '';
+      shuffledChoices.forEach(choice => {
+        const btn = document.createElement('button');
+        btn.textContent = choice.text;
+        btn.className = 'answer-btn w-full text-left p-4 rounded-lg bg-gray-700/50 hover:bg-gray-600/50 border border-white/20 backdrop-blur-sm';
+        btn.onclick = () => selectAnswer(choice);
+        answerButtonsContainer.appendChild(btn);
+      });
+    }
+
+    function selectAnswer(choice){
+      playSound('click');
+      const buttons = answerButtonsContainer.querySelectorAll('button');
+      buttons.forEach(btn => {
+        btn.disabled = true;
+        const btnChoice = gameState.scenarios[gameState.currentScenario].choices.find(c => c.text === btn.textContent);
+        if (btnChoice && btnChoice.correct) btn.classList.add('btn-correct');
+        else if (btn.textContent === choice.text) btn.classList.add('btn-wrong');
+      });
+
+      if(choice.correct) gameState.correctCount++; else gameState.wrongCount++;
+
+      gameState.capital += choice.impact;
+      updateCapitalDisplay();
+
+      if (choice.correct) playSound('correct');
+      else { playSound('wrong'); gameContainer.classList.add('screen-shake'); setTimeout(()=>gameContainer.classList.remove('screen-shake'), 300); }
+
+      if (gameState.capital <= gameState.marginCall){ setTimeout(gameOver, 2000); return; }
+
+      gameState.currentScenario++;
+      updateGlobalProgress();
+      setTimeout(displayScenario, 2000);
+    }
+
+    function levelUp(){
+      const currentLevel = gameState.level;
+      if (currentLevel + 1 >= levels.length){ gameWin(); return; }
+      playSound('levelUp');
+      modalOverlay.classList.remove('hide');
+      levelUpModal.classList.remove('hide');
+      levelUpText.textContent = levels[currentLevel].levelUpMsg;
+      gameState.level++;
+    }
+
+    function proceedToNextLevel(){
+      playSound('click');
+      modalOverlay.classList.add('hide');
+      levelUpModal.classList.add('hide');
+      loadLevel(gameState.level);
+    }
+
+    function gameOver(){
+      playSound('wrong');
+      modalOverlay.classList.remove('hide');
+      gameOverModal.classList.remove('hide');
+      const detail = Object.assign({}, getGameStats(), { reason:'marginCall' });
+      emitHook('lessonFailed', detail);
+    }
+
+    function gameWin(){
+      playSound('levelUp');
+      modalOverlay.classList.remove('hide');
+      gameWinModal.classList.remove('hide');
+      globalProgressBar.style.width = '100%';
+      const detail = getGameStats();
+      emitHook('lessonComplete', detail);
+    }
+
+    function restartGame(){ playSound('click'); initGame(); }
+
+    function updateCapitalDisplay(){
+      capitalDisplay.textContent = `$${(gameState.capital||0).toLocaleString()}`;
+      gameState.equityData.push(gameState.capital);
+      drawChart();
+      const level = levels[gameState.level];
+      const capitalRange = level.startCapital - level.marginCall;
+      const capitalLost = level.startCapital - gameState.capital;
+      const riskPercent = Math.max(0, Math.min(100, (capitalLost / capitalRange) * 100));
+      riskBar.style.width = riskPercent + '%';
+    }
+
+    function updateGlobalProgress(){
+      const totalScenarios = levels.reduce((s,l)=>s+l.scenarios,0);
+      const scenariosCompleted = levels.slice(0, gameState.level).reduce((s,l)=>s+l.scenarios,0) + gameState.currentScenario;
+      const progress = (scenariosCompleted / totalScenarios) * 100;
+      globalProgressBar.style.width = progress + '%';
+    }
+
+    /* ========= Простой отрисовщик графика (Canvas) ========= */
+    function drawChart(){
+      if(!chartCanvas) return;
+      const ctx = chartCanvas.getContext('2d');
+      const W = chartCanvas.width, H = chartCanvas.height;
+      ctx.clearRect(0,0,W,H);
+
+      const data = gameState.equityData || [0];
+      const n = data.length;
+      const minV = Math.min(...data) * 0.98;
+      const maxV = Math.max(...data) * 1.02;
+      const pad = 24;
+
+      // фон
+      ctx.fillStyle = "rgba(0,0,0,0)";
+      ctx.fillRect(0,0,W,H);
+
+      // сетка
+      ctx.strokeStyle = "rgba(255,255,255,.08)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for(let i=0;i<=4;i++){
+        const y = pad + (H-2*pad) * (i/4);
+        ctx.moveTo(pad, y); ctx.lineTo(W-pad, y);
+      }
+      ctx.stroke();
+
+      // оси
+      ctx.strokeStyle = "rgba(255,255,255,.15)";
+      ctx.beginPath();
+      ctx.moveTo(pad, pad); ctx.lineTo(pad, H-pad);
+      ctx.moveTo(pad, H-pad); ctx.lineTo(W-pad, H-pad);
+      ctx.stroke();
+
+      // линия капитала
+      if(n>1){
+        ctx.beginPath();
+        for(let i=0;i<n;i++){
+          const x = pad + (W-2*pad) * (i/(n-1));
+          const t = (data[i]-minV)/(maxV-minV || 1);
+          const y = H - pad - (H-2*pad) * t;
+          if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+        }
+        ctx.strokeStyle = "#38bdf8";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // заливка под линией
+        const lastY = H - pad - (H-2*pad) * ((data[n-1]-minV)/(maxV-minV || 1));
+        ctx.lineTo(W-pad, H-pad); ctx.lineTo(pad, H-pad); ctx.closePath();
+        ctx.fillStyle = "rgba(56,189,248,0.1)";
+        ctx.fill();
+      }
+    }
+
+    /* ========= Звук: Web Audio API ========= */
+    function playTone(freq, type='sine', dur=0.12, gain=0.05){
+      if(!isAudioEnabled || !audioCtx) return;
+      const t0 = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      osc.type = type;
+      osc.frequency.value = freq;
+      g.gain.setValueAtTime(0, t0);
+      g.gain.linearRampToValueAtTime(gain, t0 + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      osc.connect(g); g.connect(audioCtx.destination);
+      osc.start(t0); osc.stop(t0 + dur + 0.02);
+    }
+    function playSound(type){
+      try{
+        if(type==='correct'){ playTone(659.25,'triangle',0.12,0.06); }          // E5
+        else if(type==='wrong'){ playTone(130.81,'square',0.18,0.06); }         // C3
+        else if(type==='click'){ playTone(98.00,'sine',0.05,0.04); }            // G2-ish
+        else if(type==='levelUp'){ [261.63,329.63,392.00,523.25].forEach((f,i)=>setTimeout(()=>playTone(f,'triangle',0.12,0.05), i*70)); }
+      }catch(e){ /* noop */ }
+    }
+
+    /* ========= Хуки и API ========= */
+    function getGameStats(){
+      const totalLevels = levels.length;
+      const totalPlannedScenarios = levels.reduce((sum,l)=>sum + l.scenarios, 0);
+      const answered = levels.slice(0, gameState.level).reduce((s,l)=>s+l.scenarios,0) + (gameState.currentScenario||0);
+      return {
+        version: 'v1.2.0-offline',
+        startedAt: gameState.startedAt || null,
+        finishedAt: Date.now(),
+        totalLevels,
+        currentLevel: (gameState.level||0)+1,
+        capital: gameState.capital,
+        marginCall: gameState.marginCall,
+        correct: gameState.correctCount || 0,
+        wrong: gameState.wrongCount || 0,
+        answered,
+        totalPlannedScenarios
+      };
+    }
+    function emitHook(name, detail){
+      try{ window.dispatchEvent(new CustomEvent(name, { detail })); }catch(e){}
+      try{ if(name==='lessonComplete' && typeof window.onGameComplete==='function'){ window.onGameComplete(detail); } }catch(e){}
+    }
+    window.gameAPI = { getStats:getGameStats, restart:()=>initGame(), version:'v1.2.0-offline' };
+
+    /* ========= DEV панель (без консоли) ========= */
+    let __DEV_ENABLED__ = false; const __DEV_BUF__ = [];
+    function __devLog(evt, data){ const time = new Date().toLocaleTimeString(); __DEV_BUF__.push({time,evt,data}); if(!__DEV_ENABLED__) return; const log = document.getElementById('dev-log'); if(!log) return; const row = document.createElement('div'); row.textContent = `[${time}] ${evt}: ` + JSON.stringify(data); log.appendChild(row); log.scrollTop = log.scrollHeight; }
+    function __ensureDevPanel(){
+      if(document.getElementById('dev-panel')) return;
+      const badge = document.createElement('div'); badge.id='dev-badge'; badge.className='dev-badge'; badge.textContent='DEV'; document.body.appendChild(badge);
+      const panel = document.createElement('div'); panel.id='dev-panel'; panel.className='dev-panel'; panel.innerHTML = `
+        <h3>DEV / Hook Tester</h3>
+        <div class="dev-row">
+          <button class="dev-btn" id="dev-ok">Симулировать успех</button>
+          <button class="dev-btn" id="dev-fail">Симулировать провал</button>
+          <button class="dev-btn" id="dev-clear">Очистить лог</button>
+        </div>
+        <div id="dev-log" class="dev-log"></div>`;
+      document.body.appendChild(panel);
+      document.getElementById('dev-ok').onclick = ()=>emitHook('lessonComplete', Object.assign(getGameStats(), { test:true }));
+      document.getElementById('dev-fail').onclick = ()=>emitHook('lessonFailed', Object.assign(getGameStats(), { reason:'manualTest', test:true }));
+      document.getElementById('dev-clear').onclick = ()=>{ const log=document.getElementById('dev-log'); if(log) log.innerHTML=''; };
+    }
+    function __toggleDev(){ __ensureDevPanel(); __DEV_ENABLED__ = !__DEV_ENABLED__; const p=document.getElementById('dev-panel'); const b=document.getElementById('dev-badge'); if(!p||!b) return; p.style.display = __DEV_ENABLED__ ? 'block':'none'; b.style.display = __DEV_ENABLED__ ? 'inline-block':'none';
+      if(__DEV_ENABLED__){ const log=document.getElementById('dev-log'); if(log){ log.innerHTML=''; __DEV_BUF__.forEach(x=>{ const d=document.createElement('div'); d.textContent = `[${x.time}] ${x.evt}: `+JSON.stringify(x.data); log.appendChild(d); }); } } }
+    window.addEventListener('lessonComplete', e=>__devLog('lessonComplete', e.detail));
+    window.addEventListener('lessonFailed', e=>__devLog('lessonFailed', e.detail));
+    (function(){
+      const tryBind = ()=>{ const title=document.querySelector('#start-screen h1'); if(!title) return false; title.addEventListener('dblclick', __toggleDev); return true; };
+      if(!tryBind()){ const obs=new MutationObserver(()=>{ if(tryBind()) obs.disconnect(); }); obs.observe(document.body,{childList:true,subtree:true}); }
+      document.addEventListener('keydown', (e)=>{ if(e.shiftKey && e.key && e.key.toLowerCase()==='d') __toggleDev(); });
+    })();
+
+    /* ========= Утилиты ========= */
+    function shuffleArray(arr){ for(let i=arr.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; } return arr; }
+
+    /* ========= События ========= */
+    startBtn.addEventListener('click', startGame);
+    nextLevelBtn.addEventListener('click', proceedToNextLevel);
+    restartBtn.addEventListener('click', restartGame);
+    restartWinBtn.addEventListener('click', restartGame);
+    window.onload = initGame;
+  </script>
+</body>
+</html>

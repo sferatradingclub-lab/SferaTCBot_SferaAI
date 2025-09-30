@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<!-- VERSION: v1.1.0 — Hook-enabled; based on Lesson 1 engine -->
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Путь Трейдера: Урок 2 — Техническая среда скальпера</title>
+  <!-- CDN-библиотеки (онлайн): Tailwind, Chart.js, Tone.js -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.1/chart.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+  <style>
+    body{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans","Apple Color Emoji","Segoe UI Emoji",sans-serif;overflow-y:auto;touch-action:manipulation}
+    .hide{display:none!important}
+    @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+    @keyframes fadeInUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
+    @keyframes screenShake{0%,100%{transform:translateX(0)}20%{transform:translateX(-5px)}40%{transform:translateX(5px)}60%{transform:translateX(-5px)}80%{transform:translateX(5px)}}
+    .fade-in{animation:fadeIn .5s ease-in-out forwards}
+    .fade-in-up{animation:fadeInUp .5s ease-in-out forwards}
+    .pulse-btn{animation:pulse 2s infinite ease-in-out}
+    .screen-shake{animation:screenShake .3s linear}
+    .answer-btn{transition:all .2s ease-out;box-shadow:0 4px 6px -1px rgba(0,0,0,.1),0 2px 4px -2px rgba(0,0,0,.1)}
+    .answer-btn:hover{transform:translateY(-4px) scale(1.02);box-shadow:0 10px 15px -3px rgba(0,0,0,.1),0 4px 6px -2px rgba(0,0,0,.1)}
+    .answer-btn:disabled{cursor:not-allowed;opacity:.7}
+    .btn-correct{background:#22c55e!important;border-color:#16a34a!important;color:#fff;transform:scale(1.05)}
+    .btn-wrong{background:#ef4444!important;border-color:#dc2626!important;color:#fff;opacity:.6}
+    #game-container{transition:background 1s ease-in-out}
+    .level-1-bg{background:radial-gradient(circle,rgba(23,37,84,1) 0%,rgba(12,20,45,1) 100%)}
+    .level-2-bg{background:radial-gradient(circle,rgba(55,48,163,1) 0%,rgba(20,15,60,1) 100%)}
+    .level-3-bg{background:radial-gradient(circle,rgba(20,83,45,1) 0%,rgba(10,40,20,1) 100%)}
+    .level-4-bg{background:radial-gradient(circle,rgba(120,29,29,1) 0%,rgba(50,10,10,1) 100%)}
+    .level-5-bg{background:radial-gradient(circle,rgba(150,150,170,1) 0%,rgba(40,40,50,1) 100%)}
+    /* DEV panel (по желанию, Shift+D) */
+    .dev-badge{position:fixed;top:.5rem;left:.5rem;z-index:60;background:#0ea5e9;color:#fff;font-weight:700;font-size:.75rem;padding:.25rem .5rem;border-radius:.375rem;box-shadow:0 2px 8px rgba(0,0,0,.2);display:none}
+    .dev-panel{position:fixed;bottom:0;left:0;right:0;z-index:60;background:rgba(17,24,39,.98);border-top:1px solid rgba(255,255,255,.08);backdrop-filter:saturate(140%) blur(6px);padding:.75rem 1rem;display:none}
+    .dev-panel *{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace}
+    .dev-panel h3{font-size:.9rem;margin:0 0 .5rem 0;color:#93c5fd}
+    .dev-row{display:flex;gap:.5rem;align-items:center;margin-bottom:.5rem}
+    .dev-log{max-height:30vh;overflow:auto;font-size:.75rem;line-height:1.2;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:.5rem;padding:.5rem;color:#d1d5db}
+    .dev-btn{font-size:.75rem;padding:.35rem .6rem;border-radius:.375rem;border:1px solid rgba(255,255,255,.12);background:#111827;color:#e5e7eb}
+    .dev-btn:hover{background:#0b1220}
+  </style>
+</head>
+<body class="bg-gray-900 text-white">
+
+  <div id="game-container" class="w-full min-h-screen flex flex-col items-center justify-center p-4 transition-all duration-500 level-1-bg">
+
+    <div id="start-screen" class="text-center fade-in">
+      <h1 class="text-5xl md:text-7xl font-black mb-2 text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-indigo-500">
+        Путь Трейдера
+      </h1>
+      <p class="text-2xl font-bold mb-6 text-indigo-200">Урок 2: Техническая среда скальпера</p>
+      <p class="text-gray-300 mb-10 max-w-lg mx-auto">
+        Проверьте, как вы настроили рабочую среду: от горячих клавиш до DOM и ленты. Вопросы основаны на материалах урока.
+      </p>
+      <button id="start-btn" class="bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 text-white font-bold py-4 px-10 rounded-xl text-xl shadow-lg shadow-indigo-500/30 pulse-btn">
+        Начать проверку
+      </button>
+    </div>
+
+    <div id="main-game" class="w-full max-w-4xl mx-auto h-full flex flex-col hide">
+      <div class="w-full bg-gray-700/50 rounded-full h-2.5 mb-4 border border-white/10">
+        <div id="global-progress-bar" class="bg-sky-500 h-full rounded-full" style="width:0%;transition:width .5s ease-in-out;"></div>
+      </div>
+
+      <div id="stats-bar" class="flex flex-wrap justify-between items-center gap-4 bg-black/30 p-3 sm:p-4 rounded-xl mb-4 border border-white/10 fade-in-up">
+        <div>
+          <span class="text-xs sm:text-sm text-gray-400">Уровень</span>
+          <p class="text-base sm:text-xl font-bold text-sky-400" id="level-display"></p>
+        </div>
+        <div>
+          <span class="text-xs sm:text-sm text-gray-400">Капитал</span>
+          <p class="text-base sm:text-xl font-bold text-green-400" id="capital-display"></p>
+        </div>
+        <div>
+          <span class="text-xs sm:text-sm text-gray-400">Риск</span>
+          <div class="w-20 sm:w-24 bg-gray-700 rounded-full h-2.5">
+            <div id="risk-bar" class="bg-red-600 h-2.5 rounded-full" style="width:0%"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="chart-container" class="flex-grow bg-black/30 p-4 rounded-xl border border-white/10 mb-4 fade-in-up" style="animation-delay:.1s;min-height:250px;">
+        <canvas id="equity-chart"></canvas>
+      </div>
+
+      <div class="bg-black/30 p-6 rounded-xl border border-white/10 fade-in-up" style="animation-delay:.2s;">
+        <p id="scenario-text" class="text-center text-lg md:text-xl font-medium mb-6 min-h-[80px] flex items-center justify-center"></p>
+        <div id="answer-buttons" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+      </div>
+    </div>
+
+    <div id="modal-overlay" class="hide fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <div id="level-up-modal" class="hide text-center bg-gray-800 p-6 sm:p-8 rounded-2xl shadow-2xl border-2 border-sky-500 max-w-md mx-4 w-full">
+        <h2 class="text-3xl sm:text-4xl font-black text-sky-400 mb-4">УРОВЕНЬ ПРОЙДЕН!</h2>
+        <p id="level-up-text" class="text-gray-300 text-base sm:text-lg mb-6 sm:mb-8"></p>
+        <button id="next-level-btn" class="bg-sky-500 hover:bg-sky-600 text-white font-bold py-3 px-6 sm:px-8 rounded-lg text-base sm:text-lg w-full">Продолжить</button>
+      </div>
+      <div id="game-over-modal" class="hide text-center bg-gray-800 p-6 sm:p-8 rounded-2xl shadow-2xl border-2 border-red-500 max-w-md mx-4 w-full">
+        <h2 class="text-3xl sm:text-4xl font-black text-red-500 mb-4">ЛИКВИДАЦИЯ</h2>
+        <p class="text-gray-300 text-base sm:text-lg mb-6 sm:mb-8">Капитал исчерпан. Проверьте настройки среды и дисциплину — и попробуйте снова!</p>
+        <button id="restart-btn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-6 sm:px-8 rounded-lg text-base sm:text-lg w-full">Начать заново</button>
+      </div>
+      <div id="game-win-modal" class="hide text-center bg-gray-800 p-6 sm:p-8 rounded-2xl shadow-2xl border-2 border-green-500 max-w-md mx-4 w-full">
+        <h2 class="text-3xl sm:text-4xl font-black text-green-400 mb-4">УРОК 2 УСВОЕН!</h2>
+        <p class="text-gray-300 text-base sm:text-lg mb-6 sm:mb-8">Отличная работа! Ваша техническая среда скальпера выстроена. Готовы к следующему уроку?</p>
+        <button id="restart-win-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 sm:px-8 rounded-lg text-base sm:text-lg w-full">Пройти снова</button>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const gameContainer = document.getElementById('game-container');
+    const startScreen = document.getElementById('start-screen');
+    const mainGame = document.getElementById('main-game');
+    const startBtn = document.getElementById('start-btn');
+    const answerButtonsContainer = document.getElementById('answer-buttons');
+    const levelDisplay = document.getElementById('level-display');
+    const capitalDisplay = document.getElementById('capital-display');
+    const riskBar = document.getElementById('risk-bar');
+    const globalProgressBar = document.getElementById('global-progress-bar');
+    const scenarioText = document.getElementById('scenario-text');
+    const modalOverlay = document.getElementById('modal-overlay');
+    const levelUpModal = document.getElementById('level-up-modal');
+    const levelUpText = document.getElementById('level-up-text');
+    const nextLevelBtn = document.getElementById('next-level-btn');
+    const gameOverModal = document.getElementById('game-over-modal');
+    const restartBtn = document.getElementById('restart-btn');
+    const gameWinModal = document.getElementById('game-win-modal');
+    const restartWinBtn = document.getElementById('restart-win-btn');
+    const chartContainer = document.getElementById('chart-container');
+
+    // Те же параметры сложности/капитала
+    const levels = [
+      { name: "Рабочее место и хоткеи", startCapital: 10000, scenarios: 10, marginCall: 8000,  class: 'level-1-bg', levelUpMsg: "Вы настроили основу: рабочее место, сеть, хоткеи. Дальше — графики и уровни." },
+      { name: "Графики и уровни",      startCapital: 15000, scenarios: 10, marginCall: 11000, class: 'level-2-bg', levelUpMsg: "С графиками порядок. В бой — DOM и лента." },
+      { name: "DOM и лента принтов",   startCapital: 20000, scenarios: 10, marginCall: 15000, class: 'level-3-bg', levelUpMsg: "Читаете поток ордеров. Теперь — заявки и маршрутизация." },
+      { name: "Ордеры, комиссии, риск",startCapital: 30000, scenarios: 10, marginCall: 22000, class: 'level-4-bg', levelUpMsg: "Операционка под контролем. Финал — режим дня и чек-листы." },
+      { name: "Режим дня и чек-листы", startCapital: 50000, scenarios: 10, marginCall: 35000, class: 'level-5-bg', levelUpMsg: "ПОБЕДА!" },
+    ];
+
+    // 10 сценариев на уровень (структура и балансы как в уроке 1)
+    const scenariosByLevel = {
+      1: [
+        { text: 'Какая сеть предпочтительна для скальпера?', choices: [
+          { text: 'Wi-Fi — быстрее и удобнее.', correct: false, impact: -800 },
+          { text: 'Проводной Ethernet для стабильной задержки.', correct: true, impact: 900 },
+          { text: 'Мобильный интернет, если 5G.', correct: false, impact: -1200 },
+          { text: 'Неважно — главное хороший провайдер.', correct: false, impact: -700 },
+        ]},
+        { text: 'Зачем использовать горячие клавиши (hotkeys)?', choices: [
+          { text: 'Чтобы выглядеть профессионально.', correct: false, impact: -300 },
+          { text: 'Ускорить ввод/вывод, снизить клики мышью и ошибки.', correct: true, impact: 800 },
+          { text: 'Они повышают винрейт.', correct: false, impact: -900 },
+          { text: 'Чтобы не пользоваться DOM.', correct: false, impact: -700 },
+        ]},
+        { text: 'Оптимальная раскладка рабочего места для скальпера:', choices: [
+          { text: 'Один ноутбук с тачпадом.', correct: false, impact: -1200 },
+          { text: 'Минимум 1 монитор + удобно выведенные DOM/лента/графики.', correct: true, impact: 700 },
+          { text: 'Три монитора обязательно, иначе нельзя.', correct: false, impact: -500 },
+          { text: 'Монитор вертикально для чатов.', correct: false, impact: -400 },
+        ]},
+        { text: 'Что делать с уведомлениями/мессенджерами во время сессии?', choices: [
+          { text: 'Оставить — вдруг сигнал.', correct: false, impact: -800 },
+          { text: 'Выключить/фокус-режим. Внешний шум = ошибки.', correct: true, impact: 700 },
+          { text: 'Пусть звук останется, а баннеры отключить.', correct: false, impact: -400 },
+          { text: 'Перенести на второй монитор.', correct: false, impact: -500 },
+        ]},
+        { text: 'Зачем писать видео/скринкаст сессии?', choices: [
+          { text: 'Для контента в соцсетях.', correct: false, impact: -400 },
+          { text: 'Объективный разбор действий и паттернов ошибок.', correct: true, impact: 900 },
+          { text: 'Чтобы ментор проверил сделки в реальном времени.', correct: false, impact: -500 },
+          { text: 'Чтобы экономить на дневнике.', correct: false, impact: -700 },
+        ]},
+        { text: 'Какой режим интерфейса предпочтителен для глаз при долгой работе?', choices: [
+          { text: 'Сверхяркий день и белый фон.', correct: false, impact: -500 },
+          { text: 'Сбалансированная яркость и тёмная тема.', correct: true, impact: 400 },
+          { text: 'Минимальная яркость всегда.', correct: false, impact: -300 },
+          { text: 'Автояркость от веб-камеры.', correct: false, impact: -300 },
+        ]},
+        { text: 'Перед стартом сессии важно проверить…', choices: [
+          { text: 'Что музыка включена.', correct: false, impact: -300 },
+          { text: 'Подключение к дата-фиду/бирже и синхронизацию времени.', correct: true, impact: 800 },
+          { text: 'Пароль от Telegram.', correct: false, impact: -300 },
+          { text: 'Гороскоп на день.', correct: false, impact: -1200 },
+        ]},
+        { text: 'Почему «паник-кнопка» (Flatten/Close All) — обязательна?', choices: [
+          { text: 'Чтобы быстро закрыть платформу.', correct: false, impact: -500 },
+          { text: 'Аварийно закрыть все позиции при отказе хоткеев/DOM.', correct: true, impact: 900 },
+          { text: 'Чтобы быстро перевернуться в шорт.', correct: false, impact: -700 },
+          { text: 'Чтобы тестировать торговлю.', correct: false, impact: -400 },
+        ]},
+        { text: 'Какая мышь лучше для точного скальпинга?', choices: [
+          { text: 'Любая, без разницы.', correct: false, impact: -300 },
+          { text: 'Надёжная проводная/стойкая к дабл-клику, с колёсом без ускорения.', correct: true, impact: 500 },
+          { text: 'Тачпад — быстрее.', correct: false, impact: -1000 },
+          { text: 'Трекиболл для скорости.', correct: false, impact: -700 },
+        ]},
+        { text: 'Зачем сохранять профили/лейауты платформы?', choices: [
+          { text: 'Чтобы делиться с друзьями.', correct: false, impact: -300 },
+          { text: 'Быстро восстанавливаться после сбоев и переключать пресеты под актив.', correct: true, impact: 700 },
+          { text: 'Это формальность.', correct: false, impact: -500 },
+          { text: 'Чтобы не делать бэкапы.', correct: false, impact: -400 },
+        ]},
+      ],
+      2: [
+        { text: 'Базовый набор таймфреймов для контекста скальпера:', choices: [
+          { text: 'Только 1-минутный.', correct: false, impact: -600 },
+          { text: 'Старший (15–60m) для контекста + 1–5m для сделок.', correct: true, impact: 900 },
+          { text: 'Только тиковый.', correct: false, impact: -700 },
+          { text: 'Дневка и неделька — остальное лишнее.', correct: false, impact: -800 },
+        ]},
+        { text: 'Какие уровни отмечать до открытия?', choices: [
+          { text: 'Случайные экстремумы прошлой недели.', correct: false, impact: -400 },
+          { text: 'PDH/PDL, премаркет High/Low, уровни объёма, gap-уровни.', correct: true, impact: 1000 },
+          { text: 'Линии тренда из чата.', correct: false, impact: -600 },
+          { text: 'Только круглые числа.', correct: false, impact: -500 },
+        ]},
+        { text: 'Роль VWAP/сессионного VWAP для скальпера:', choices: [
+          { text: 'Главный сигнал для входа.', correct: false, impact: -500 },
+          { text: 'Ориентир баланса дня/контекста; не заменяет план.', correct: true, impact: 700 },
+          { text: 'Индикатор «грааль».', correct: false, impact: -1200 },
+          { text: 'Не нужен вообще.', correct: false, impact: -500 },
+        ]},
+        { text: 'Как использовать ATR/ожидаемую волатильность?', choices: [
+          { text: 'Не использовать — только мешает.', correct: false, impact: -700 },
+          { text: 'Понимать ожидаемый ход, выбирать адекватные цели/стопы.', correct: true, impact: 800 },
+          { text: 'Всегда ставить стоп = ATR*3.', correct: false, impact: -500 },
+          { text: 'ATR нужен для инвестиций, не для скальпа.', correct: false, impact: -600 },
+        ]},
+        { text: 'Правильный подход к индикаторам на графике:', choices: [
+          { text: 'Чем больше — тем точнее.', correct: false, impact: -900 },
+          { text: 'Минимализм: цена/объем/ключевые уровни и ясный план.', correct: true, impact: 800 },
+          { text: 'Индикаторы заменяют контекст.', correct: false, impact: -1000 },
+          { text: 'Только свечи — остальное запрещено.', correct: false, impact: -400 },
+        ]},
+        { text: 'Что такое «открывающий диапазон» (OR) и зачем он?', choices: [
+          { text: 'Боковик вчерашнего дня.', correct: false, impact: -500 },
+          { text: 'Диапазон первых минут/15m — даёт ориентир на утренний импульс.', correct: true, impact: 800 },
+          { text: 'Уровень закрытия месяца.', correct: false, impact: -400 },
+          { text: 'Ненужное понятие.', correct: false, impact: -600 },
+        ]},
+        { text: 'Когда лучше избегать входов по графику?', choices: [
+          { text: 'Когда рынок стоит в узком диапазоне без объёма.', correct: true, impact: 700 },
+          { text: 'Когда есть тренд и объём.', correct: false, impact: -700 },
+          { text: 'Когда совпадают уровни разных ТФ.', correct: false, impact: -600 },
+          { text: 'Когда пробит ключевой уровень.', correct: false, impact: -600 },
+        ]},
+        { text: 'Почему важно фиксировать «зоны ликвидности»?', choices: [
+          { text: 'Чтобы красиво выглядел график.', correct: false, impact: -300 },
+          { text: 'Там вероятны остановки/реакции цены и «борьба» участников.', correct: true, impact: 900 },
+          { text: 'Для построения индикаторов.', correct: false, impact: -400 },
+          { text: 'Чтобы было больше линий.', correct: false, impact: -400 },
+        ]},
+        { text: 'Выравнивание контекста между ТФ означает…', choices: [
+          { text: 'Игнорировать старший ТФ.', correct: false, impact: -700 },
+          { text: 'Входить, когда младший сетап не противоречит старшему сценарию.', correct: true, impact: 900 },
+          { text: 'Торговать против тренда старшего ТФ.', correct: false, impact: -900 },
+          { text: 'Менять ТФ до совпадения картины.', correct: false, impact: -600 },
+        ]},
+        { text: 'Что делать с «визуальным шумом» на графике?', choices: [
+          { text: 'Добавить больше индикаторов.', correct: false, impact: -800 },
+          { text: 'Убрать лишнее: оставьте только то, что влияет на решения.', correct: true, impact: 800 },
+          { text: 'Зумить до тиков.', correct: false, impact: -500 },
+          { text: 'Ничего — привыкнуть.', correct: false, impact: -400 },
+        ]},
+      ],
+      3: [
+        { text: 'DOM (стакан) показывает прежде всего…', choices: [
+          { text: 'Прогноз цены от биржи.', correct: false, impact: -900 },
+          { text: 'Лимитные заявки покупателей/продавцов по ценовым уровням.', correct: true, impact: 900 },
+          { text: 'Только маркет-сделки.', correct: false, impact: -700 },
+          { text: 'Тайные уровни маркет-мейкера.', correct: false, impact: -800 },
+        ]},
+        { text: 'Лента принтов (Time&Sales) нужна для…', choices: [
+          { text: 'Истории заявок за неделю.', correct: false, impact: -600 },
+          { text: 'Оценки агрессии: кто бьёт по рынку, скорость и размер сделок.', correct: true, impact: 1000 },
+          { text: 'Отображения лимитных ордеров.', correct: false, impact: -700 },
+          { text: 'Подтверждения индикаторов.', correct: false, impact: -500 },
+        ]},
+        { text: 'Что такое «абсорбция» в DOM/ленте?', choices: [
+          { text: 'Случайное торможение рынка.', correct: false, impact: -600 },
+          { text: 'Поглощение рыночного потока крупным лимитным участником.', correct: true, impact: 900 },
+          { text: 'Ускорение ленты.', correct: false, impact: -500 },
+          { text: 'Ложный объём индикатора.', correct: false, impact: -500 },
+        ]},
+        { text: 'Как трактовать резкое расширение спреда?', choices: [
+          { text: 'Отличный момент входить побольше.', correct: false, impact: -1500 },
+          { text: 'Сигнал осторожности: ухудшается исполнение/ликвидность.', correct: true, impact: 900 },
+          { text: 'Ничего не значит.', correct: false, impact: -700 },
+          { text: 'Гарантия разворота.', correct: false, impact: -800 },
+        ]},
+        { text: '«Спуфинг» — это…', choices: [
+          { text: 'Задержка котировок.', correct: false, impact: -600 },
+          { text: 'Выставление крупных лимитных ордеров с намерением быстро снять, вводя в заблуждение.', correct: true, impact: 800 },
+          { text: 'Скрытые объёмы (iceberg).', correct: false, impact: -500 },
+          { text: 'Название индикатора.', correct: false, impact: -400 },
+        ]},
+        { text: 'Лучшее применение DOM/ленты для скальпера:', choices: [
+          { text: 'Торговать только по ленте без уровней.', correct: false, impact: -900 },
+          { text: 'Подтверждать идеи на ключевых уровнях, видеть агрессию/поглощение.', correct: true, impact: 900 },
+          { text: 'Подменять торговый план.', correct: false, impact: -800 },
+          { text: 'Смотреть только крупные принты.', correct: false, impact: -500 },
+        ]},
+        { text: 'Market-order против marketable-limit:', choices: [
+          { text: 'Это одно и то же.', correct: false, impact: -600 },
+          { text: 'Market — исполняется по рынку; marketable-limit — лимит, который сразу пересекает спред.', correct: true, impact: 900 },
+          { text: 'Limit всегда быстрее.', correct: false, impact: -700 },
+          { text: 'Market безопаснее от проскальзывания.', correct: false, impact: -1000 },
+        ]},
+        { text: 'Как использовать «айсберг-ордера» (iceberg) в чтении ленты?', choices: [
+          { text: 'Не имеют значения.', correct: false, impact: -700 },
+          { text: 'Замечать повторяющиеся принты по одной цене при устойчивом удержании уровня.', correct: true, impact: 800 },
+          { text: 'Это только на крипте.', correct: false, impact: -600 },
+          { text: 'Всегда шортить при айсберге.', correct: false, impact: -900 },
+        ]},
+        { text: 'Когда избегать агрессивного входа по рынку?', choices: [
+          { text: 'Когда спред узкий и ликвидность хорошая.', correct: false, impact: -600 },
+          { text: 'При тонкой ликвидности/расширении спреда/новостях.', correct: true, impact: 900 },
+          { text: 'Когда тренд ускоряется.', correct: false, impact: -500 },
+          { text: 'Всегда избегать.', correct: false, impact: -400 },
+        ]},
+        { text: 'Правильный выход по DOM/ленте:', choices: [
+          { text: 'Держать, пока не вернёт всю прибыль.', correct: false, impact: -1200 },
+          { text: 'Снимать у цели/ослабления агрессии/поглощения в обратную сторону.', correct: true, impact: 900 },
+          { text: 'Закрывать только по стопу.', correct: false, impact: -700 },
+          { text: 'Ждать совет из чата.', correct: false, impact: -800 },
+        ]},
+      ],
+      4: [
+        { text: 'Как снизить проскальзывание при входе?', choices: [
+          { text: 'Всегда жать Market.', correct: false, impact: -1200 },
+          { text: 'По возможности использовать лимит/marketable-limit у цены с ликвидностью.', correct: true, impact: 900 },
+          { text: 'Ждать расширения спреда.', correct: false, impact: -800 },
+          { text: 'Увеличить размер позиции.', correct: false, impact: -1500 },
+        ]},
+        { text: 'Комиссии maker/taker для скальпера…', choices: [
+          { text: 'Неважны: прибыль всё покроет.', correct: false, impact: -1200 },
+          { text: 'Критичны: частые сделки. Предпочитать maker, если позволяет план.', correct: true, impact: 1000 },
+          { text: 'Относятся только к крипте.', correct: false, impact: -600 },
+          { text: 'Важны лишь на больших депо.', correct: false, impact: -700 },
+        ]},
+        { text: 'Что делать при частичном исполнении (partial fill)?', choices: [
+          { text: 'Игнорировать — само доберётся.', correct: false, impact: -600 },
+          { text: 'Иметь хоткей Cancel/Replace/Join bid/ask дл

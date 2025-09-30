@@ -1,0 +1,16 @@
+# Файлы виртуального окружения
+venv/
+
+# Кэш Python
+__pycache__/
+
+# Файлы баз данных и логов
+bot_data.pickle
+bot_data.sqlite
+bot.log
+
+# Файл с секретными ключами
+.env
+
+# Системные файлы ОС
+.DS_Store
