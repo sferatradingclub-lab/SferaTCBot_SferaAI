@@ -45,12 +45,12 @@ GEM_BOT_2_URL = "https://ссылка_на_полный_курс_будет_зд
 TELEGRAM_CHANNEL_URL = "https://t.me/SferaTC"
 
 # --- FILE_ID ДЛЯ КАРТИНОК ---
-WELCOME_IMAGE_ID = "AgACAgQAAxkBAAEYXopo29bYcM4EuWJk5up3WiGKG8nSoQACI8wxGxD-4VJch-qWOaiCRgEAAwIAA3gAAzYE"
-TRAINING_IMAGE_ID = "AgACAgQAAxkBAAEYXoxo29b6PW1IgwKq3zJdf4kq-qmliAACIswxGxD-4VJbIAOhKve3PAEAAwIAA3gAAzYE"
-PSYCHOLOGIST_IMAGE_ID = "AgACAgQAAxkBAAEYXpJo29clOS-FSN8zZgpuSbQ3-2F2qQACJ8wxGxD-4VKkpaN9NhAhAQEAAwIAA3gAAzYE"
-CHATGPT_IMAGE_ID = "AgACAgQAAxkBAAEYXppo29dHeV5ZgZVp0M5KarNZLgQ1RQACJMwxGxD-4VKAYjqZKk-unwEAAwIAA20AAzYE"
-SUPPORT_IMAGE_ID = "AgACAgQAAxkBAAEYXpxo29dmWSoymKeq_1vdKRLSQP6A6AACJswxGxD-4VJ2lQVtGF7rXQEAAwIAA3gAAzYE"
-TOOLS_IMAGE_ID = "AgACAgQAAxkBAAEYXp5o29eOtpJkbX2hPj8INFCgstrofwACJcwxGxD-4VLOOxrXlyJhpQEAAwIAA3gAAzYE"
+WELCOME_IMAGE_ID = "AgACAgQAAxkBAAICQWjb8wqKwikYJp6txAroJee8xjvpAAKn0DEb4AThUm3BmrJMZoAMAQADAgADeQADNgQ"
+TRAINING_IMAGE_ID = "AgACAgQAAxkBAAICQ2jb8yHH1tJVm6KEUGt_OSxMw-4BAAKp0DEb4AThUltBVKdoe9IJAQADAgADeQADNgQ"
+PSYCHOLOGIST_IMAGE_ID = "AgACAgQAAxkBAAICRWjb8zp6kahf1CikSrl2QAIZ8mV3AAKq0DEb4AThUnxJDM4ftsVKAQADAgADeQADNgQ"
+CHATGPT_IMAGE_ID = "AgACAgQAAxkBAAICR2jb81lq_aydDnaTwSCxO6IwvNIJAAKs0DEb4AThUshrpq9MaaRJAQADAgADeQADNgQ"
+SUPPORT_IMAGE_ID = "AgACAgQAAxkBAAICSWjb82rdXBSnpseMTMjiOSBmAd4zAAKt0DEb4AThUtwJpCAfqRKoAQADAgADeQADNgQ"
+TOOLS_IMAGE_ID = "AgACAgQAAxkBAAICS2jb83zXEZLZetuOs4N_NIbLE7RkAAKu0DEb4AThUrAeDLjYjVAwAQADAgADeQADNgQ"
 
 # --- ДАННЫЕ ДЛЯ РАЗДЕЛА "ПОЛЕЗНЫЕ ИНСТРУМЕНТЫ" ---
 TOOLS_DATA = {
@@ -58,9 +58,9 @@ TOOLS_DATA = {
         'title': "💰 Скидки на комиссии",
         'intro_text': "В этом разделе собраны лучшие биржи и брокеры. Откройте счет по этим ссылкам, чтобы получить максимальные скидки и экономить на комиссиях!",
         'items': [
-            { 'name': 'Крипто Брокер Tiger.com', 'callback': 'tool_tiger', 'description': 'Единая платформа для торговли на нескольких биржах. Экономьте на комиссиях, ведите автоматический дневник сделок и управляйте рисками.', 'image_id': 'AgACAgQAAxkBAAEYXoRo29RV6Y8woIgthw_GeQMDqyySPAACIMwxGxD-4VKFGycvX6gGqgEAAwIAA3kAAzYE', 'site_url': 'https://account.tiger.com/signup?referral=sferatc', 'video_url': 'https://www.youtube.com/@sferaTC' },
-            { 'name': 'Крипто Брокер Vataga', 'callback': 'tool_vataga', 'description': 'Торгуйте на всех крупных биржах через одну платформу: продвинутые графики, мультиаккаунт и круглосуточная поддержка.', 'image_id': 'AgACAgQAAxkBAAEYXoZo29XlQX4Dxn8RpSzW8Ll8_HVLIgACKcwxGxD-4VJ9sXI9HQjOVwEAAwIAA3kAAzYE', 'site_url': 'https://app.vataga.trading/register', 'video_url': 'https://www.youtube.com/@sferaTC' },
-            { 'name': 'Крипто Брокер Whitelist', 'callback': 'tool_whitelist', 'description': 'Онлайн-офис для скальперов с мощным торговым терминалом Scalpee для ПК и большим сообществом трейдеров.', 'image_id': 'AgACAgQAAxkBAAEYXoho29YYXxz4Dl58octNx3UHxnyvwwACKMwxGxD-4VIwYsTzQolnnAEAAwIAA3MAAzYE', 'site_url': 'https://passport.whitelist.capital/', 'video_url': 'https://www.youtube.com/@sferaTC' }
+            { 'name': 'Крипто Брокер Tiger.com', 'callback': 'tool_tiger', 'description': 'Единая платформа для торговли на нескольких биржах. Экономьте на комиссиях, ведите автоматический дневник сделок и управляйте рисками.', 'image_id': 'AgACAgQAAxkBAAICO2jb7dO65ohp9d_RyLy5V0pL7c8NAAKg0DEb4AThUugE3GHwNfEgAQADAgADeQADNgQ', 'site_url': 'https://account.tiger.com/signup?referral=sferatc', 'video_url': 'https://www.youtube.com/@sferaTC' },
+            { 'name': 'Крипто Брокер Vataga', 'callback': 'tool_vataga', 'description': 'Торгуйте на всех крупных биржах через одну платформу: продвинутые графики, мультиаккаунт и круглосуточная поддержка.', 'image_id': 'AgACAgQAAxkBAAICPWjb8nqaR4unVO3TFjaQ7FyU3VBDAAKk0DEb4AThUig_pHKXcHIeAQADAgADeQADNgQ', 'site_url': 'https://app.vataga.trading/register', 'video_url': 'https://www.youtube.com/@sferaTC' },
+            { 'name': 'Крипто Брокер Whitelist', 'callback': 'tool_whitelist', 'description': 'Онлайн-офис для скальперов с мощным торговым терминалом Scalpee для ПК и большим сообществом трейдеров.', 'image_id': 'AgACAgQAAxkBAAICP2jb8tCWFDcYZHYoZhdA5n1Xf0nVAAKl0DEb4AThUhlCkLw2grF3AQADAgADeQADNgQ', 'site_url': 'https://passport.whitelist.capital/', 'video_url': 'https://www.youtube.com/@sferaTC' }
         ]
     },
     'screeners': {'title': "📈 Скринеры", 'intro_text': "Выберите скринер:", 'items': []},
@@ -495,29 +495,26 @@ def main() -> None:
         return
 
     persistence = PicklePersistence(filepath="bot_data.pickle")
-    
-    # --- НАЧАЛО ИСПРАВЛЕНИЯ ---
-    # Создаем Application Builder
-    builder = Application.builder().token(TELEGRAM_TOKEN).persistence(persistence)
-    
-    # Правильно инициализируем JobQueue
-    job_queue = JobQueue()
-    application = builder.job_queue(job_queue).build()
-    # --- КОНЕЦ ИСПРАВЛЕНИЯ ---
+
+    # --- ИСПРАВЛЕННАЯ ВЕРСИЯ ---
+    application = Application.builder().token(TELEGRAM_TOKEN).persistence(persistence).build()
 
     # --- РЕГИСТРАЦИЯ ОБРАБОТЧИКОВ ---
-    
+
     # Команды
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("approve", approve_user))
     application.add_handler(CommandHandler("stats", show_stats))
     application.add_handler(CommandHandler("reset_user", reset_user))
-    
+
     # Инлайн-кнопки
     application.add_handler(CallbackQueryHandler(user_actions_handler, pattern='^user_'))
     application.add_handler(CallbackQueryHandler(tools_menu_handler, pattern='^tool'))
     application.add_handler(CallbackQueryHandler(admin_menu_handler, pattern='^admin_'))
     application.add_handler(CallbackQueryHandler(broadcast_confirmation_handler, pattern='^broadcast_'))
+
+    # Временный обработчик для получения file_id (если вы его добавляли)
+    # application.add_handler(MessageHandler(filters.PHOTO, get_photo_id))
 
     # Кнопки главного меню
     application.add_handler(MessageHandler(filters.TEXT & filters.Regex('^Пройти бесплатное обучение$'), show_training_menu))
@@ -532,17 +529,13 @@ def main() -> None:
 
     # Задачи
     application.job_queue.run_daily(daily_stats_job, time=time(0, 0), name="daily_stats_report")
-    
+
     # --- ЗАПУСК БОТА ---
     if WEBHOOK_URL:
         url_path = TELEGRAM_TOKEN.split(':')[-1]
         webhook_full_url = f"{WEBHOOK_URL.rstrip('/')}/{url_path}"
         logger.info(f"Бот @{BOT_USERNAME} запускается через Webhook.")
-        
-        # Настраиваем вебхук перед запуском
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(application.bot.set_webhook(url=webhook_full_url))
-        
+
         application.run_webhook(
             listen="0.0.0.0",
             port=WEBHOOK_PORT,
