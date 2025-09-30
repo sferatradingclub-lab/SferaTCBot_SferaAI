@@ -172,38 +172,80 @@ async def show_admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 # =============================================================================
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Обрабатывает все сообщения, которые не являются командами или кнопками меню."""
     user = update.effective_user
-    if context.user_data.get('is_banned', False): return
+
+    if context.user_data.get('is_banned', False):
+        return
+        
     context.user_data['last_seen'] = datetime.now()
     
     admin_state = context.user_data.get('admin_state')
     user_state = context.user_data.get('state')
     
+    # --- СЦЕНАРИЙ: ПОЛЬЗОВАТЕЛЬ ПИШЕТ В ПОДДЕРЖКУ ---
     if user_state == 'awaiting_support_message' and str(user.id) != ADMIN_CHAT_ID:
         context.user_data['state'] = None 
-        forwarded_message = await context.bot.forward_message(chat_id=ADMIN_CHAT_ID, from_chat_id=user.id, message_id=update.message.message_id)
+        
+        # Мы НЕ пересылаем сообщение, а просто запоминаем его ID
+        original_message_id = update.message.message_id
+
         await update.message.reply_text("Спасибо, ваше сообщение отправлено в поддержку. Мы скоро ответим.")
+
+        # Копируем сообщение админу, чтобы получить ID копии в чате админа
+        forwarded_message_copy = await context.bot.copy_message(
+            chat_id=ADMIN_CHAT_ID,
+            from_chat_id=user.id,
+            message_id=original_message_id
+        )
 
         user_fullname = escape_markdown(user.full_name or "Имя не указано", version=2)
         user_username = f"@{escape_markdown(user.username, version=2)}" if user.username else "Нет"
-        admin_info_text = (f"❗️ Новый вопрос от *{user_fullname}* \\({user_username}\\)\\.\nUser ID: `{user.id}`\n\nНажмите кнопку ниже, чтобы ответить\\.")
-        reply_button = [[InlineKeyboardButton("💬 Ответить", callback_data=f'user_reply_{user.id}_{forwarded_message.message_id}')]]
-        await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text=admin_info_text, reply_markup=InlineKeyboardMarkup(reply_button), parse_mode='MarkdownV2')
+
+        admin_info_text = (
+            f"❗️ Новый вопрос от *{user_fullname}* \\({user_username}\\)\\.\nUser ID: `{user.id}`\n\n"
+            f"Нажмите кнопку ниже, чтобы ответить на это сообщение\\."
+        )
+        
+        # ИЗМЕНЕНИЕ: В кнопку передаем ID ОРИГИНАЛЬНОГО сообщения
+        reply_button = [[
+            InlineKeyboardButton(
+                "💬 Ответить", 
+                callback_data=f'user_reply_{user.id}_{original_message_id}'
+            )
+        ]]
+        
+        # Отправляем инфо админу как ответ на скопированное сообщение
+        await context.bot.send_message(
+            chat_id=ADMIN_CHAT_ID,
+            text=admin_info_text,
+            reply_to_message_id=forwarded_message_copy.message_id,
+            reply_markup=InlineKeyboardMarkup(reply_button),
+            parse_mode='MarkdownV2'
+        )
         return
 
+    # --- СЦЕНАРИЙ: АДМИН ОТВЕЧАЕТ ПОЛЬЗОВАТЕЛЮ ---
     if str(user.id) == ADMIN_CHAT_ID and admin_state == 'users_awaiting_dm':
         target_user_id = context.user_data.pop('dm_target_user_id', None)
         context.user_data['admin_state'] = None
         if target_user_id:
             try:
                 message_id_to_reply = context.user_data.pop('reply_to_message_id', None)
-                await context.bot.copy_message(chat_id=target_user_id, from_chat_id=ADMIN_CHAT_ID, message_id=update.message.message_id, reply_to_message_id=message_id_to_reply)
+                await context.bot.copy_message(
+                    chat_id=target_user_id,
+                    from_chat_id=ADMIN_CHAT_ID,
+                    message_id=update.message.message_id,
+                    reply_to_message_id=message_id_to_reply
+                )
                 await update.message.reply_text("✅ Сообщение успешно отправлено!")
+
             except TelegramError as e:
                 logger.error(f"Не удалось отправить DM пользователю {target_user_id}: {e.message}")
                 await update.message.reply_text(f"❌ Не удалось отправить сообщение. Ошибка: {e.message}")
         return
 
+    # --- СЦЕНАРИИ ЗАЯВОК И АДМИН-ДЕЙСТВИЙ (без изменений) ---
     if user_state == 'awaiting_id_submission' and str(user.id) != ADMIN_CHAT_ID:
         text = update.message.text or ""
         context.user_data['awaiting_verification'] = True
@@ -325,45 +367,55 @@ async def broadcast_confirmation_handler(update: Update, context: ContextTypes.D
         context.user_data.pop('broadcast_message_id', None)
 
 async def user_actions_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Обрабатывает все действия с пользователями из админки."""
     query = update.callback_query
     await query.answer()
     parts = query.data.split('_')
     action, user_id = parts[1], int(parts[2])
     user_data = context.application.user_data.get(user_id, {})
 
+    # ИЗМЕНЕНИЕ: Определяем display_name для всех действий
+    target_user_data = context.application.user_data.get(user_id, {})
+    display_name = f"@{target_user_data.get('username')}" if target_user_data.get('username') else target_user_data.get('full_name', f"ID: {user_id}")
+
     if action == "reply":
         reply_to_msg_id = int(parts[3]) if len(parts) > 3 else None
         context.user_data.update({'admin_state': 'users_awaiting_dm', 'dm_target_user_id': user_id, 'reply_to_message_id': reply_to_msg_id})
-        await query.edit_message_text(f"Введите ответ для пользователя {user_id}:")
+        await query.edit_message_text(f"Введите ответ для пользователя {display_name}:")
         return
+
     elif action == "approve":
         user_data.update({'is_approved': True, 'approval_date': datetime.now(), 'awaiting_verification': False})
         logger.info(f"Админ ({query.from_user.id}) одобрил {user_id}")
         await context.bot.send_message(chat_id=user_id, text="🎉 Поздравляем! Администратор одобрил вашу заявку.")
+    
     elif action == "revoke":
         user_data.update({'is_approved': False})
         user_data.pop('approval_date', None)
         logger.info(f"Админ ({query.from_user.id}) отозвал одобрение у {user_id}")
         await context.bot.send_message(chat_id=user_id, text="❗️Ваш доступ к полному курсу был отозван администратором.")
+    
     elif action == "message":
-        target_user_data = context.application.user_data.get(user_id, {})
-        display_name = f"@{target_user_data.get('username')}" if target_user_data.get('username') else target_user_data.get('full_name', user_id)
         context.user_data.update({'admin_state': 'users_awaiting_dm', 'dm_target_user_id': user_id})
         context.user_data.pop('reply_to_message_id', None)
         await query.edit_message_text(f"Введите сообщение для {display_name}:")
         return
+
     elif action == "block":
-        await query.edit_message_text(f"Вы уверены, что хотите заблокировать {user_id}?", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("ДА, заблокировать", callback_data=f'user_blockconfirm_{user_id}')], [InlineKeyboardButton("Отмена", callback_data=f'user_showcard_{user_id}')]]))
+        await query.edit_message_text(f"Вы уверены, что хотите заблокировать {display_name}?", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("ДА, заблокировать", callback_data=f'user_blockconfirm_{user_id}')], [InlineKeyboardButton("Отмена", callback_data=f'user_showcard_{user_id}')]]))
         return
+        
     elif action == "blockconfirm":
         user_data['is_banned'] = True
         logger.info(f"Админ ({query.from_user.id}) заблокировал {user_id}")
         await query.answer("Пользователь заблокирован.", show_alert=True)
+
     elif action == "unblock":
         user_data.pop('is_banned', None)
         logger.info(f"Админ ({query.from_user.id}) разблокировал {user_id}")
         await query.answer("Пользователь разблокирован.", show_alert=True)
     
+    # После любого действия (кроме message/reply/block) обновляем карточку
     await display_user_card(update, context, user_id)
 
 # =============================================================================
