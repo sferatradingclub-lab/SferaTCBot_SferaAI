@@ -543,19 +543,31 @@ async def display_user_card(update: Update, context: ContextTypes.DEFAULT_TYPE, 
 # =============================================================================
 
 def main() -> None:
+    """Главная функция, которая собирает и запускает бота."""
     if not all([TELEGRAM_TOKEN, ADMIN_CHAT_ID]):
         logger.critical("КРИТИЧЕСКАЯ ОШИБКА: Отсутствуют TELEGRAM_TOKEN или ADMIN_CHAT_ID.")
         return
 
     persistence = PicklePersistence(filepath="bot_data.pickle")
-    application = Application.builder().token(TELEGRAM_TOKEN).persistence(persistence).build()
+
+    # Создаем Application Builder
+    builder = Application.builder().token(TELEGRAM_TOKEN).persistence(persistence)
+
+    # Правильно инициализируем JobQueue, если она нужна
+    if builder.job_queue:
+        application = builder.build()
+    else:
+        job_queue = JobQueue()
+        application = builder.job_queue(job_queue).build()
+
+    # --- РЕГИСТРАЦИЯ ОБРАБОТЧИКОВ ---
 
     # Команды
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("approve", approve_user))
     application.add_handler(CommandHandler("stats", show_stats))
     application.add_handler(CommandHandler("reset_user", reset_user))
-    
+
     # Инлайн-кнопки
     application.add_handler(CallbackQueryHandler(user_actions_handler, pattern='^user_'))
     application.add_handler(CallbackQueryHandler(tools_menu_handler, pattern='^tool'))
@@ -575,7 +587,8 @@ def main() -> None:
 
     # Задачи
     application.job_queue.run_daily(daily_stats_job, time=time(0, 0), name="daily_stats_report")
-    
+
+    # --- ЗАПУСК БОТА ---
     if WEBHOOK_URL:
         url_path = TELEGRAM_TOKEN.split(':')[-1]
         webhook_full_url = f"{WEBHOOK_URL.rstrip('/')}/{url_path}"
