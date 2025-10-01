@@ -651,5 +651,3 @@ def main() -> None:
         logger.info(f"Бот @{BOT_USERNAME} запускается в режиме Polling.")
         application.run_polling()
 
-if __name__ == "__main__":
-    main()
