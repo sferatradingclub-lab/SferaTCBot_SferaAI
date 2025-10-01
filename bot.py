@@ -32,7 +32,7 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler("bot.log"),
+        logging.FileHandler("bot.log", encoding='utf-8'),
         logging.StreamHandler()
     ]
 )
@@ -41,16 +41,16 @@ logger = logging.getLogger(__name__)
 # --- ССЫЛКИ И FILE_ID ---
 GEM_BOT_1_URL = "https://chatgpt.com/g/g-68d9b0f1d07c8191bba533ecfb9d1689-sferatc-lessons"
 AI_PSYCHOLOGIST_URL = "https://chatgpt.com/g/g-68bb703f9a3881918d51f97375d7d128-sferatc-ai"
-GEM_BOT_2_URL = "https://chatgpt.com/g/g-68d9b0f1d0745661bba533ecfb9d1689-sferatc-lessons" # ЗАМЕНИТЕ НА ВАШУ РЕАЛЬНУЮ ССЫЛКУ
+GEM_BOT_2_URL = "https://g-2NaO34S37-sferatc-full-course"
 TELEGRAM_CHANNEL_URL = "https://t.me/SferaTC"
 
-# --- FILE_ID ДЛЯ КАРТИНОК ---
-WELCOME_IMAGE_ID = "AgACAgQAAxkBAAICQWjb8wqKwikYJp6txAroJee8xjvpAAKn0DEb4AThUm3BmrJMZoAMAQADAgADeQADNgQ"
-TRAINING_IMAGE_ID = "AgACAgQAAxkBAAICQ2jb8yHH1tJVm6KEUGt_OSxMw-4BAAKp0DEb4AThUltBVKdoe9IJAQADAgADeQADNgQ"
-PSYCHOLOGIST_IMAGE_ID = "AgACAgQAAxkBAAICRWjb8zp6kahf1CikSrl2QAIZ8mV3AAKq0DEb4AThUnxJDM4ftsVKAQADAgADeQADNgQ"
-CHATGPT_IMAGE_ID = "AgACAgQAAxkBAAICR2jb81lq_aydDnaTwSCxO6IwvNIJAAKs0DEb4AThUshrpq9MaaRJAQADAgADeQADNgQ"
-SUPPORT_IMAGE_ID = "AgACAgQAAxkBAAICSWjb82rdXBSnpseMTMjiOSBmAd4zAAKt0DEb4AThUtwJpCAfqRKoAQADAgADeQADNgQ"
-TOOLS_IMAGE_ID = "AgACAgQAAxkBAAICS2jb83zXEZLZetuOs4N_NIbLE7RkAAKu0DEb4AThUrAeDLjYjVAwAQADAgADeQADNgQ"
+# --- FILE_ID ДЛЯ КАРТИНОК (ЗАГРУЖАЮТСЯ ИЗ .env) ---
+WELCOME_IMAGE_ID = os.getenv("WELCOME_IMAGE_ID")
+TRAINING_IMAGE_ID = os.getenv("TRAINING_IMAGE_ID")
+PSYCHOLOGIST_IMAGE_ID = os.getenv("PSYCHOLOGIST_IMAGE_ID")
+CHATGPT_IMAGE_ID = os.getenv("CHATGPT_IMAGE_ID")
+SUPPORT_IMAGE_ID = os.getenv("SUPPORT_IMAGE_ID")
+TOOLS_IMAGE_ID = os.getenv("TOOLS_IMAGE_ID")
 
 # --- ДАННЫЕ ДЛЯ РАЗДЕЛА "ПОЛЕЗНЫЕ ИНСТРУМЕНТЫ" ---
 TOOLS_DATA = {
@@ -58,9 +58,9 @@ TOOLS_DATA = {
         'title': "💰 Скидки на комиссии",
         'intro_text': "В этом разделе собраны лучшие биржи и брокеры. Откройте счет по этим ссылкам, чтобы получить максимальные скидки и экономить на комиссиях!",
         'items': [
-            { 'name': 'Крипто Брокер Tiger.com', 'callback': 'tool_tiger', 'description': 'Единая платформа для торговли на нескольких биржах. Экономьте на комиссиях, ведите автоматический дневник сделок и управляйте рисками.', 'image_id': 'AgACAgQAAxkBAAICO2jb7dO65ohp9d_RyLy5V0pL7c8NAAKg0DEb4AThUugE3GHwNfEgAQADAgADeQADNgQ', 'site_url': 'https://account.tiger.com/signup?referral=sferatc', 'video_url': 'https://www.youtube.com/@sferaTC' },
-            { 'name': 'Крипто Брокер Vataga Crypto', 'callback': 'tool_vataga', 'description': 'Торгуйте на всех крупных биржах через одну платформу: продвинутые графики, мультиаккаунт и круглосуточная поддержка.', 'image_id': 'AgACAgQAAxkBAAICPWjb8nqaR4unVO3TFjaQ7FyU3VBDAAKk0DEb4AThUig_pHKXcHIeAQADAgADeQADNgQ', 'site_url': 'https://app.vataga.trading/register', 'video_url': 'https://www.youtube.com/@sferaTC' },
-            { 'name': 'Крипто Брокер Whitelist', 'callback': 'tool_whitelist', 'description': 'Онлайн-офис для скальперов с мощным торговым терминалом Scalpee для ПК и большим сообществом трейдеров.', 'image_id': 'AgACAgQAAxkBAAICP2jb8tCWFDcYZHYoZhdA5n1Xf0nVAAKl0DEb4AThUhlCkLw2grF3AQADAgADeQADNgQ', 'site_url': 'https://passport.whitelist.capital/signup/?ref=sferatc', 'video_url': 'https://www.youtube.com/@sferaTC' }
+            { 'name': 'Крипто Брокер Tiger.com', 'callback': 'tool_tiger', 'description': 'Единая платформа для торговли на нескольких биржах. Экономьте на комиссиях, ведите автоматический дневник сделок и управляйте рисками.', 'image_id': os.getenv("TIGER_IMAGE_ID"), 'site_url': 'https://account.tiger.com/signup?referral=sferatc', 'video_url': 'https://www.youtube.com/@sferaTC' },
+            { 'name': 'Крипто Брокер Vataga Crypto', 'callback': 'tool_vataga', 'description': 'Торгуйте на всех крупных биржах через одну платформу: продвинутые графики, мультиаккаунт и круглосуточная поддержка.', 'image_id': os.getenv("VATAGA_IMAGE_ID"), 'site_url': 'https://app.vataga.trading/register', 'video_url': 'https://www.youtube.com/@sferaTC' },
+            { 'name': 'Крипто Брокер Whitelist', 'callback': 'tool_whitelist', 'description': 'Онлайн-офис для скальперов с мощным торговым терминалом Scalpee для ПК и большим сообществом трейдеров.', 'image_id': os.getenv("WHITELIST_IMAGE_ID"), 'site_url': 'https://passport.whitelist.capital/signup/?ref=sferatc', 'video_url': 'https://www.youtube.com/@sferaTC' }
         ]
     },
     'screeners': {'title': "📈 Скринеры", 'intro_text': "Выберите скринер:", 'items': []},
@@ -134,7 +134,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         
         user_fullname = escape_markdown(user.full_name or "Имя не указано", version=2)
         user_username = f"@{escape_markdown(user.username, version=2)}" if user.username else "Нет"
-        admin_message = (f"👋 Новый пользователь!\n\nИмя: {user_fullname}\nUsername: {user_username}\nID: `{user.id}`")
+        admin_message = (f"👋 Новый пользователь\\!\n\nИмя: {user_fullname}\nUsername: {user_username}\nID: `{user.id}`")
         try:
             await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text=admin_message, parse_mode='MarkdownV2')
         except Exception as e:
@@ -152,7 +152,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         context.user_data['state'] = 'awaiting_id_submission'
         
         text = (
-            f"С возвращением, {user.first_name}! Поздравляем с прохождением первых 3 уроков нашего курса «Путь трейдера»! 🥳\n\n"
+            f"С возвращением, {user.first_name}! Поздравляем с прохождением первых трех уроков нашего курса «Путь трейдера»! 🥳\n\n"
             "Чтобы поддержать наш проект и получить доступ к остальным 27 урокам, просто зарегистрируйся у одного из наших брокеров-партнеров по ссылке ниже.\n\n"
             "Ты получишь отличные бонусы и скидки на комиссии, а мы будем делать для тебя следующие уроки и другие полезности. ❤️\n\n"
             "После регистрации через нашу ссылку просто отправь сюда свой ID пользователя из личного кабинета. Мы занесём тебя в наш лист рефералов и откроем доступ к следующим урокам курса 🚀"
@@ -160,7 +160,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
         discounts = TOOLS_DATA.get('discounts', {}).get('items', [])
         tiger_url = next((item['site_url'] for item in discounts if 'Tiger.com' in item['name']), '#')
-        vataga_url = next((item['site_url'] for item in discounts if 'Vataga' in item['name']), '#')
+        vataga_url = next((item['site_url'] for item in discounts if 'Vataga Crypto' in item['name']), '#')
         whitelist_url = next((item['site_url'] for item in discounts if 'Whitelist' in item['name']), '#')
 
         keyboard = [
@@ -486,11 +486,11 @@ async def reset_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     try:
         user_id_to_reset = int(context.args[0])
         if user_id_to_reset in context.application.user_data:
-            context.application.user_data[user_id_to_reset].pop('awaiting_verification', None)
-            logger.info(f"Админ ({update.effective_user.id}) сбросил статус верификации для {user_id_to_reset}")
-            await update.message.reply_text(f"Статус 'ожидает верификации' для {user_id_to_reset} сброшен.")
+            context.application.user_data[user_id_to_reset].clear()
+            logger.info(f"Админ ({update.effective_user.id}) полностью очистил данные пользователя {user_id_to_reset}")
+            await update.message.reply_text(f"✅ Данные пользователя {user_id_to_reset} полностью очищены. Теперь он считается новым.")
         else:
-            await update.message.reply_text(f"Пользователь {user_id_to_reset} не найден.")
+            await update.message.reply_text(f"Пользователь {user_id_to_reset} не найден в базе.")
     except (IndexError, ValueError):
         await update.message.reply_text("Ошибка! Используй: /reset_user <user_id>")
 
