@@ -1,0 +1,118 @@
+import asyncio
+from datetime import time
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    MessageHandler,
+    filters,
+    CallbackQueryHandler,
+)
+
+from config import TELEGRAM_TOKEN, WEBHOOK_URL, WEBHOOK_PORT, BOT_USERNAME, logger
+
+# Импорты для настройки базы данных
+from models.base import Base, engine
+from models.user import User # Убедитесь, что импортируете все ваши модели
+
+# Импортируем наши обработчики
+from handlers.common_handlers import (
+    start,
+    help_command,
+    handle_message,
+    show_training_menu,
+    show_psychologist_menu,
+    show_chatgpt_menu,
+    show_support_menu,
+)
+from handlers.admin_handlers import (
+    show_admin_panel,
+    admin_menu_handler,
+    broadcast_confirmation_handler,
+    approve_user,
+    reset_user,
+    show_stats,
+    daily_stats_job,
+)
+from handlers.tools_handlers import (
+    show_tools_menu,
+    tools_menu_handler,
+)
+from handlers.verification_handlers import (
+    user_actions_handler,
+    support_rejection_handler,
+    support_dm_handler,
+)
+
+def setup_database():
+    """Создает все таблицы в базе данных на основе моделей SQLAlchemy."""
+    logger.info("Настройка базы данных...")
+    Base.metadata.create_all(bind=engine)
+    logger.info("База данных успешно настроена.")
+
+def main() -> None:
+    """Главная функция, которая собирает и запускает бота."""
+    
+    # Сначала настраиваем базу данных
+    setup_database()
+
+    # Собираем приложение БЕЗ persistence
+    application = Application.builder().token(TELEGRAM_TOKEN).build()
+
+    # --- РЕГИСТРАЦИЯ ОБРАБОТЧИКОВ ---
+
+    # Команды
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("training", show_training_menu))
+    application.add_handler(CommandHandler("psychologist", show_psychologist_menu))
+    application.add_handler(CommandHandler("tools", show_tools_menu))
+    application.add_handler(CommandHandler("chatgpt", show_chatgpt_menu))
+    application.add_handler(CommandHandler("support", show_support_menu))
+
+    # Команды только для админа
+    application.add_handler(CommandHandler("admin", show_admin_panel))
+    application.add_handler(CommandHandler("approve", approve_user))
+    application.add_handler(CommandHandler("stats", show_stats))
+    application.add_handler(CommandHandler("reset_user", reset_user))
+
+    # Инлайн-кнопки (CallbackQueryHandler)
+    application.add_handler(CallbackQueryHandler(admin_menu_handler, pattern='^admin_'))
+    application.add_handler(CallbackQueryHandler(broadcast_confirmation_handler, pattern='^broadcast_'))
+    application.add_handler(CallbackQueryHandler(tools_menu_handler, pattern='^tool'))
+    application.add_handler(CallbackQueryHandler(user_actions_handler, pattern='^user_'))
+    application.add_handler(CallbackQueryHandler(support_rejection_handler, pattern='^support_from_rejection$'))
+    application.add_handler(CallbackQueryHandler(support_dm_handler, pattern='^support_from_dm$'))
+
+    # Кнопки главного меню (MessageHandler)
+    application.add_handler(MessageHandler(filters.TEXT & filters.Regex('^Пройти бесплатное обучение$'), show_training_menu))
+    application.add_handler(MessageHandler(filters.TEXT & filters.Regex('^ИИ-психолог$'), show_psychologist_menu))
+    application.add_handler(MessageHandler(filters.TEXT & filters.Regex('^Полезные инструменты$'), show_tools_menu))
+    application.add_handler(MessageHandler(filters.TEXT & filters.Regex('^Бесплатный ChatGPT$'), show_chatgpt_menu))
+    application.add_handler(MessageHandler(filters.TEXT & filters.Regex('^Поддержка$'), show_support_menu))
+    application.add_handler(MessageHandler(filters.TEXT & filters.Regex('^👑 Админка$'), show_admin_panel))
+
+    # Все остальные сообщения (должен быть последним!)
+    # Обратите внимание: handle_message теперь должен будет работать с БД
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
+    # Задачи
+    # Обратите внимание: daily_stats_job теперь должен будет работать с БД
+    application.job_queue.run_daily(daily_stats_job, time=time(0, 0), name="daily_stats_report")
+
+    # --- ЗАПУСК БОТА ---
+    if WEBHOOK_URL:
+        url_path = TELEGRAM_TOKEN.split(':')[-1]
+        webhook_full_url = f"{WEBHOOK_URL.rstrip('/')}/{url_path}"
+        logger.info(f"Бот @{BOT_USERNAME} запускается через Webhook.")
+        application.run_webhook(
+            listen="0.0.0.0",
+            port=WEBHOOK_PORT,
+            url_path=url_path,
+            webhook_url=webhook_full_url
+        )
+    else:
+        logger.info(f"Бот @{BOT_USERNAME} запускается в режиме Polling.")
+        application.run_polling()
+
+if __name__ == "__main__":
+    main()
