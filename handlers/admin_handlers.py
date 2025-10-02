@@ -5,8 +5,10 @@ from telegram.ext import ContextTypes
 from telegram.helpers import escape_markdown
 from telegram.error import TelegramError
 
-from config import logger, ADMIN_CHAT_ID
+from config import logger, ADMIN_CHAT_ID, GEM_BOT_2_URL
 from keyboards import get_admin_panel_keyboard
+from db_session import get_db
+from models.crud import get_all_users, get_user, approve_user_in_db, ban_user_in_db
 
 async def show_admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if str(update.effective_user.id) == ADMIN_CHAT_ID:
@@ -16,6 +18,7 @@ async def show_admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
 async def handle_admin_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     admin_state = context.user_data.get('admin_state')
+    db = next(get_db())
 
     if admin_state == 'broadcast_awaiting_message':
         context.user_data['broadcast_message_id'] = update.message.message_id
@@ -27,40 +30,38 @@ async def handle_admin_message(update: Update, context: ContextTypes.DEFAULT_TYP
     elif admin_state == 'users_awaiting_id':
         target_id_str = update.message.text
         context.user_data['admin_state'] = None
-        found_user_id = None
+        
+        found_user = None
         if target_id_str.isdigit():
-            found_user_id = int(target_id_str)
-            if found_user_id not in context.application.user_data: found_user_id = None
+            found_user = get_user(db, int(target_id_str))
         else:
             cleaned_username = target_id_str.replace('@', '').lower()
-            for uid, udata in context.application.user_data.items():
-                if udata.get('username', '').lower() == cleaned_username:
-                    found_user_id = uid
+            all_users = get_all_users(db)
+            for user in all_users:
+                if user.username and user.username.lower() == cleaned_username:
+                    found_user = user
                     break
-        if found_user_id: await display_user_card(update, context, found_user_id)
-        else: await update.message.reply_text(f"❌ Пользователь '{target_id_str}' не найден.")
+        
+        if found_user: 
+            await display_user_card(update, context, found_user.user_id)
+        else: 
+            await update.message.reply_text(f"❌ Пользователь '{target_id_str}' не найден.")
 
     elif admin_state == 'users_awaiting_dm':
         target_user_id = context.user_data.pop('dm_target_user_id', None)
         context.user_data['admin_state'] = None
         if target_user_id:
+            # Здесь может понадобиться более сложная логика для привязки к сообщению
+            # Для простоты отправляем как есть
+            text_to_send = update.message.text
             try:
-                target_user_data = context.application.user_data[target_user_id]
-                reply_to_id = target_user_data.get('verification_message_id')
-                
-                text_to_send = update.message.text
-                keyboard = [[InlineKeyboardButton("✍️ Ответить в поддержку", callback_data="support_from_dm")]]
-                
-                await context.bot.send_message(
-                    chat_id=target_user_id,
-                    text=text_to_send,
-                    reply_to_message_id=reply_to_id,
-                    reply_markup=InlineKeyboardMarkup(keyboard)
-                )
-                await update.message.reply_text("✅ Сообщение успешно отправлено и привязано к заявке!")
+                await context.bot.send_message(chat_id=target_user_id, text=text_to_send)
+                await update.message.reply_text("✅ Сообщение успешно отправлено!")
             except TelegramError as e:
                 logger.error(f"Не удалось отправить DM пользователю {target_user_id}: {e.message}")
                 await update.message.reply_text(f"❌ Не удалось отправить сообщение. Ошибка: {e.message}")
+    db.close()
+
 
 async def admin_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
@@ -99,48 +100,46 @@ async def broadcast_confirmation_handler(update: Update, context: ContextTypes.D
 
 async def approve_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if str(update.effective_user.id) != ADMIN_CHAT_ID: return
+    db = next(get_db())
     try:
         user_id_to_approve = int(context.args[0])
-        user_data = context.application.user_data[user_id_to_approve]
-        user_data.update({'is_approved': True, 'approval_date': datetime.now(), 'awaiting_verification': False})
-        logger.info(f"Админ ({update.effective_user.id}) одобрил {user_id_to_approve}")
-        await update.message.reply_text(f"✅ Пользователь {user_id_to_approve} успешно одобрен.")
-        await context.bot.send_message(chat_id=user_id_to_approve, text="🎉 Поздравляем! Ваша заявка одобрена! Теперь вам доступен полный курс.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🎉 Перейти к полному курсу!", url=GEM_BOT_2_URL)]]))
+        db_user = approve_user_in_db(db, user_id_to_approve)
+        if db_user:
+            logger.info(f"Админ ({update.effective_user.id}) одобрил {user_id_to_approve}")
+            await update.message.reply_text(f"✅ Пользователь {user_id_to_approve} успешно одобрен.")
+            await context.bot.send_message(chat_id=user_id_to_approve, text="🎉 Поздравляем! Ваша заявка одобрена! Теперь вам доступен полный курс.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🎉 Перейти к полному курсу!", url=GEM_BOT_2_URL)]]))
+        else:
+            await update.message.reply_text(f"Ошибка! Пользователь с ID {context.args[0]} не найден.")
     except (IndexError, ValueError):
         await update.message.reply_text("Ошибка! Используйте: /approve <user_id>")
-    except KeyError:
-        await update.message.reply_text(f"Ошибка! Пользователь с ID {context.args[0]} не найден.")
+    finally:
+        db.close()
 
 async def reset_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if str(update.effective_user.id) != ADMIN_CHAT_ID: return
-    try:
-        user_id_to_reset = int(context.args[0])
-        if user_id_to_reset in context.application.user_data:
-            context.application.user_data[user_id_to_reset].clear()
-            logger.info(f"Админ ({update.effective_user.id}) полностью очистил данные пользователя {user_id_to_reset}")
-            await update.message.reply_text(f"✅ Данные пользователя {user_id_to_reset} полностью очищены. Теперь он считается новым.")
-        else:
-            await update.message.reply_text(f"Пользователь {user_id_to_reset} не найден в базе.")
-    except (IndexError, ValueError):
-        await update.message.reply_text("Ошибка! Используй: /reset_user <user_id>")
+    # Эта функция потребует переработки, т.к. полной очистки данных пользователя теперь нет
+    await update.message.reply_text("Функция сброса пользователя требует обновления для работы с БД.")
+
 
 async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, query=None, period="all") -> None:
     if str(update.effective_user.id) != ADMIN_CHAT_ID: return
     
-    all_data = context.application.user_data.values()
+    db = next(get_db())
+    all_users = get_all_users(db)
     today = datetime.now().date()
     
     if period == "today":
-        new_today = sum(1 for d in all_data if d.get('first_seen') and d['first_seen'].date() == today)
-        approved_today = sum(1 for d in all_data if d.get('approval_date') and d['approval_date'].date() == today)
-        active_today = sum(1 for d in all_data if d.get('last_seen') and d['last_seen'].date() == today)
-        awaiting = sum(1 for d in all_data if d.get('awaiting_verification'))
+        new_today = sum(1 for u in all_users if u.first_seen and u.first_seen.date() == today)
+        approved_today = sum(1 for u in all_users if u.approval_date and u.approval_date.date() == today)
+        active_today = sum(1 for u in all_users if u.last_seen and u.last_seen.date() == today)
+        awaiting = sum(1 for u in all_users if u.awaiting_verification)
         stats_text = (f"📊 *Статистика за сегодня*\n\n➕ Новых: *{new_today}*\n🏃‍♂️ Активных: *{active_today}*\n✅ Одобрено: *{approved_today}*\n⏳ Ожидает: *{awaiting}*")
     else:
-        total = len(all_data)
-        approved = sum(1 for d in all_data if d.get('is_approved'))
-        awaiting = sum(1 for d in all_data if d.get('awaiting_verification'))
+        total = len(all_users)
+        approved = sum(1 for u in all_users if u.is_approved)
+        awaiting = sum(1 for u in all_users if u.awaiting_verification)
         stats_text = (f"📊 *Статистика за все время*\n\n👤 Всего: *{total}*\n✅ Одобрено: *{approved}*\n⏳ Ожидает: *{awaiting}*")
+
+    db.close()
 
     if query:
         await query.edit_message_text(stats_text, parse_mode='MarkdownV2', reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Назад", callback_data='admin_stats')]]))
@@ -154,7 +153,11 @@ async def run_broadcast(context: ContextTypes.DEFAULT_TYPE) -> None:
         await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text="❌ Ошибка: не найдено сообщение для рассылки.")
         return
 
-    user_ids = [uid for uid in context.application.user_data.keys() if uid != int(ADMIN_CHAT_ID)]
+    db = next(get_db())
+    all_users = get_all_users(db)
+    user_ids = [u.user_id for u in all_users if u.user_id != int(ADMIN_CHAT_ID)]
+    db.close()
+
     success, blocked, error = 0, 0, 0
     logger.info(f"Начинаю рассылку для {len(user_ids)} пользователей.")
     
@@ -174,34 +177,45 @@ async def run_broadcast(context: ContextTypes.DEFAULT_TYPE) -> None:
     await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text=report_text, parse_mode='MarkdownV2', reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ В админку", callback_data='admin_main')]]))
 
 async def daily_stats_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    db = next(get_db())
+    all_users = get_all_users(db)
+    db.close()
+
     yesterday = (datetime.now() - timedelta(days=1)).date()
-    new_yesterday = sum(1 for d in context.application.user_data.values() if d.get('first_seen') and d['first_seen'].date() == yesterday)
-    approved_yesterday = sum(1 for d in context.application.user_data.values() if d.get('approval_date') and d['approval_date'].date() == yesterday)
+    new_yesterday = sum(1 for u in all_users if u.first_seen and u.first_seen.date() == yesterday)
+    approved_yesterday = sum(1 for u in all_users if u.approval_date and u.approval_date.date() == yesterday)
     report_text = (f"🗓️ *Отчет за {yesterday.strftime('%d.%m.%Y')}*\n\n➕ Новых: *{new_yesterday}*\n✅ Одобрено: *{approved_yesterday}*")
     await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text=report_text, parse_mode='MarkdownV2')
 
 async def display_user_card(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: int):
-    user_data = context.application.user_data.get(user_id, {})
-    status = "🚫 Заблокирован" if user_data.get('is_banned') else "⏳ Ожидает" if user_data.get('awaiting_verification') else "✅ Одобрен" if user_data.get('is_approved') else "Новый"
+    db = next(get_db())
+    db_user = get_user(db, user_id)
+    db.close()
+
+    if not db_user:
+        await update.message.reply_text(f"Пользователь с ID {user_id} не найден в базе данных.")
+        return
+
+    status = "🚫 Заблокирован" if db_user.is_banned else "⏳ Ожидает" if db_user.awaiting_verification else "✅ Одобрен" if db_user.is_approved else "Новый"
     
-    first_seen_str = user_data.get('first_seen').strftime('%d.%m.%Y %H:%M') if user_data.get('first_seen') else 'Неизвестно'
-    last_seen_str = user_data.get('last_seen').strftime('%d.%m.%Y %H:%M') if user_data.get('last_seen') else 'Неизвестно'
+    first_seen_str = db_user.first_seen.strftime('%d.%m.%Y %H:%M') if db_user.first_seen else 'Неизвестно'
+    last_seen_str = db_user.last_seen.strftime('%d.%m.%Y %H:%M') if db_user.last_seen else 'Неизвестно'
     
-    safe_name = escape_markdown(user_data.get('full_name', 'Неизвестно'), version=2)
-    safe_user = escape_markdown(user_data.get('username', 'Нет'), version=2)
+    safe_name = escape_markdown(db_user.full_name or 'Неизвестно', version=2)
+    safe_user = escape_markdown(db_user.username or 'Нет', version=2)
 
     card_text = (
         f"👤 *Карточка пользователя*\n\n"
-        f"*ID:* `{user_id}`\n*Имя:* {safe_name}\n*Username:* @{safe_user}\n\n"
+        f"*ID:* `{db_user.user_id}`\n*Имя:* {safe_name}\n*Username:* @{safe_user}\n\n"
         f"*Статус:* {status}\n*Первый визит:* {escape_markdown(first_seen_str, version=2)}\n*Активность:* {escape_markdown(last_seen_str, version=2)}"
     )
     
     action_buttons = []
-    if user_data.get('awaiting_verification'): action_buttons.append(InlineKeyboardButton("✅ Одобрить", callback_data=f'user_approve_{user_id}'))
-    elif user_data.get('is_approved'): action_buttons.append(InlineKeyboardButton("❌ Отозвать", callback_data=f'user_revoke_{user_id}')) # Пример, логика отзыва не реализована
+    if db_user.awaiting_verification: action_buttons.append(InlineKeyboardButton("✅ Одобрить", callback_data=f'user_approve_{user_id}'))
+    elif db_user.is_approved: action_buttons.append(InlineKeyboardButton("❌ Отозвать", callback_data=f'user_revoke_{user_id}'))
     
     if user_id != int(ADMIN_CHAT_ID):
-        if user_data.get('is_banned'): action_buttons.append(InlineKeyboardButton("✅ Разблок", callback_data=f'user_unblock_{user_id}'))
+        if db_user.is_banned: action_buttons.append(InlineKeyboardButton("✅ Разблок", callback_data=f'user_unblock_{user_id}'))
         else: action_buttons.append(InlineKeyboardButton("🚫 Заблок", callback_data=f'user_block_{user_id}'))
 
     keyboard = [action_buttons] if action_buttons else []
