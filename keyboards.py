@@ -1,7 +1,8 @@
 from telegram import ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton
 from config import (
-    TOOLS_DATA, TELEGRAM_CHANNEL_URL, TRAINING_BOT_URL, 
-    AI_PSYCHOLOGIST_URL, FULL_COURSE_URL
+    TOOLS_DATA, TELEGRAM_CHANNEL_URL, TRAINING_BOT_URL,
+    AI_PSYCHOLOGIST_URL, FULL_COURSE_URL,
+    SUPPORT_ESCALATION_BUTTON_TEXT, SUPPORT_ESCALATION_CALLBACK
 )
 
 # --- Клавиатура главного меню ---
@@ -12,7 +13,7 @@ main_menu_keyboard_layout = [
 ]
 
 def get_main_menu_keyboard(user_id: int) -> ReplyKeyboardMarkup:
-    from config import ADMIN_CHAT_ID 
+    from config import ADMIN_CHAT_ID
     current_menu = [row[:] for row in main_menu_keyboard_layout]
     if str(user_id) == ADMIN_CHAT_ID:
         current_menu.append(["👑 Админка"])
@@ -61,3 +62,8 @@ def get_chatgpt_keyboard() -> ReplyKeyboardMarkup:
     """Возвращает клавиатуру для режима ChatGPT."""
     keyboard = [["Закончить диалог"]]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
+
+# --- НОВАЯ КЛАВИАТУРА ДЛЯ ИИ-ПОДДЕРЖКИ ---
+def get_support_llm_keyboard() -> InlineKeyboardMarkup:
+    keyboard = [[InlineKeyboardButton(SUPPORT_ESCALATION_BUTTON_TEXT, callback_data=SUPPORT_ESCALATION_CALLBACK)]]
+    return InlineKeyboardMarkup(keyboard)

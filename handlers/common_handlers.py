@@ -1,15 +1,19 @@
 from datetime import datetime
+from typing import Awaitable, Callable
 from telegram import Update
 from telegram.ext import ContextTypes
 from telegram.helpers import escape_markdown
+from telegram.error import TelegramError
 
 from config import (
     logger, ADMIN_CHAT_ID, WELCOME_IMAGE_ID, TRAINING_IMAGE_ID,
-    PSYCHOLOGIST_IMAGE_ID, CHATGPT_IMAGE_ID, SUPPORT_IMAGE_ID
+    PSYCHOLOGIST_IMAGE_ID, CHATGPT_IMAGE_ID, SUPPORT_IMAGE_ID,
+    SUPPORT_LLM_SYSTEM_PROMPT, SUPPORT_ESCALATION_BUTTON_TEXT,
+    SUPPORT_LLM_HISTORY_LIMIT
 )
 from keyboards import (
     get_main_menu_keyboard, get_channel_keyboard, get_training_keyboard,
-    get_psychologist_keyboard, get_chatgpt_keyboard
+    get_psychologist_keyboard, get_chatgpt_keyboard, get_support_llm_keyboard
 )
 from db_session import get_db
 from models.crud import get_user, create_user, update_user_last_seen
@@ -60,6 +64,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "Выберите действие в меню ниже:",
         reply_markup=get_main_menu_keyboard(user.id)
     )
+
 async def show_training_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     with get_db() as db:
         db_user = get_user(db, update.effective_user.id)
@@ -97,9 +102,43 @@ async def stop_chatgpt_session(update: Update, context: ContextTypes.DEFAULT_TYP
         reply_markup=get_main_menu_keyboard(update.effective_user.id)
     )
 
-async def show_support_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+# --- НОВЫЙ БЛОК ЛОГИКИ ДЛЯ ДВУХУРОВНЕВОЙ ПОДДЕРЖКИ ---
+
+SupportPromptSender = Callable[[str], Awaitable[object]]
+SUPPORT_ESCALATION_PROMPT = "Опишите вашу проблему одним сообщением, и мы передадим его администратору."
+
+async def _activate_manual_support(context: ContextTypes.DEFAULT_TYPE, send_prompt: SupportPromptSender) -> None:
     context.user_data['state'] = 'awaiting_support_message'
-    await update.message.reply_photo(photo=SUPPORT_IMAGE_ID, caption="Слушаю твой вопрос. Просто отправь его следующим сообщением (можно текст, фото, видео или голосовое).")
+    context.user_data.pop('support_llm_history', None)
+    await send_prompt(SUPPORT_ESCALATION_PROMPT)
+
+async def show_support_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    context.user_data['state'] = 'support_llm_active'
+    context.user_data['support_llm_history'] = [{"role": "system", "content": SUPPORT_LLM_SYSTEM_PROMPT}]
+    await update.message.reply_photo(
+        photo=SUPPORT_IMAGE_ID,
+        caption=(
+            "Я — ИИ-поддержка SferaTC и готов помочь. Опишите проблему текстом, а если понадобится человек, "
+            f"нажмите кнопку «{SUPPORT_ESCALATION_BUTTON_TEXT}»."
+        ),
+        reply_markup=get_support_llm_keyboard(),
+    )
+
+async def escalate_support_to_admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer("Подключаю администратора…")
+    message = query.message
+    if message:
+        try:
+            if message.text:
+                await message.edit_reply_markup(reply_markup=None)
+            elif message.caption:
+                await message.edit_caption(caption=message.caption, reply_markup=None)
+        except TelegramError as error:
+            logger.warning(f"Не удалось обновить сообщение поддержки: {error}")
+        await _activate_manual_support(context, message.reply_text)
+
+# ----------------------------------------------------------------
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("Это бот образовательной экосистемы SferaTC. Используйте меню для навигации по разделам.")
@@ -143,6 +182,40 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             await update.message.reply_text(
                 "Мне не удалось сгенерировать ответ. Попробуйте переформулировать ваш запрос.", 
                 reply_markup=get_chatgpt_keyboard()
+            )
+            
+    elif user_state == 'support_llm_active':
+        text = (update.message.text or "").strip()
+
+        if text.lower() == SUPPORT_ESCALATION_BUTTON_TEXT.lower():
+            await _activate_manual_support(context, update.message.reply_text)
+            return
+
+        if not text:
+            await update.message.reply_text(
+                f"ИИ-поддержка сейчас работает только с текстовыми сообщениями. "
+                f"Опишите вопрос словами или нажмите «{SUPPORT_ESCALATION_BUTTON_TEXT}».",
+                reply_markup=get_support_llm_keyboard(),
+            )
+            return
+
+        history = context.user_data.get('support_llm_history') or [{"role": "system", "content": SUPPORT_LLM_SYSTEM_PROMPT}]
+        history = history + [{"role": "user", "content": text}]
+
+        if len(history) > SUPPORT_LLM_HISTORY_LIMIT + 1:
+            history = [history[0]] + history[-SUPPORT_LLM_HISTORY_LIMIT:]
+
+        context.user_data['support_llm_history'] = history
+        response_text = await get_chatgpt_response(history)
+
+        if response_text and response_text.strip():
+            history.append({"role": "assistant", "content": response_text})
+            context.user_data['support_llm_history'] = history
+            await update.message.reply_text(response_text, reply_markup=get_support_llm_keyboard())
+        else:
+            await update.message.reply_text(
+                f"Мне не удалось решить вопрос. Попробуйте переформулировать или нажмите «{SUPPORT_ESCALATION_BUTTON_TEXT}».",
+                reply_markup=get_support_llm_keyboard(),
             )
 
     elif str(user.id) == ADMIN_CHAT_ID and admin_state:

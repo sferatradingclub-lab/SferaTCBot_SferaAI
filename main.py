@@ -15,6 +15,7 @@ from config import (
     BOT_USERNAME,
     logger,
     ensure_required_settings,
+    SUPPORT_ESCALATION_CALLBACK
 )
 
 # Импорты для настройки базы данных
@@ -31,6 +32,7 @@ from handlers.common_handlers import (
     show_chatgpt_menu,
     show_support_menu,
     stop_chatgpt_session,
+    escalate_support_to_admin
 )
 from handlers.admin_handlers import (
     show_admin_panel,
@@ -59,7 +61,7 @@ def setup_database():
 
 def main() -> None:
     """Главная функция, которая собирает и запускает бота."""
-    
+
     # Сначала настраиваем базу данных
     setup_database()
 
@@ -95,6 +97,8 @@ def main() -> None:
     application.add_handler(CallbackQueryHandler(user_actions_handler, pattern='^user_'))
     application.add_handler(CallbackQueryHandler(support_rejection_handler, pattern='^support_from_rejection$'))
     application.add_handler(CallbackQueryHandler(support_dm_handler, pattern='^support_from_dm$'))
+    # --- НОВЫЙ ОБРАБОТЧИК ДЛЯ КНОПКИ "ПОЗВАТЬ АДМИНИСТРАТОРА" ---
+    application.add_handler(CallbackQueryHandler(escalate_support_to_admin, pattern=rf'^{SUPPORT_ESCALATION_CALLBACK}$'))
 
     # Кнопки главного меню (MessageHandler)
     application.add_handler(MessageHandler(filters.TEXT & filters.Regex('^Пройти бесплатное обучение$'), show_training_menu))

@@ -10,7 +10,7 @@ from keyboards import get_verification_links_keyboard
 from .admin_handlers import display_user_card
 from db_session import get_db
 from models.crud import (
-    get_user, set_awaiting_verification, approve_user_in_db, 
+    get_user, set_awaiting_verification, approve_user_in_db,
     reject_user_in_db, revoke_user_in_db, ban_user_in_db
 )
 
@@ -18,14 +18,14 @@ async def start_verification_process(update: Update, context: ContextTypes.DEFAU
     user = update.effective_user
     with get_db() as db:
         set_awaiting_verification(db, user.id, True)
-    
+
     text = (
         f"С возвращением, {user.first_name}! Поздравляем с прохождением первых трех уроков нашего курса «Путь трейдера»! 🥳\n\n"
         "Чтобы поддержать наш проект и получить доступ к остальным 27 урокам, просто зарегистрируйся у одного из наших брокеров-партнеров по ссылке ниже.\n\n"
         "Ты получишь отличные бонусы и скидки на комиссии, а мы будем делать для тебя следующие уроки и другие полезности. ❤️\n\n"
         "После регистрации через нашу ссылку просто отправь сюда свой ID пользователя из личного кабинета. Мы занесём тебя в наш лист рефералов и откроем доступ к следующим урокам курса 🚀"
     )
-    
+
     await update.message.reply_text(text, reply_markup=get_verification_links_keyboard())
 
 async def handle_id_submission(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -37,39 +37,40 @@ async def handle_id_submission(update: Update, context: ContextTypes.DEFAULT_TYP
     if 'verification_requests' not in context.bot_data:
         context.bot_data['verification_requests'] = {}
     context.bot_data['verification_requests'][user.id] = {'text': text, 'message_id': update.message.message_id}
-    
+
     logger.info(f"Получена заявка от user_id: {user.id} ({user.full_name}) с ID биржи: {text}")
-    
+
     safe_full_name = escape_markdown(user.full_name or "Имя не указано", version=2)
     safe_username = escape_markdown(user.username or 'none', version=2)
     safe_text = escape_markdown(text, version=2)
-    
+
     message_to_admin = (f"❗️ Новая заявка на верификацию\\!\n\nОт: {safe_full_name} \\(@{safe_username}\\)\nUser ID: `{user.id}`\nID биржи: `{safe_text}`")
-    
+
     keyboard = [[
         InlineKeyboardButton("✅ Одобрить", callback_data=f'user_approve_{user.id}'),
         InlineKeyboardButton("❌ Отклонить", callback_data=f'user_reject_{user.id}'),
         InlineKeyboardButton("💬 Написать", callback_data=f'user_message_{user.id}')
     ]]
-    
+
     try:
         await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text=message_to_admin, parse_mode='MarkdownV2', reply_markup=InlineKeyboardMarkup(keyboard))
     except TelegramError as e:
         logger.error(f"КРИТИЧЕСКАЯ ОШИБКА: Не удалось отправить заявку админу ({ADMIN_CHAT_ID}). Причина: {e.message}.")
-    
+
     await update.message.reply_text("Спасибо! Твоя заявка принята на ручную проверку. Обычно это занимает не более часа.")
 
 async def handle_support_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    context.user_data['state'] = None 
+    context.user_data['state'] = None
+    context.user_data.pop('support_llm_history', None) # Очищаем историю ИИ-чата
     await update.message.reply_text("Спасибо, ваше сообщение отправлено в поддержку. Мы скоро ответим.")
 
     try:
         copied_message = await context.bot.copy_message(chat_id=ADMIN_CHAT_ID, from_chat_id=user.id, message_id=update.message.message_id)
-        
+
         user_fullname = escape_markdown(user.full_name or "Имя не указано", version=2)
         user_username = f"@{escape_markdown(user.username, version=2)}" if user.username else "Нет"
-        
+
         with get_db() as db:
             db_user = get_user(db, user.id)
             is_awaiting_verification = db_user.awaiting_verification if db_user else False
@@ -101,7 +102,7 @@ async def user_actions_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     parts = query.data.split('_')
     action = parts[1]
     user_id = int(parts[2])
-    
+
     with get_db() as db:
         db_user = get_user(db, user_id)
         display_name = f"@{db_user.username}" if db_user and db_user.username else f"ID: {user_id}"
@@ -156,7 +157,7 @@ async def user_actions_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             ban_user_in_db(db, user_id, False)
             logger.info(f"Админ ({query.from_user.id}) разблокировал {user_id}")
             await query.answer("Пользователь разблокирован.", show_alert=True)
-    
+
     if action not in ["approve", "reject", "reply", "message", "block"]:
         await display_user_card(update, context, user_id)
 
