@@ -1,3 +1,4 @@
+from typing import Union
 import os
 import logging
 from dotenv import load_dotenv
@@ -84,7 +85,7 @@ SUPPORT_IMAGE_ID = os.getenv("SUPPORT_IMAGE_ID")
 TOOLS_IMAGE_ID = os.getenv("TOOLS_IMAGE_ID")
 
 
-def get_safe_file_id(file_id: str | None, context_name: str) -> str | None:
+def get_safe_file_id(file_id: Union[str, None], context_name: str) -> Union[str, None]:
     """Возвращает file_id, если он задан, иначе логирует предупреждение."""
     if file_id:
         return file_id

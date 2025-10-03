@@ -79,7 +79,7 @@ async def show_psychologist_menu(update: Update, context: ContextTypes.DEFAULT_T
 async def show_chatgpt_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Начинает сессию с LLM через OpenRouter."""
     context.user_data['state'] = 'chatgpt_active'
-    context.user_data['chat_history'] = [{"role": "system", "content": "You are a helpful assistant."}]
+    context.user_data['chat_history'] = [{"role": "system", "content": "Ты — универсальный ИИ-ассистент, созданный для помощи пользователю в самых разных задачах. Твои главные принципы: полезность, точность и безопасность. Всегда стремись дать наиболее полный и структурированный ответ. Если задача творческая — предлагай оригинальные идеи. Если техническая — будь точным и приводи примеры. Общайся вежливо и нейтрально. Категорически избегай генерации вредоносного, неэтичного или оскорбительного контента. Не давай финансовых или медицинских советов. Твоя цель — быть лучшим инструментом для решения задач пользователя."}]
     
     await update.message.reply_text(
         "Вы начали диалог с ИИ-ассистентом. Просто отправьте ваше сообщение. "
