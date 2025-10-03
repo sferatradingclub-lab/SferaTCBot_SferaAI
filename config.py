@@ -19,10 +19,10 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./sferatc_dev.db")
 
 # --- Настройки для ИИ-чата через OpenRouter ---
 CHATGPT_BASE_URL = "https://openrouter.ai/api/v1"
-# Список моделей в порядке приоритета (сначала бесплатная, потом платная резервная)
+# Список бесплатных моделей OpenRouter (можно переопределить через .env, платные модели требуют положительный баланс)
 CHATGPT_MODELS = [
-    os.getenv("CHATGPT_MODEL_PRIMARY", "nousresearch/nous-hermes-2-mixtral-8x7b-dpo"),
-    os.getenv("CHATGPT_MODEL_FALLBACK", "mistralai/mistral-7b-instruct")
+    os.getenv("CHATGPT_MODEL_PRIMARY", "meta-llama/llama-3.1-8b-instruct:free"),
+    os.getenv("CHATGPT_MODEL_FALLBACK", "qwen/qwen-2.5-7b-instruct:free")
 ]
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
