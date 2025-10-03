@@ -5,11 +5,14 @@ from telegram.ext import ContextTypes
 from telegram.helpers import escape_markdown
 from telegram.error import TelegramError
 
-from config import logger, ADMIN_CHAT_ID, GEM_BOT_2_URL
+from config import logger, ADMIN_CHAT_ID, FULL_COURSE_URL
 from keyboards import get_verification_links_keyboard
 from .admin_handlers import display_user_card
 from db_session import get_db
-from models.crud import get_user, set_awaiting_verification, approve_user_in_db, reject_user_in_db, ban_user_in_db
+from models.crud import (
+    get_user, set_awaiting_verification, approve_user_in_db, 
+    reject_user_in_db, revoke_user_in_db, ban_user_in_db
+)
 
 async def start_verification_process(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -30,10 +33,9 @@ async def handle_id_submission(update: Update, context: ContextTypes.DEFAULT_TYP
     user = update.effective_user
     text = update.message.text or ""
     db = next(get_db())
-    set_awaiting_verification(db, user.id, False) # Заявка отправлена, больше не ждем ID
+    set_awaiting_verification(db, user.id, True) # Устанавливаем флаг, что заявка подана
     db.close()
 
-    # Временные данные для админа можно хранить в context.bot_data
     if 'verification_requests' not in context.bot_data:
         context.bot_data['verification_requests'] = {}
     context.bot_data['verification_requests'][user.id] = {'text': text, 'message_id': update.message.message_id}
@@ -61,7 +63,7 @@ async def handle_id_submission(update: Update, context: ContextTypes.DEFAULT_TYP
 
 async def handle_support_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    context.user_data['state'] = None # Сбрасываем временное состояние
+    context.user_data['state'] = None 
     await update.message.reply_text("Спасибо, ваше сообщение отправлено в поддержку. Мы скоро ответим.")
 
     try:
@@ -117,7 +119,7 @@ async def user_actions_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         approve_user_in_db(db, user_id)
         logger.info(f"Админ ({query.from_user.id}) одобрил заявку {user_id}")
         try:
-            await context.bot.send_message(chat_id=user_id, text="🎉 Поздравляем! Ваша заявка одобрена! Теперь вам доступен полный курс.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🎉 Перейти к полному курсу!", url=GEM_BOT_2_URL)]]))
+            await context.bot.send_message(chat_id=user_id, text="🎉 Поздравляем! Ваша заявка одобрена! Теперь вам доступен полный курс.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🎉 Перейти к полному курсу!", url=FULL_COURSE_URL)]]))
         except TelegramError as e:
             logger.error(f"Не удалось отправить уведомление об одобрении пользователю {user_id}: {e.message}")
         await query.edit_message_text(f"{original_message}\n\n*Статус: ✅ Одобрено*", parse_mode='MarkdownV2')
@@ -125,13 +127,18 @@ async def user_actions_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     elif action == "reject":
         reject_user_in_db(db, user_id)
         logger.info(f"Админ ({query.from_user.id}) отклонил заявку {user_id}")
-        rejection_text = "К сожалению, ваша заявка была отклонена..."
+        rejection_text = "К сожалению, ваша заявка была отклонена. Возможно, произошла ошибка. Если у вас есть вопросы, напишите в поддержку."
         support_button = [[InlineKeyboardButton("✍️ Написать в поддержку", callback_data="support_from_rejection")]]
         try:
             await context.bot.send_message(chat_id=user_id, text=rejection_text, reply_markup=InlineKeyboardMarkup(support_button))
         except TelegramError as e:
             logger.error(f"Не удалось отправить уведомление об отклонении пользователю {user_id}: {e.message}")
         await query.edit_message_text(f"{original_message}\n\n*Статус: ❌ Отклонено*", parse_mode='MarkdownV2')
+
+    elif action == "revoke":
+        revoke_user_in_db(db, user_id)
+        logger.info(f"Админ ({query.from_user.id}) отозвал одобрение для {user_id}")
+        await query.answer("Одобрение отозвано.")
 
     elif action in ["reply", "message"]:
         context.user_data['admin_state'] = 'users_awaiting_dm'
@@ -153,7 +160,7 @@ async def user_actions_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         logger.info(f"Админ ({query.from_user.id}) разблокировал {user_id}")
         await query.answer("Пользователь разблокирован.", show_alert=True)
     
-    db.close() # Закрываем сессию
+    db.close()
     
     if action not in ["approve", "reject", "reply", "message", "block"]:
         await display_user_card(update, context, user_id)
