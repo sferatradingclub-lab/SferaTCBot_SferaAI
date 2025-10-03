@@ -8,7 +8,14 @@ from telegram.ext import (
     CallbackQueryHandler,
 )
 
-from config import TELEGRAM_TOKEN, WEBHOOK_URL, WEBHOOK_PORT, BOT_USERNAME, logger
+from config import (
+    TELEGRAM_TOKEN,
+    WEBHOOK_URL,
+    WEBHOOK_PORT,
+    BOT_USERNAME,
+    logger,
+    ensure_required_settings,
+)
 
 # Импорты для настройки базы данных
 from models.base import Base, engine
@@ -55,6 +62,9 @@ def main() -> None:
     
     # Сначала настраиваем базу данных
     setup_database()
+
+    # Проверяем наличие обязательных настроек перед запуском бота
+    ensure_required_settings()
 
     # Собираем приложение
     application = Application.builder().token(TELEGRAM_TOKEN).build()
