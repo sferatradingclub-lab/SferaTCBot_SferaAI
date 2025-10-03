@@ -16,9 +16,8 @@ from models.crud import (
 
 async def start_verification_process(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    db = next(get_db())
-    set_awaiting_verification(db, user.id, True)
-    db.close()
+    with get_db() as db:
+        set_awaiting_verification(db, user.id, True)
     
     text = (
         f"С возвращением, {user.first_name}! Поздравляем с прохождением первых трех уроков нашего курса «Путь трейдера»! 🥳\n\n"
@@ -32,9 +31,8 @@ async def start_verification_process(update: Update, context: ContextTypes.DEFAU
 async def handle_id_submission(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     text = update.message.text or ""
-    db = next(get_db())
-    set_awaiting_verification(db, user.id, True) # Устанавливаем флаг, что заявка подана
-    db.close()
+    with get_db() as db:
+        set_awaiting_verification(db, user.id, True)  # Устанавливаем флаг, что заявка подана
 
     if 'verification_requests' not in context.bot_data:
         context.bot_data['verification_requests'] = {}
@@ -72,10 +70,9 @@ async def handle_support_message(update: Update, context: ContextTypes.DEFAULT_T
         user_fullname = escape_markdown(user.full_name or "Имя не указано", version=2)
         user_username = f"@{escape_markdown(user.username, version=2)}" if user.username else "Нет"
         
-        db = next(get_db())
-        db_user = get_user(db, user.id)
-        is_awaiting_verification = db_user.awaiting_verification if db_user else False
-        db.close()
+        with get_db() as db:
+            db_user = get_user(db, user.id)
+            is_awaiting_verification = db_user.awaiting_verification if db_user else False
 
         if is_awaiting_verification:
             admin_info_text = (f"💬 Ответ от пользователя по заявке *{user_fullname}* \\({user_username}\\)\\.\nUser ID: `{user.id}`")
@@ -105,62 +102,60 @@ async def user_actions_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     action = parts[1]
     user_id = int(parts[2])
     
-    db = next(get_db())
-    db_user = get_user(db, user_id)
-    display_name = f"@{db_user.username}" if db_user and db_user.username else f"ID: {user_id}"
-    
-    original_message = ""
-    if query.message and query.message.text_markdown_v2:
-        original_message = query.message.text_markdown_v2
-    elif query.message and query.message.text:
-        original_message = escape_markdown(query.message.text, version=2)
+    with get_db() as db:
+        db_user = get_user(db, user_id)
+        display_name = f"@{db_user.username}" if db_user and db_user.username else f"ID: {user_id}"
 
-    if action == "approve":
-        approve_user_in_db(db, user_id)
-        logger.info(f"Админ ({query.from_user.id}) одобрил заявку {user_id}")
-        try:
-            await context.bot.send_message(chat_id=user_id, text="🎉 Поздравляем! Ваша заявка одобрена! Теперь вам доступен полный курс.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🎉 Перейти к полному курсу!", url=FULL_COURSE_URL)]]))
-        except TelegramError as e:
-            logger.error(f"Не удалось отправить уведомление об одобрении пользователю {user_id}: {e.message}")
-        await query.edit_message_text(f"{original_message}\n\n*Статус: ✅ Одобрено*", parse_mode='MarkdownV2')
-    
-    elif action == "reject":
-        reject_user_in_db(db, user_id)
-        logger.info(f"Админ ({query.from_user.id}) отклонил заявку {user_id}")
-        rejection_text = "К сожалению, ваша заявка была отклонена. Возможно, произошла ошибка. Если у вас есть вопросы, напишите в поддержку."
-        support_button = [[InlineKeyboardButton("✍️ Написать в поддержку", callback_data="support_from_rejection")]]
-        try:
-            await context.bot.send_message(chat_id=user_id, text=rejection_text, reply_markup=InlineKeyboardMarkup(support_button))
-        except TelegramError as e:
-            logger.error(f"Не удалось отправить уведомление об отклонении пользователю {user_id}: {e.message}")
-        await query.edit_message_text(f"{original_message}\n\n*Статус: ❌ Отклонено*", parse_mode='MarkdownV2')
+        original_message = ""
+        if query.message and query.message.text_markdown_v2:
+            original_message = query.message.text_markdown_v2
+        elif query.message and query.message.text:
+            original_message = escape_markdown(query.message.text, version=2)
 
-    elif action == "revoke":
-        revoke_user_in_db(db, user_id)
-        logger.info(f"Админ ({query.from_user.id}) отозвал одобрение для {user_id}")
-        await query.answer("Одобрение отозвано.")
+        if action == "approve":
+            approve_user_in_db(db, user_id)
+            logger.info(f"Админ ({query.from_user.id}) одобрил заявку {user_id}")
+            try:
+                await context.bot.send_message(chat_id=user_id, text="🎉 Поздравляем! Ваша заявка одобрена! Теперь вам доступен полный курс.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🎉 Перейти к полному курсу!", url=FULL_COURSE_URL)]]))
+            except TelegramError as e:
+                logger.error(f"Не удалось отправить уведомление об одобрении пользователю {user_id}: {e.message}")
+            await query.edit_message_text(f"{original_message}\n\n*Статус: ✅ Одобрено*", parse_mode='MarkdownV2')
 
-    elif action in ["reply", "message"]:
-        context.user_data['admin_state'] = 'users_awaiting_dm'
-        context.user_data['dm_target_user_id'] = user_id
-        if action == "reply":
-            context.user_data['reply_to_message_id'] = int(parts[3]) if len(parts) > 3 else None
-        await query.edit_message_text(f"Введите ответ для пользователя {display_name}:")
-    
-    elif action == "block":
-        await query.edit_message_text(f"Вы уверены, что хотите заблокировать {display_name}?", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("ДА, заблокировать", callback_data=f'user_blockconfirm_{user_id}')], [InlineKeyboardButton("Отмена", callback_data=f'user_showcard_{user_id}')]]))
-    
-    elif action == "blockconfirm":
-        ban_user_in_db(db, user_id, True)
-        logger.info(f"Админ ({query.from_user.id}) заблокировал {user_id}")
-        await query.answer("Пользователь заблокирован.", show_alert=True)
-    
-    elif action == "unblock":
-        ban_user_in_db(db, user_id, False)
-        logger.info(f"Админ ({query.from_user.id}) разблокировал {user_id}")
-        await query.answer("Пользователь разблокирован.", show_alert=True)
-    
-    db.close()
+        elif action == "reject":
+            reject_user_in_db(db, user_id)
+            logger.info(f"Админ ({query.from_user.id}) отклонил заявку {user_id}")
+            rejection_text = "К сожалению, ваша заявка была отклонена. Возможно, произошла ошибка. Если у вас есть вопросы, напишите в поддержку."
+            support_button = [[InlineKeyboardButton("✍️ Написать в поддержку", callback_data="support_from_rejection")]]
+            try:
+                await context.bot.send_message(chat_id=user_id, text=rejection_text, reply_markup=InlineKeyboardMarkup(support_button))
+            except TelegramError as e:
+                logger.error(f"Не удалось отправить уведомление об отклонении пользователю {user_id}: {e.message}")
+            await query.edit_message_text(f"{original_message}\n\n*Статус: ❌ Отклонено*", parse_mode='MarkdownV2')
+
+        elif action == "revoke":
+            revoke_user_in_db(db, user_id)
+            logger.info(f"Админ ({query.from_user.id}) отозвал одобрение для {user_id}")
+            await query.answer("Одобрение отозвано.")
+
+        elif action in ["reply", "message"]:
+            context.user_data['admin_state'] = 'users_awaiting_dm'
+            context.user_data['dm_target_user_id'] = user_id
+            if action == "reply":
+                context.user_data['reply_to_message_id'] = int(parts[3]) if len(parts) > 3 else None
+            await query.edit_message_text(f"Введите ответ для пользователя {display_name}:")
+
+        elif action == "block":
+            await query.edit_message_text(f"Вы уверены, что хотите заблокировать {display_name}?", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("ДА, заблокировать", callback_data=f'user_blockconfirm_{user_id}')], [InlineKeyboardButton("Отмена", callback_data=f'user_showcard_{user_id}')]]))
+
+        elif action == "blockconfirm":
+            ban_user_in_db(db, user_id, True)
+            logger.info(f"Админ ({query.from_user.id}) заблокировал {user_id}")
+            await query.answer("Пользователь заблокирован.", show_alert=True)
+
+        elif action == "unblock":
+            ban_user_in_db(db, user_id, False)
+            logger.info(f"Админ ({query.from_user.id}) разблокировал {user_id}")
+            await query.answer("Пользователь разблокирован.", show_alert=True)
     
     if action not in ["approve", "reject", "reply", "message", "block"]:
         await display_user_card(update, context, user_id)
