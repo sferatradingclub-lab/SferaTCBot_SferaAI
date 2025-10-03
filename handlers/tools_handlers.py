@@ -2,16 +2,30 @@ from telegram import Update, InputMediaPhoto, InlineKeyboardButton, InlineKeyboa
 from telegram.ext import ContextTypes
 from telegram.error import TelegramError
 
-from config import logger, TOOLS_DATA, TOOLS_IMAGE_ID
+from config import logger, TOOLS_DATA, TOOLS_IMAGE_ID, get_safe_file_id
 from keyboards import get_tools_categories_keyboard
+
+TOOLS_MENU_TEXT = "Здесь мы собрали полезные инструменты для трейдера. Выберите нужный раздел:"
 
 async def show_tools_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Отправляет начальное меню раздела 'Полезные инструменты'."""
-    await update.message.reply_photo(
-        photo=TOOLS_IMAGE_ID, 
-        caption="Здесь мы собрали полезные инструменты для трейдера. Выберите нужный раздел:", 
-        reply_markup=get_tools_categories_keyboard()
-    )
+    if not update.message:
+        return
+
+    tools_image_id = get_safe_file_id(TOOLS_IMAGE_ID, "TOOLS_IMAGE_ID")
+    keyboard = get_tools_categories_keyboard()
+
+    if tools_image_id:
+        await update.message.reply_photo(
+            photo=tools_image_id,
+            caption=TOOLS_MENU_TEXT,
+            reply_markup=keyboard,
+        )
+    else:
+        await update.message.reply_text(
+            text=TOOLS_MENU_TEXT,
+            reply_markup=keyboard,
+        )
 
 async def tools_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обрабатывает все нажатия на инлайн-кнопки в разделе 'Полезные инструменты'."""
@@ -21,12 +35,24 @@ async def tools_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     if query_data == 'tools_main':
         keyboard = get_tools_categories_keyboard()
-        media = InputMediaPhoto(media=TOOLS_IMAGE_ID, caption="Здесь мы собрали полезные инструменты для трейдера. Выберите нужный раздел:")
-        try:
-            await query.edit_message_media(media=media, reply_markup=keyboard)
-        except TelegramError as e:
-            if "Message is not modified" not in e.message: 
-                logger.warning(f"Error in tools_main: {e}")
+        tools_image_id = get_safe_file_id(TOOLS_IMAGE_ID, "TOOLS_IMAGE_ID")
+
+        if tools_image_id and query.message and query.message.photo:
+            media = InputMediaPhoto(media=tools_image_id, caption=TOOLS_MENU_TEXT)
+            try:
+                await query.edit_message_media(media=media, reply_markup=keyboard)
+            except TelegramError as e:
+                if "Message is not modified" not in e.message:
+                    logger.warning(f"Error in tools_main: {e}")
+        else:
+            try:
+                if query.message and query.message.photo:
+                    await query.edit_message_caption(caption=TOOLS_MENU_TEXT, reply_markup=keyboard)
+                else:
+                    await query.edit_message_text(text=TOOLS_MENU_TEXT, reply_markup=keyboard)
+            except TelegramError as e:
+                if "Message is not modified" not in e.message:
+                    logger.warning(f"Error editing tools main text: {e}")
         return
 
     if query_data.startswith('tools_'):
@@ -42,7 +68,10 @@ async def tools_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
             buttons.append([InlineKeyboardButton("⬅️ Назад к разделам", callback_data='tools_main')])
             keyboard = InlineKeyboardMarkup(buttons)
 
-        await query.edit_message_caption(caption=text, reply_markup=keyboard)
+        if query.message and query.message.photo:
+            await query.edit_message_caption(caption=text, reply_markup=keyboard)
+        else:
+            await query.edit_message_text(text=text, reply_markup=keyboard)
         return
 
     if query_data.startswith('tool_'):
@@ -64,9 +93,30 @@ async def tools_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 ],
                 [InlineKeyboardButton("⬅️ Назад к списку", callback_data=parent_category_callback)]
             ]
-            media = InputMediaPhoto(media=selected_tool['image_id'], caption=caption, parse_mode='Markdown')
-            try:
-                await query.edit_message_media(media=media, reply_markup=InlineKeyboardMarkup(keyboard_buttons))
-            except TelegramError as e:
-                if "Message is not modified" not in e.message: 
-                    logger.warning(f"Error editing tool media: {e}")
+            tool_image_id = get_safe_file_id(selected_tool.get('image_id'), selected_tool['name'])
+            reply_markup = InlineKeyboardMarkup(keyboard_buttons)
+
+            if tool_image_id and query.message and query.message.photo:
+                media = InputMediaPhoto(media=tool_image_id, caption=caption, parse_mode='Markdown')
+                try:
+                    await query.edit_message_media(media=media, reply_markup=reply_markup)
+                except TelegramError as e:
+                    if "Message is not modified" not in e.message:
+                        logger.warning(f"Error editing tool media: {e}")
+            else:
+                try:
+                    if query.message and query.message.photo:
+                        await query.edit_message_caption(
+                            caption=caption,
+                            reply_markup=reply_markup,
+                            parse_mode='Markdown',
+                        )
+                    else:
+                        await query.edit_message_text(
+                            text=caption,
+                            reply_markup=reply_markup,
+                            parse_mode='Markdown',
+                        )
+                except TelegramError as e:
+                    if "Message is not modified" not in e.message:
+                        logger.warning(f"Error editing tool text: {e}")

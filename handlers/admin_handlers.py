@@ -5,7 +5,7 @@ from telegram.ext import ContextTypes
 from telegram.helpers import escape_markdown
 from telegram.error import TelegramError
 
-from config import logger, ADMIN_CHAT_ID, GEM_BOT_2_URL
+from config import logger, ADMIN_CHAT_ID, FULL_COURSE_URL
 from keyboards import get_admin_panel_keyboard
 from db_session import get_db
 from models.crud import get_all_users, get_user, approve_user_in_db, ban_user_in_db
@@ -51,8 +51,6 @@ async def handle_admin_message(update: Update, context: ContextTypes.DEFAULT_TYP
         target_user_id = context.user_data.pop('dm_target_user_id', None)
         context.user_data['admin_state'] = None
         if target_user_id:
-            # Здесь может понадобиться более сложная логика для привязки к сообщению
-            # Для простоты отправляем как есть
             text_to_send = update.message.text
             try:
                 await context.bot.send_message(chat_id=target_user_id, text=text_to_send)
@@ -107,7 +105,11 @@ async def approve_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         if db_user:
             logger.info(f"Админ ({update.effective_user.id}) одобрил {user_id_to_approve}")
             await update.message.reply_text(f"✅ Пользователь {user_id_to_approve} успешно одобрен.")
-            await context.bot.send_message(chat_id=user_id_to_approve, text="🎉 Поздравляем! Ваша заявка одобрена! Теперь вам доступен полный курс.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🎉 Перейти к полному курсу!", url=GEM_BOT_2_URL)]]))
+            await context.bot.send_message(
+                chat_id=user_id_to_approve, 
+                text="🎉 Поздравляем! Ваша заявка одобрена! Теперь вам доступен полный курс.", 
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🎉 Перейти к полному курсу!", url=FULL_COURSE_URL)]])
+            )
         else:
             await update.message.reply_text(f"Ошибка! Пользователь с ID {context.args[0]} не найден.")
     except (IndexError, ValueError):
@@ -116,7 +118,6 @@ async def approve_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         db.close()
 
 async def reset_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    # Эта функция потребует переработки, т.к. полной очистки данных пользователя теперь нет
     await update.message.reply_text("Функция сброса пользователя требует обновления для работы с БД.")
 
 
@@ -193,7 +194,10 @@ async def display_user_card(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     db.close()
 
     if not db_user:
-        await update.message.reply_text(f"Пользователь с ID {user_id} не найден в базе данных.")
+        if update.callback_query:
+            await update.callback_query.message.reply_text(f"Пользователь с ID {user_id} не найден в базе данных.")
+        else:
+            await update.message.reply_text(f"Пользователь с ID {user_id} не найден в базе данных.")
         return
 
     status = "🚫 Заблокирован" if db_user.is_banned else "⏳ Ожидает" if db_user.awaiting_verification else "✅ Одобрен" if db_user.is_approved else "Новый"

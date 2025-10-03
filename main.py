@@ -23,6 +23,7 @@ from handlers.common_handlers import (
     show_psychologist_menu,
     show_chatgpt_menu,
     show_support_menu,
+    stop_chatgpt_session,
 )
 from handlers.admin_handlers import (
     show_admin_panel,
@@ -55,7 +56,7 @@ def main() -> None:
     # Сначала настраиваем базу данных
     setup_database()
 
-    # Собираем приложение БЕЗ persistence
+    # Собираем приложение
     application = Application.builder().token(TELEGRAM_TOKEN).build()
 
     # --- РЕГИСТРАЦИЯ ОБРАБОТЧИКОВ ---
@@ -68,6 +69,8 @@ def main() -> None:
     application.add_handler(CommandHandler("tools", show_tools_menu))
     application.add_handler(CommandHandler("chatgpt", show_chatgpt_menu))
     application.add_handler(CommandHandler("support", show_support_menu))
+    # Команда для принудительного завершения диалога с ИИ
+    application.add_handler(CommandHandler("stop_chat", stop_chatgpt_session))
 
     # Команды только для админа
     application.add_handler(CommandHandler("admin", show_admin_panel))
@@ -91,12 +94,11 @@ def main() -> None:
     application.add_handler(MessageHandler(filters.TEXT & filters.Regex('^Поддержка$'), show_support_menu))
     application.add_handler(MessageHandler(filters.TEXT & filters.Regex('^👑 Админка$'), show_admin_panel))
 
-    # Все остальные сообщения (должен быть последним!)
-    # Обратите внимание: handle_message теперь должен будет работать с БД
+    # Все остальные текстовые сообщения (должен быть последним!)
+    # Обработчик для "Закончить диалог" удален, т.к. логика перенесена в handle_message
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     # Задачи
-    # Обратите внимание: daily_stats_job теперь должен будет работать с БД
     application.job_queue.run_daily(daily_stats_job, time=time(0, 0), name="daily_stats_report")
 
     # --- ЗАПУСК БОТА ---

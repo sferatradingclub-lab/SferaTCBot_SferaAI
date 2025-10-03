@@ -56,6 +56,15 @@ def reject_user_in_db(db: Session, user_id: int):
         db.commit()
     return db_user
 
+def revoke_user_in_db(db: Session, user_id: int):
+    """Отзывает одобрение пользователя."""
+    db_user = get_user(db, user_id)
+    if db_user:
+        db_user.is_approved = False
+        db_user.approval_date = None
+        db.commit()
+    return db_user
+
 def ban_user_in_db(db: Session, user_id: int, ban_status: bool):
     """Блокирует или разблокирует пользователя."""
     db_user = get_user(db, user_id)

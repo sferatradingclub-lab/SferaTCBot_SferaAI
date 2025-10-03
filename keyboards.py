@@ -1,5 +1,8 @@
 from telegram import ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton
-from config import TOOLS_DATA, TELEGRAM_CHANNEL_URL, GEM_BOT_1_URL, AI_PSYCHOLOGIST_URL, GEM_BOT_2_URL
+from config import (
+    TOOLS_DATA, TELEGRAM_CHANNEL_URL, TRAINING_BOT_URL, 
+    AI_PSYCHOLOGIST_URL, FULL_COURSE_URL
+)
 
 # --- Клавиатура главного меню ---
 main_menu_keyboard_layout = [
@@ -22,9 +25,9 @@ def get_channel_keyboard() -> InlineKeyboardMarkup:
 
 def get_training_keyboard(is_approved: bool) -> InlineKeyboardMarkup:
     if is_approved:
-        return InlineKeyboardMarkup([[InlineKeyboardButton("Перейти к полному курсу", url=GEM_BOT_2_URL)]])
+        return InlineKeyboardMarkup([[InlineKeyboardButton("Перейти к полному курсу", url=FULL_COURSE_URL)]])
     else:
-        return InlineKeyboardMarkup([[InlineKeyboardButton("🚀 Начать обучение", url=GEM_BOT_1_URL)]])
+        return InlineKeyboardMarkup([[InlineKeyboardButton("🚀 Начать обучение", url=TRAINING_BOT_URL)]])
 
 def get_psychologist_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([[InlineKeyboardButton("Перейти к ИИ-психологу", url=AI_PSYCHOLOGIST_URL)]])
@@ -53,3 +56,8 @@ def get_admin_panel_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton("👤 Управление пользователями", callback_data='admin_users')]
     ]
     return InlineKeyboardMarkup(keyboard)
+
+def get_chatgpt_keyboard() -> ReplyKeyboardMarkup:
+    """Возвращает клавиатуру для режима ChatGPT."""
+    keyboard = [["Закончить диалог"]]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
