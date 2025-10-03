@@ -5,6 +5,27 @@ from dotenv import load_dotenv
 # --- ЗАГРУЗКА ПЕРЕМЕННЫХ ОКРУЖЕНИЯ ---
 load_dotenv()
 
+DEFAULT_CHATGPT_FREE_MODELS = [
+    "meta-llama/llama-3.1-8b-instruct:free",
+    "qwen/qwen-2.5-7b-instruct:free",
+]
+
+
+def ensure_free_models(models: list[str]) -> list[str]:
+    """Возвращает только бесплатные модели и подставляет значения по умолчанию при необходимости."""
+    logger_instance = logging.getLogger(__name__)
+    free_models = [model for model in models if model and model.endswith(":free")]
+
+    if free_models:
+        return free_models
+
+    logger_instance.warning(
+        "Не найдены бесплатные модели в конфигурации. Будут использованы значения по умолчанию: %s.",
+        ", ".join(DEFAULT_CHATGPT_FREE_MODELS),
+    )
+    return DEFAULT_CHATGPT_FREE_MODELS.copy()
+
+
 # --- ВАЖНЫЕ НАСТРОЙКИ ---
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 BOT_USERNAME = os.getenv("BOT_USERNAME", "SferaTC_bot")
@@ -20,9 +41,13 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./sferatc_dev.db")
 # --- Настройки для ИИ-чата через OpenRouter ---
 CHATGPT_BASE_URL = "https://openrouter.ai/api/v1"
 # Список бесплатных моделей OpenRouter (можно переопределить через .env, платные модели требуют положительный баланс)
-CHATGPT_MODELS = [
-    os.getenv("CHATGPT_MODEL_PRIMARY", "meta-llama/llama-3.1-8b-instruct:free"),
-    os.getenv("CHATGPT_MODEL_FALLBACK", "qwen/qwen-2.5-7b-instruct:free")
+_RAW_CHATGPT_MODELS = [
+    os.getenv("CHATGPT_MODEL_PRIMARY", DEFAULT_CHATGPT_FREE_MODELS[0]),
+    os.getenv("CHATGPT_MODEL_FALLBACK", DEFAULT_CHATGPT_FREE_MODELS[1]),
+]
+CHATGPT_MODELS = ensure_free_models(_RAW_CHATGPT_MODELS)
+DISCARDED_PAID_MODELS = [
+    model for model in _RAW_CHATGPT_MODELS if model and not model.endswith(":free")
 ]
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
@@ -37,6 +62,12 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
+if DISCARDED_PAID_MODELS:
+    logger.warning(
+        "Платные модели были проигнорированы и не будут использоваться: %s.",
+        ", ".join(DISCARDED_PAID_MODELS),
+    )
 
 # --- ССЫЛКИ ---
 TRAINING_BOT_URL = "https://chatgpt.com/g/g-68d9b0f1d07c8191bba533ecfb9d1689-sferatc-lessons"
