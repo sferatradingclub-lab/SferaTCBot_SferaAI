@@ -18,47 +18,45 @@ async def show_admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
 async def handle_admin_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     admin_state = context.user_data.get('admin_state')
-    db = next(get_db())
+    with get_db() as db:
+        if admin_state == 'broadcast_awaiting_message':
+            context.user_data['broadcast_message_id'] = update.message.message_id
+            await context.bot.copy_message(chat_id=ADMIN_CHAT_ID, from_chat_id=ADMIN_CHAT_ID, message_id=update.message.message_id)
+            confirmation_keyboard = [[InlineKeyboardButton("✅ Да, отправить всем", callback_data='broadcast_send')], [InlineKeyboardButton("❌ Отмена", callback_data='broadcast_cancel')]]
+            await update.message.reply_text("Вот так будет выглядеть ваше сообщение. Все верно?", reply_markup=InlineKeyboardMarkup(confirmation_keyboard))
+            context.user_data['admin_state'] = 'broadcast_awaiting_confirmation'
 
-    if admin_state == 'broadcast_awaiting_message':
-        context.user_data['broadcast_message_id'] = update.message.message_id
-        await context.bot.copy_message(chat_id=ADMIN_CHAT_ID, from_chat_id=ADMIN_CHAT_ID, message_id=update.message.message_id)
-        confirmation_keyboard = [[InlineKeyboardButton("✅ Да, отправить всем", callback_data='broadcast_send')], [InlineKeyboardButton("❌ Отмена", callback_data='broadcast_cancel')]]
-        await update.message.reply_text("Вот так будет выглядеть ваше сообщение. Все верно?", reply_markup=InlineKeyboardMarkup(confirmation_keyboard))
-        context.user_data['admin_state'] = 'broadcast_awaiting_confirmation'
+        elif admin_state == 'users_awaiting_id':
+            target_id_str = update.message.text
+            context.user_data['admin_state'] = None
 
-    elif admin_state == 'users_awaiting_id':
-        target_id_str = update.message.text
-        context.user_data['admin_state'] = None
-        
-        found_user = None
-        if target_id_str.isdigit():
-            found_user = get_user(db, int(target_id_str))
-        else:
-            cleaned_username = target_id_str.replace('@', '').lower()
-            all_users = get_all_users(db)
-            for user in all_users:
-                if user.username and user.username.lower() == cleaned_username:
-                    found_user = user
-                    break
-        
-        if found_user: 
-            await display_user_card(update, context, found_user.user_id)
-        else: 
-            await update.message.reply_text(f"❌ Пользователь '{target_id_str}' не найден.")
+            found_user = None
+            if target_id_str.isdigit():
+                found_user = get_user(db, int(target_id_str))
+            else:
+                cleaned_username = target_id_str.replace('@', '').lower()
+                all_users = get_all_users(db)
+                for user in all_users:
+                    if user.username and user.username.lower() == cleaned_username:
+                        found_user = user
+                        break
 
-    elif admin_state == 'users_awaiting_dm':
-        target_user_id = context.user_data.pop('dm_target_user_id', None)
-        context.user_data['admin_state'] = None
-        if target_user_id:
-            text_to_send = update.message.text
-            try:
-                await context.bot.send_message(chat_id=target_user_id, text=text_to_send)
-                await update.message.reply_text("✅ Сообщение успешно отправлено!")
-            except TelegramError as e:
-                logger.error(f"Не удалось отправить DM пользователю {target_user_id}: {e.message}")
-                await update.message.reply_text(f"❌ Не удалось отправить сообщение. Ошибка: {e.message}")
-    db.close()
+            if found_user:
+                await display_user_card(update, context, found_user.user_id)
+            else:
+                await update.message.reply_text(f"❌ Пользователь '{target_id_str}' не найден.")
+
+        elif admin_state == 'users_awaiting_dm':
+            target_user_id = context.user_data.pop('dm_target_user_id', None)
+            context.user_data['admin_state'] = None
+            if target_user_id:
+                text_to_send = update.message.text
+                try:
+                    await context.bot.send_message(chat_id=target_user_id, text=text_to_send)
+                    await update.message.reply_text("✅ Сообщение успешно отправлено!")
+                except TelegramError as e:
+                    logger.error(f"Не удалось отправить DM пользователю {target_user_id}: {e.message}")
+                    await update.message.reply_text(f"❌ Не удалось отправить сообщение. Ошибка: {e.message}")
 
 
 async def admin_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -97,25 +95,27 @@ async def broadcast_confirmation_handler(update: Update, context: ContextTypes.D
         context.user_data.pop('broadcast_message_id', None)
 
 async def approve_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if str(update.effective_user.id) != ADMIN_CHAT_ID: return
-    db = next(get_db())
+    if str(update.effective_user.id) != ADMIN_CHAT_ID:
+        return
+
     try:
         user_id_to_approve = int(context.args[0])
+    except (IndexError, ValueError):
+        await update.message.reply_text("Ошибка! Используйте: /approve <user_id>")
+        return
+
+    with get_db() as db:
         db_user = approve_user_in_db(db, user_id_to_approve)
         if db_user:
             logger.info(f"Админ ({update.effective_user.id}) одобрил {user_id_to_approve}")
             await update.message.reply_text(f"✅ Пользователь {user_id_to_approve} успешно одобрен.")
             await context.bot.send_message(
-                chat_id=user_id_to_approve, 
-                text="🎉 Поздравляем! Ваша заявка одобрена! Теперь вам доступен полный курс.", 
+                chat_id=user_id_to_approve,
+                text="🎉 Поздравляем! Ваша заявка одобрена! Теперь вам доступен полный курс.",
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🎉 Перейти к полному курсу!", url=FULL_COURSE_URL)]])
             )
         else:
-            await update.message.reply_text(f"Ошибка! Пользователь с ID {context.args[0]} не найден.")
-    except (IndexError, ValueError):
-        await update.message.reply_text("Ошибка! Используйте: /approve <user_id>")
-    finally:
-        db.close()
+            await update.message.reply_text(f"Ошибка! Пользователь с ID {user_id_to_approve} не найден.")
 
 async def reset_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("Функция сброса пользователя требует обновления для работы с БД.")
@@ -124,8 +124,9 @@ async def reset_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, query=None, period="all") -> None:
     if str(update.effective_user.id) != ADMIN_CHAT_ID: return
     
-    db = next(get_db())
-    all_users = get_all_users(db)
+    with get_db() as db:
+        all_users = get_all_users(db)
+
     today = datetime.now().date()
     
     if period == "today":
@@ -140,8 +141,6 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, query=N
         awaiting = sum(1 for u in all_users if u.awaiting_verification)
         stats_text = (f"📊 *Статистика за все время*\n\n👤 Всего: *{total}*\n✅ Одобрено: *{approved}*\n⏳ Ожидает: *{awaiting}*")
 
-    db.close()
-
     if query:
         await query.edit_message_text(stats_text, parse_mode='MarkdownV2', reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Назад", callback_data='admin_stats')]]))
     else:
@@ -154,10 +153,9 @@ async def run_broadcast(context: ContextTypes.DEFAULT_TYPE) -> None:
         await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text="❌ Ошибка: не найдено сообщение для рассылки.")
         return
 
-    db = next(get_db())
-    all_users = get_all_users(db)
+    with get_db() as db:
+        all_users = get_all_users(db)
     user_ids = [u.user_id for u in all_users if u.user_id != int(ADMIN_CHAT_ID)]
-    db.close()
 
     success, blocked, error = 0, 0, 0
     logger.info(f"Начинаю рассылку для {len(user_ids)} пользователей.")
@@ -178,9 +176,8 @@ async def run_broadcast(context: ContextTypes.DEFAULT_TYPE) -> None:
     await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text=report_text, parse_mode='MarkdownV2', reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ В админку", callback_data='admin_main')]]))
 
 async def daily_stats_job(context: ContextTypes.DEFAULT_TYPE) -> None:
-    db = next(get_db())
-    all_users = get_all_users(db)
-    db.close()
+    with get_db() as db:
+        all_users = get_all_users(db)
 
     yesterday = (datetime.now() - timedelta(days=1)).date()
     new_yesterday = sum(1 for u in all_users if u.first_seen and u.first_seen.date() == yesterday)
@@ -189,9 +186,8 @@ async def daily_stats_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text=report_text, parse_mode='MarkdownV2')
 
 async def display_user_card(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: int):
-    db = next(get_db())
-    db_user = get_user(db, user_id)
-    db.close()
+    with get_db() as db:
+        db_user = get_user(db, user_id)
 
     if not db_user:
         if update.callback_query:
