@@ -52,6 +52,18 @@ CHATGPT_IMAGE_ID = os.getenv("CHATGPT_IMAGE_ID")
 SUPPORT_IMAGE_ID = os.getenv("SUPPORT_IMAGE_ID")
 TOOLS_IMAGE_ID = os.getenv("TOOLS_IMAGE_ID")
 
+
+def get_safe_file_id(file_id: str | None, context_name: str) -> str | None:
+    """Возвращает file_id, если он задан, иначе логирует предупреждение."""
+    if file_id:
+        return file_id
+
+    logger.warning(
+        "Отсутствует file_id для %s. Будет использован текстовый fallback.",
+        context_name,
+    )
+    return None
+
 # --- ДАННЫЕ ДЛЯ РАЗДЕЛА "ПОЛЕЗНЫЕ ИНСТРУМЕНТЫ" ---
 TOOLS_DATA = {
     'discounts': {
