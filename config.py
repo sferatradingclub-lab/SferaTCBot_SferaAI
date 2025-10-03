@@ -19,10 +19,10 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./sferatc_dev.db")
 
 # --- Настройки для ИИ-чата через OpenRouter ---
 CHATGPT_BASE_URL = "https://openrouter.ai/api/v1"
-# Список моделей в порядке приоритета (сначала бесплатная, потом платная резервная)
+# Список бесплатных моделей OpenRouter (можно переопределить через .env, платные модели требуют положительный баланс)
 CHATGPT_MODELS = [
-    os.getenv("CHATGPT_MODEL_PRIMARY", "nousresearch/nous-hermes-2-mixtral-8x7b-dpo"),
-    os.getenv("CHATGPT_MODEL_FALLBACK", "mistralai/mistral-7b-instruct")
+    os.getenv("CHATGPT_MODEL_PRIMARY", "meta-llama/llama-3.1-8b-instruct:free"),
+    os.getenv("CHATGPT_MODEL_FALLBACK", "qwen/qwen-2.5-7b-instruct:free")
 ]
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
@@ -52,6 +52,18 @@ CHATGPT_IMAGE_ID = os.getenv("CHATGPT_IMAGE_ID")
 SUPPORT_IMAGE_ID = os.getenv("SUPPORT_IMAGE_ID")
 TOOLS_IMAGE_ID = os.getenv("TOOLS_IMAGE_ID")
 
+
+def get_safe_file_id(file_id: str | None, context_name: str) -> str | None:
+    """Возвращает file_id, если он задан, иначе логирует предупреждение."""
+    if file_id:
+        return file_id
+
+    logger.warning(
+        "Отсутствует file_id для %s. Будет использован текстовый fallback.",
+        context_name,
+    )
+    return None
+
 # --- ДАННЫЕ ДЛЯ РАЗДЕЛА "ПОЛЕЗНЫЕ ИНСТРУМЕНТЫ" ---
 TOOLS_DATA = {
     'discounts': {
@@ -68,10 +80,24 @@ TOOLS_DATA = {
     'ping': {'title': "⚡️ Снизить ping", 'intro_text': "Выберите сервис:", 'items': []}
 }
 
-# Проверка наличия ключевых переменных
-if not all([TELEGRAM_TOKEN, ADMIN_CHAT_ID]):
-    logger.critical("КРИТИЧЕСКАЯ ОШИБКА: Отсутствуют обязательные переменные окружения TELEGRAM_TOKEN или ADMIN_CHAT_ID.")
-    exit()
+# Проверка обязательных настроек выполняется через ensure_required_settings().
+def ensure_required_settings() -> None:
+    """Убеждается, что заданы обязательные переменные окружения."""
+    missing_settings = []
+
+    if not TELEGRAM_TOKEN:
+        missing_settings.append("TELEGRAM_TOKEN")
+    if not ADMIN_CHAT_ID:
+        missing_settings.append("ADMIN_CHAT_ID")
+
+    if missing_settings:
+        message = (
+            "КРИТИЧЕСКАЯ ОШИБКА: Отсутствуют обязательные переменные окружения "
+            + ", ".join(missing_settings)
+            + "."
+        )
+        logger.critical(message)
+        raise RuntimeError(message)
 
 # Предупреждение, если используется БД для разработки
 if "sqlite" in DATABASE_URL:

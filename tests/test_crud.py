@@ -1,6 +1,19 @@
+import os
+import sys
+from pathlib import Path
 import pytest
 from datetime import datetime
 from unittest.mock import MagicMock, PropertyMock
+
+# Устанавливаем фиктивные переменные окружения до импорта модулей,
+# которые обращаются к config.py
+os.environ.setdefault("TELEGRAM_TOKEN", "test-token")
+os.environ.setdefault("ADMIN_CHAT_ID", "123456")
+
+# Убеждаемся, что корень проекта находится в PYTHONPATH при запуске тестов
+ROOT_DIR = Path(__file__).resolve().parents[1]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
 
 # Импортируем тестируемые функции и класс User
 from models.user import User
