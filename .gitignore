@@ -10,7 +10,7 @@ bot_data.sqlite
 bot.log
 
 # Файл с секретными ключами
-.envы
+.env
 
 # Системные файлы ОС
 .DS_Store
