@@ -5,6 +5,27 @@ from dotenv import load_dotenv
 # --- ЗАГРУЗКА ПЕРЕМЕННЫХ ОКРУЖЕНИЯ ---
 load_dotenv()
 
+DEFAULT_CHATGPT_FREE_MODELS = [
+    "deepseek/deepseek-chat-v3.1:free",
+    "qwen/qwen3-8b:free",
+]
+
+
+def ensure_free_models(models: list[str]) -> list[str]:
+    """Возвращает только бесплатные модели и подставляет значения по умолчанию при необходимости."""
+    logger_instance = logging.getLogger(__name__)
+    free_models = [model for model in models if model and model.endswith(":free")]
+
+    if free_models:
+        return free_models
+
+    logger_instance.warning(
+        "Не найдены бесплатные модели в конфигурации. Будут использованы значения по умолчанию: %s.",
+        ", ".join(DEFAULT_CHATGPT_FREE_MODELS),
+    )
+    return DEFAULT_CHATGPT_FREE_MODELS.copy()
+
+
 # --- ВАЖНЫЕ НАСТРОЙКИ ---
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 BOT_USERNAME = os.getenv("BOT_USERNAME", "SferaTC_bot")
@@ -19,10 +40,14 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./sferatc_dev.db")
 
 # --- Настройки для ИИ-чата через OpenRouter ---
 CHATGPT_BASE_URL = "https://openrouter.ai/api/v1"
-# Список моделей в порядке приоритета (сначала бесплатная, потом платная резервная)
-CHATGPT_MODELS = [
-    os.getenv("CHATGPT_MODEL_PRIMARY", "nousresearch/nous-hermes-2-mixtral-8x7b-dpo"),
-    os.getenv("CHATGPT_MODEL_FALLBACK", "mistralai/mistral-7b-instruct")
+# Список бесплатных моделей OpenRouter (можно переопределить через .env, платные модели требуют положительный баланс)
+_RAW_CHATGPT_MODELS = [
+    os.getenv("CHATGPT_MODEL_PRIMARY", DEFAULT_CHATGPT_FREE_MODELS[0]),
+    os.getenv("CHATGPT_MODEL_FALLBACK", DEFAULT_CHATGPT_FREE_MODELS[1]),
+]
+CHATGPT_MODELS = ensure_free_models(_RAW_CHATGPT_MODELS)
+DISCARDED_PAID_MODELS = [
+    model for model in _RAW_CHATGPT_MODELS if model and not model.endswith(":free")
 ]
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
@@ -37,6 +62,12 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
+if DISCARDED_PAID_MODELS:
+    logger.warning(
+        "Платные модели были проигнорированы и не будут использоваться: %s.",
+        ", ".join(DISCARDED_PAID_MODELS),
+    )
 
 # --- ССЫЛКИ ---
 TRAINING_BOT_URL = "https://chatgpt.com/g/g-68d9b0f1d07c8191bba533ecfb9d1689-sferatc-lessons"
@@ -80,10 +111,24 @@ TOOLS_DATA = {
     'ping': {'title': "⚡️ Снизить ping", 'intro_text': "Выберите сервис:", 'items': []}
 }
 
-# Проверка наличия ключевых переменных
-if not all([TELEGRAM_TOKEN, ADMIN_CHAT_ID]):
-    logger.critical("КРИТИЧЕСКАЯ ОШИБКА: Отсутствуют обязательные переменные окружения TELEGRAM_TOKEN или ADMIN_CHAT_ID.")
-    exit()
+# Проверка обязательных настроек выполняется через ensure_required_settings().
+def ensure_required_settings() -> None:
+    """Убеждается, что заданы обязательные переменные окружения."""
+    missing_settings = []
+
+    if not TELEGRAM_TOKEN:
+        missing_settings.append("TELEGRAM_TOKEN")
+    if not ADMIN_CHAT_ID:
+        missing_settings.append("ADMIN_CHAT_ID")
+
+    if missing_settings:
+        message = (
+            "КРИТИЧЕСКАЯ ОШИБКА: Отсутствуют обязательные переменные окружения "
+            + ", ".join(missing_settings)
+            + "."
+        )
+        logger.critical(message)
+        raise RuntimeError(message)
 
 # Предупреждение, если используется БД для разработки
 if "sqlite" in DATABASE_URL:

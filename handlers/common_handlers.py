@@ -22,33 +22,30 @@ from .verification_handlers import start_verification_process, handle_id_submiss
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
-    db = next(get_db())
-    
-    db_user = get_user(db, user.id)
+    with get_db() as db:
+        db_user = get_user(db, user.id)
 
-    if not db_user:
-        logger.info(f"Новый пользователь: {user.id} ({user.full_name}) @{user.username}")
-        db_user = create_user(db, {'id': user.id, 'username': user.username, 'full_name': user.full_name})
-        
-        user_fullname = escape_markdown(user.full_name or "Имя не указано", version=2)
-        user_username = f"@{escape_markdown(user.username, version=2)}" if user.username else "Нет"
-        admin_message = (f"👋 Новый пользователь\\!\n\nИмя: {user_fullname}\nUsername: {user_username}\nID: `{user.id}`")
-        try:
-            await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text=admin_message, parse_mode='MarkdownV2')
-        except Exception as e:
-            logger.error(f"Не удалось отправить уведомление о новом пользователе админу: {e}")
-    
-    if db_user and db_user.is_banned:
-        db.close()
-        return
+        if not db_user:
+            logger.info(f"Новый пользователь: {user.id} ({user.full_name}) @{user.username}")
+            db_user = create_user(db, {'id': user.id, 'username': user.username, 'full_name': user.full_name})
 
-    update_user_last_seen(db, user.id)
-    
-    payload = " ".join(context.args)
-    if payload == "trial_completed":
-        await start_verification_process(update, context)
-        db.close()
-        return
+            user_fullname = escape_markdown(user.full_name or "Имя не указано", version=2)
+            user_username = f"@{escape_markdown(user.username, version=2)}" if user.username else "Нет"
+            admin_message = (f"👋 Новый пользователь\\!\n\nИмя: {user_fullname}\nUsername: {user_username}\nID: `{user.id}`")
+            try:
+                await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text=admin_message, parse_mode='MarkdownV2')
+            except Exception as e:
+                logger.error(f"Не удалось отправить уведомление о новом пользователе админу: {e}")
+
+        if db_user and db_user.is_banned:
+            return
+
+        update_user_last_seen(db, user.id)
+
+        payload = " ".join(context.args)
+        if payload == "trial_completed":
+            await start_verification_process(update, context)
+            return
         
     await update.message.reply_photo(
         photo=WELCOME_IMAGE_ID,
@@ -63,13 +60,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "Выберите действие в меню ниже:",
         reply_markup=get_main_menu_keyboard(user.id)
     )
-    db.close()
-
 async def show_training_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    db = next(get_db())
-    db_user = get_user(db, update.effective_user.id)
-    is_approved = db_user.is_approved if db_user else False
-    db.close()
+    with get_db() as db:
+        db_user = get_user(db, update.effective_user.id)
+        is_approved = db_user.is_approved if db_user else False
 
     caption = "Наше бесплатное обучение проходит в специальном чат-боте на платформе ChatGPT."
     text = "Ты уже получил доступ к полному курсу!"
@@ -112,17 +106,16 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
-    db = next(get_db())
-    db_user = get_user(db, user.id)
+    with get_db() as db:
+        db_user = get_user(db, user.id)
 
-    if not db_user:
-        db_user = create_user(db, {'id': user.id, 'username': user.username, 'full_name': user.full_name})
+        if not db_user:
+            db_user = create_user(db, {'id': user.id, 'username': user.username, 'full_name': user.full_name})
 
-    if db_user and db_user.is_banned:
-        db.close()
-        return
+        if db_user and db_user.is_banned:
+            return
 
-    update_user_last_seen(db, user.id)
+        update_user_last_seen(db, user.id)
     
     admin_state = context.user_data.get('admin_state')
     user_state = context.user_data.get('state')
@@ -130,7 +123,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     if user_state == 'chatgpt_active':
         if update.message.text == "Закончить диалог":
             await stop_chatgpt_session(update, context)
-            db.close()
             return
 
         history = context.user_data.get('chat_history', [])
@@ -159,5 +151,3 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await handle_support_message(update, context)
     elif db_user and db_user.awaiting_verification:
         await handle_id_submission(update, context)
-    
-    db.close()
