@@ -68,10 +68,24 @@ TOOLS_DATA = {
     'ping': {'title': "⚡️ Снизить ping", 'intro_text': "Выберите сервис:", 'items': []}
 }
 
-# Проверка наличия ключевых переменных
-if not all([TELEGRAM_TOKEN, ADMIN_CHAT_ID]):
-    logger.critical("КРИТИЧЕСКАЯ ОШИБКА: Отсутствуют обязательные переменные окружения TELEGRAM_TOKEN или ADMIN_CHAT_ID.")
-    exit()
+# Проверка обязательных настроек выполняется через ensure_required_settings().
+def ensure_required_settings() -> None:
+    """Убеждается, что заданы обязательные переменные окружения."""
+    missing_settings = []
+
+    if not TELEGRAM_TOKEN:
+        missing_settings.append("TELEGRAM_TOKEN")
+    if not ADMIN_CHAT_ID:
+        missing_settings.append("ADMIN_CHAT_ID")
+
+    if missing_settings:
+        message = (
+            "КРИТИЧЕСКАЯ ОШИБКА: Отсутствуют обязательные переменные окружения "
+            + ", ".join(missing_settings)
+            + "."
+        )
+        logger.critical(message)
+        raise RuntimeError(message)
 
 # Предупреждение, если используется БД для разработки
 if "sqlite" in DATABASE_URL:
