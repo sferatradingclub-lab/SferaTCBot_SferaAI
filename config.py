@@ -6,8 +6,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 DEFAULT_CHATGPT_FREE_MODELS = [
-    "meta-llama/llama-3.1-8b-instruct:free",
-    "qwen/qwen-2.5-7b-instruct:free",
+    "meta-llama/Meta-Llama-3.1-8B-Instruct:free",
+    "qwen/Qwen2.5-7B-Instruct:free",
 ]
 
 
