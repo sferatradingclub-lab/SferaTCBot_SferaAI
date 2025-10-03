@@ -1,7 +1,8 @@
+from typing import Union
 import httpx
 from config import logger, CHATGPT_BASE_URL, CHATGPT_MODELS, OPENROUTER_API_KEY
 
-async def get_chatgpt_response(history: list) -> str | None:
+async def get_chatgpt_response(history: list) -> Union[str, None]:
     """
     Отправляет историю диалога в OpenRouter, используя список моделей с автоматическим переключением при ошибках.
     """
