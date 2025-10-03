@@ -31,8 +31,8 @@ python main.py
 
 По умолчанию бот использует бесплатные модели OpenRouter, чтобы исключить ошибки `402 Payment Required`:
 
-- Основная: `meta-llama/llama-3.1-8b-instruct:free`
-- Резервная: `qwen/qwen-2.5-7b-instruct:free`
+- Основная: `meta-llama/Meta-Llama-3.1-8B-Instruct:free`
+- Резервная: `qwen/Qwen2.5-7B-Instruct:free`
 
 Вы можете переопределить эти значения через переменные окружения `CHATGPT_MODEL_PRIMARY` и `CHATGPT_MODEL_FALLBACK`. Если указать платную модель (без суффикса `:free`), бот автоматически проигнорирует её и оставит только бесплатные варианты, чтобы исключить ошибки `402 Payment Required` при нулевом балансе на OpenRouter.
 
