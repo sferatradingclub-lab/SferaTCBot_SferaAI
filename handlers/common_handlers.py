@@ -107,6 +107,7 @@ async def stop_chatgpt_session(update: Update, context: ContextTypes.DEFAULT_TYP
 SupportPromptSender = Callable[[str], Awaitable[object]]
 SUPPORT_ESCALATION_PROMPT = "Опишите вашу проблему одним сообщением, и мы передадим его администратору."
 
+
 def _ensure_manual_support_state(context: ContextTypes.DEFAULT_TYPE) -> bool:
     """Устанавливает состояние ручной поддержки.
 
@@ -118,12 +119,17 @@ def _ensure_manual_support_state(context: ContextTypes.DEFAULT_TYPE) -> bool:
 
     already_manual = context.user_data.get('state') == 'awaiting_support_message'
     context.user_data['state'] = 'awaiting_support_message'
-
     if not already_manual:
         context.user_data.pop('support_llm_history', None)
-        context.user_data['support_thank_you_sent'] = False
-
+    context.user_data['support_thank_you_sent'] = False
     return not already_manual
+
+
+async def _activate_manual_support(context: ContextTypes.DEFAULT_TYPE, send_prompt: SupportPromptSender) -> None:
+    """Переключает пользователя в режим ручной поддержки и показывает подсказку при первом переходе."""
+    first_transition = _ensure_manual_support_state(context)
+    if first_transition:
+        await send_prompt(SUPPORT_ESCALATION_PROMPT)
 
 async def show_support_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     context.user_data['state'] = 'support_llm_active'
