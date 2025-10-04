@@ -107,7 +107,9 @@ async def stop_chatgpt_session(update: Update, context: ContextTypes.DEFAULT_TYP
 SupportPromptSender = Callable[[str], Awaitable[object]]
 SUPPORT_ESCALATION_PROMPT = "Опишите вашу проблему одним сообщением, и мы передадим его администратору."
 
-async def _activate_manual_support(context: ContextTypes.DEFAULT_TYPE, send_prompt: SupportPromptSender) -> None:
+def _ensure_manual_support_state(context: ContextTypes.DEFAULT_TYPE) -> bool:
+    """Устанавливает состояние ручной поддержки и очищает историю только при первом входе."""
+    already_manual = context.user_data.get('state') == 'awaiting_support_message'
     context.user_data['state'] = 'awaiting_support_message'
     context.user_data.pop('support_llm_history', None)
     context.user_data['support_thank_you_sent'] = False

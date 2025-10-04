@@ -171,6 +171,8 @@ async def user_actions_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 async def support_rejection_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
+    if context.user_data.get('state') != 'awaiting_support_message':
+        context.user_data.pop('support_llm_history', None)
     context.user_data['state'] = 'awaiting_support_message'
     context.user_data['support_thank_you_sent'] = False
     await query.edit_message_text("Ваша заявка была отклонена. Опишите вашу проблему или вопрос следующим сообщением, и мы постараемся помочь.")
@@ -178,6 +180,9 @@ async def support_rejection_handler(update: Update, context: ContextTypes.DEFAUL
 async def support_dm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
+    if context.user_data.get('state') != 'awaiting_support_message':
+        context.user_data.pop('support_llm_history', None)
     context.user_data['state'] = 'awaiting_support_message'
     context.user_data['support_thank_you_sent'] = False
     await query.edit_message_text("Опишите ваш ответ для администратора. Он будет отправлен в том же диалоге.")
+
