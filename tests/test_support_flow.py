@@ -15,6 +15,7 @@ if str(ROOT_DIR) not in sys.path:
 
 from handlers import common_handlers
 from handlers import verification_handlers
+from handlers import admin_handlers
 
 
 class DummyDBContext:
@@ -85,3 +86,45 @@ async def test_support_messages_override_verification(monkeypatch):
     assert support_calls == ["Первый вопрос", "Еще вопрос"]
     handle_id_mock.assert_not_called()
     assert context.bot.copy_message.await_count == 2
+
+
+@pytest.mark.anyio
+async def test_support_from_dm_button_triggers_handler(monkeypatch):
+    monkeypatch.setattr(admin_handlers, "get_db", lambda: DummyDBContext())
+
+    context = SimpleNamespace(
+        user_data={
+            "admin_state": "users_awaiting_dm",
+            "dm_target_user_id": 999,
+        },
+        bot=SimpleNamespace(send_message=AsyncMock()),
+    )
+
+    admin_message = SimpleNamespace(text="Ответ пользователю", reply_text=AsyncMock())
+    update = SimpleNamespace(message=admin_message)
+
+    await admin_handlers.handle_admin_message(update, context)
+
+    assert context.user_data.get("admin_state") is None
+    context.bot.send_message.assert_awaited_once()
+    _, kwargs = context.bot.send_message.await_args
+    markup = kwargs.get("reply_markup")
+    assert markup is not None
+    button = markup.inline_keyboard[0][0]
+    assert button.text == "✍️ Ответить"
+    assert button.callback_data == "support_from_dm"
+
+    callback_query = SimpleNamespace(
+        data="support_from_dm",
+        answer=AsyncMock(),
+        edit_message_text=AsyncMock(),
+        message=SimpleNamespace(reply_text=AsyncMock()),
+    )
+    callback_update = SimpleNamespace(callback_query=callback_query)
+    support_context = SimpleNamespace(user_data={}, bot=None)
+
+    await verification_handlers.support_dm_handler(callback_update, support_context)
+
+    assert support_context.user_data.get("state") == "awaiting_support_message"
+    callback_query.answer.assert_awaited_once()
+    callback_query.edit_message_text.assert_awaited_once()

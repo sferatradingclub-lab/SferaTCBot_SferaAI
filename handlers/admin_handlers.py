@@ -52,7 +52,13 @@ async def handle_admin_message(update: Update, context: ContextTypes.DEFAULT_TYP
             if target_user_id:
                 text_to_send = update.message.text
                 try:
-                    await context.bot.send_message(chat_id=target_user_id, text=text_to_send)
+                    await context.bot.send_message(
+                        chat_id=target_user_id,
+                        text=text_to_send,
+                        reply_markup=InlineKeyboardMarkup(
+                            [[InlineKeyboardButton("✍️ Ответить", callback_data="support_from_dm")]]
+                        ),
+                    )
                     await update.message.reply_text("✅ Сообщение успешно отправлено!")
                 except TelegramError as e:
                     logger.error(f"Не удалось отправить DM пользователю {target_user_id}: {e.message}")
