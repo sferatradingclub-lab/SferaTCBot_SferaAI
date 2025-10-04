@@ -61,8 +61,6 @@ async def handle_id_submission(update: Update, context: ContextTypes.DEFAULT_TYP
 
 async def handle_support_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    context.user_data['state'] = None
-    context.user_data.pop('support_llm_history', None) # Очищаем историю ИИ-чата
     await update.message.reply_text("Спасибо, ваше сообщение отправлено в поддержку. Мы скоро ответим.")
 
     try:
@@ -164,11 +162,15 @@ async def user_actions_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 async def support_rejection_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
+    if context.user_data.get('state') != 'awaiting_support_message':
+        context.user_data.pop('support_llm_history', None)
     context.user_data['state'] = 'awaiting_support_message'
     await query.edit_message_text("Ваша заявка была отклонена. Опишите вашу проблему или вопрос следующим сообщением, и мы постараемся помочь.")
 
 async def support_dm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
+    if context.user_data.get('state') != 'awaiting_support_message':
+        context.user_data.pop('support_llm_history', None)
     context.user_data['state'] = 'awaiting_support_message'
     await query.edit_message_text("Опишите ваш ответ для администратора. Он будет отправлен в том же диалоге.")
