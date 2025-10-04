@@ -108,12 +108,23 @@ SupportPromptSender = Callable[[str], Awaitable[object]]
 SUPPORT_ESCALATION_PROMPT = "Опишите вашу проблему одним сообщением, и мы передадим его администратору."
 
 def _ensure_manual_support_state(context: ContextTypes.DEFAULT_TYPE) -> bool:
-    """Устанавливает состояние ручной поддержки и очищает историю только при первом входе."""
+    """Готовит состояние для ручной поддержки.
+
+    Возвращает ``True``, если переход в ручной режим произошёл впервые и состояние
+    было изменено в рамках текущего запроса. В этом случае мы очищаем историю
+    ИИ-чата и сбрасываем флаг благодарности, чтобы пользователь получил
+    подтверждение только один раз за сессию. При повторных вызовах внутри той же
+    сессии данные остаются нетронутыми.
+    """
+
     already_manual = context.user_data.get('state') == 'awaiting_support_message'
     context.user_data['state'] = 'awaiting_support_message'
-    context.user_data.pop('support_llm_history', None)
-    context.user_data['support_thank_you_sent'] = False
-    await send_prompt(SUPPORT_ESCALATION_PROMPT)
+
+    if not already_manual:
+        context.user_data.pop('support_llm_history', None)
+        context.user_data['support_thank_you_sent'] = False
+
+    return not already_manual
 
 async def show_support_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     context.user_data['state'] = 'support_llm_active'
