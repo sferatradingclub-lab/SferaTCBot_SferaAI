@@ -111,12 +111,8 @@ def _ensure_manual_support_state(context: ContextTypes.DEFAULT_TYPE) -> bool:
     """Устанавливает состояние ручной поддержки и очищает историю только при первом входе."""
     already_manual = context.user_data.get('state') == 'awaiting_support_message'
     context.user_data['state'] = 'awaiting_support_message'
-    if not already_manual:
-        context.user_data.pop('support_llm_history', None)
-    return not already_manual
-
-async def _activate_manual_support(context: ContextTypes.DEFAULT_TYPE, send_prompt: SupportPromptSender) -> None:
-    _ensure_manual_support_state(context)
+    context.user_data.pop('support_llm_history', None)
+    context.user_data['support_thank_you_sent'] = False
     await send_prompt(SUPPORT_ESCALATION_PROMPT)
 
 async def show_support_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
