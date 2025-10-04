@@ -99,8 +99,9 @@ async def handle_support_message(update: Update, context: ContextTypes.DEFAULT_T
     except TelegramError as e:
         logger.error(f"Не удалось отправить сообщение поддержки админу: {e.message}")
     finally:
-        context.user_data['state'] = None
-        context.user_data.pop('support_llm_history', None) # Очищаем историю ИИ-чата
+        # Сохраняем пользователя в ручной поддержке и не очищаем историю LLM,
+        # чтобы повторные сообщения не сбрасывали контекст.
+        context.user_data['state'] = 'awaiting_support_message'
         context.user_data.pop('support_thank_you_sent', None)
 
 async def user_actions_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
