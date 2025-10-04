@@ -128,3 +128,30 @@ async def test_support_from_dm_button_triggers_handler(monkeypatch):
     assert support_context.user_data.get("state") == "awaiting_support_message"
     callback_query.answer.assert_awaited_once()
     callback_query.edit_message_text.assert_awaited_once()
+
+
+@pytest.mark.anyio
+async def test_admin_reply_sent_with_original_message_reference(monkeypatch):
+    monkeypatch.setattr(admin_handlers, "get_db", lambda: DummyDBContext())
+
+    context = SimpleNamespace(
+        user_data={
+            "admin_state": "users_awaiting_dm",
+            "dm_target_user_id": 555,
+            "reply_to_message_id": 777,
+        },
+        bot=SimpleNamespace(send_message=AsyncMock()),
+    )
+
+    admin_message = SimpleNamespace(text="Ответ пользователю", reply_text=AsyncMock())
+    update = SimpleNamespace(message=admin_message)
+
+    await admin_handlers.handle_admin_message(update, context)
+
+    assert context.user_data.get("admin_state") is None
+    assert "reply_to_message_id" not in context.user_data
+
+    context.bot.send_message.assert_awaited_once()
+    _, kwargs = context.bot.send_message.await_args
+    assert kwargs.get("reply_to_message_id") == 777
+    admin_message.reply_text.assert_awaited_once_with("✅ Сообщение успешно отправлено!")
