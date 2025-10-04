@@ -6,7 +6,7 @@ from telegram.helpers import escape_markdown
 from telegram.error import TelegramError
 
 from config import logger, ADMIN_CHAT_ID, FULL_COURSE_URL
-from keyboards import get_verification_links_keyboard
+from keyboards import get_verification_links_keyboard, get_support_keyboard
 from .admin_handlers import display_user_card
 from db_session import get_db
 from models.crud import (
@@ -61,8 +61,10 @@ async def handle_id_submission(update: Update, context: ContextTypes.DEFAULT_TYP
 
 async def handle_support_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    context.user_data['state'] = None 
-    await update.message.reply_text("Спасибо, ваше сообщение отправлено в поддержку. Мы скоро ответим.")
+    await update.message.reply_text(
+        "Спасибо, ваше сообщение отправлено в поддержку. Мы скоро ответим.",
+        reply_markup=get_support_keyboard()
+    )
 
     try:
         copied_message = await context.bot.copy_message(chat_id=ADMIN_CHAT_ID, from_chat_id=user.id, message_id=update.message.message_id)
@@ -165,9 +167,17 @@ async def support_rejection_handler(update: Update, context: ContextTypes.DEFAUL
     await query.answer()
     context.user_data['state'] = 'awaiting_support_message'
     await query.edit_message_text("Ваша заявка была отклонена. Опишите вашу проблему или вопрос следующим сообщением, и мы постараемся помочь.")
+    await query.message.reply_text(
+        "Мы на связи! Когда будете готовы, отправьте сообщение. Если хотите выйти — нажмите кнопку ниже.",
+        reply_markup=get_support_keyboard()
+    )
 
 async def support_dm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
     context.user_data['state'] = 'awaiting_support_message'
     await query.edit_message_text("Опишите ваш ответ для администратора. Он будет отправлен в том же диалоге.")
+    await query.message.reply_text(
+        "Ждем ваше сообщение. Для возврата в меню используйте кнопку ниже.",
+        reply_markup=get_support_keyboard()
+    )
