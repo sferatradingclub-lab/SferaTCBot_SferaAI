@@ -9,7 +9,7 @@ from config import (
 )
 from keyboards import (
     get_main_menu_keyboard, get_channel_keyboard, get_training_keyboard,
-    get_psychologist_keyboard, get_chatgpt_keyboard
+    get_psychologist_keyboard, get_chatgpt_keyboard, get_support_keyboard
 )
 from db_session import get_db
 from models.crud import get_user, create_user, update_user_last_seen
@@ -99,7 +99,15 @@ async def stop_chatgpt_session(update: Update, context: ContextTypes.DEFAULT_TYP
 
 async def show_support_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     context.user_data['state'] = 'awaiting_support_message'
-    await update.message.reply_photo(photo=SUPPORT_IMAGE_ID, caption="Слушаю твой вопрос. Просто отправь его следующим сообщением (можно текст, фото, видео или голосовое).")
+    await update.message.reply_photo(
+        photo=SUPPORT_IMAGE_ID,
+        caption=(
+            "Слушаю твой вопрос. Просто отправь его следующим сообщением "
+            "(можно текст, фото, видео или голосовое). Если передумал — нажми"
+            " кнопку ниже, чтобы вернуться в главное меню."
+        ),
+        reply_markup=get_support_keyboard()
+    )
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("Это бот образовательной экосистемы SferaTC. Используйте меню для навигации по разделам.")
@@ -148,6 +156,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     elif str(user.id) == ADMIN_CHAT_ID and admin_state:
         await handle_admin_message(update, context)
     elif user_state == 'awaiting_support_message':
+        if update.message.text == "Вернуться в меню":
+            context.user_data.pop('state', None)
+            await update.message.reply_text(
+                "Вы вернулись в главное меню.",
+                reply_markup=get_main_menu_keyboard(user.id)
+            )
+            return
+
         await handle_support_message(update, context)
     elif db_user and db_user.awaiting_verification:
         await handle_id_submission(update, context)

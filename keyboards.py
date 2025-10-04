@@ -12,11 +12,16 @@ main_menu_keyboard_layout = [
 ]
 
 def get_main_menu_keyboard(user_id: int) -> ReplyKeyboardMarkup:
-    from config import ADMIN_CHAT_ID 
+    from config import ADMIN_CHAT_ID
     current_menu = [row[:] for row in main_menu_keyboard_layout]
     if str(user_id) == ADMIN_CHAT_ID:
         current_menu.append(["👑 Админка"])
     return ReplyKeyboardMarkup(current_menu, resize_keyboard=True)
+
+
+def get_support_keyboard() -> ReplyKeyboardMarkup:
+    """Клавиатура режима общения с поддержкой."""
+    return ReplyKeyboardMarkup([["Вернуться в меню"]], resize_keyboard=True)
 
 # --- Инлайн-клавиатуры ---
 def get_channel_keyboard() -> InlineKeyboardMarkup:
