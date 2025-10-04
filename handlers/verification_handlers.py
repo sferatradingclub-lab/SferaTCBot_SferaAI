@@ -61,9 +61,12 @@ async def handle_id_submission(update: Update, context: ContextTypes.DEFAULT_TYP
 
 async def handle_support_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    context.user_data['state'] = None
-    context.user_data.pop('support_llm_history', None) # Очищаем историю ИИ-чата
-    await update.message.reply_text("Спасибо, ваше сообщение отправлено в поддержку. Мы скоро ответим.")
+
+    should_send_thank_you = not context.user_data.get('support_thank_you_sent')
+
+    if should_send_thank_you:
+        await update.message.reply_text("Спасибо, ваше сообщение отправлено в поддержку. Мы скоро ответим.")
+        context.user_data['support_thank_you_sent'] = True
 
     try:
         copied_message = await context.bot.copy_message(chat_id=ADMIN_CHAT_ID, from_chat_id=user.id, message_id=update.message.message_id)
@@ -95,6 +98,10 @@ async def handle_support_message(update: Update, context: ContextTypes.DEFAULT_T
         )
     except TelegramError as e:
         logger.error(f"Не удалось отправить сообщение поддержки админу: {e.message}")
+    finally:
+        context.user_data['state'] = None
+        context.user_data.pop('support_llm_history', None) # Очищаем историю ИИ-чата
+        context.user_data.pop('support_thank_you_sent', None)
 
 async def user_actions_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
@@ -165,10 +172,12 @@ async def support_rejection_handler(update: Update, context: ContextTypes.DEFAUL
     query = update.callback_query
     await query.answer()
     context.user_data['state'] = 'awaiting_support_message'
+    context.user_data['support_thank_you_sent'] = False
     await query.edit_message_text("Ваша заявка была отклонена. Опишите вашу проблему или вопрос следующим сообщением, и мы постараемся помочь.")
 
 async def support_dm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
     context.user_data['state'] = 'awaiting_support_message'
+    context.user_data['support_thank_you_sent'] = False
     await query.edit_message_text("Опишите ваш ответ для администратора. Он будет отправлен в том же диалоге.")

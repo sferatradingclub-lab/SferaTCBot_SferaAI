@@ -110,6 +110,7 @@ SUPPORT_ESCALATION_PROMPT = "Опишите вашу проблему одним
 async def _activate_manual_support(context: ContextTypes.DEFAULT_TYPE, send_prompt: SupportPromptSender) -> None:
     context.user_data['state'] = 'awaiting_support_message'
     context.user_data.pop('support_llm_history', None)
+    context.user_data['support_thank_you_sent'] = False
     await send_prompt(SUPPORT_ESCALATION_PROMPT)
 
 async def show_support_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
