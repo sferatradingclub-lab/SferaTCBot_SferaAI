@@ -50,10 +50,11 @@ def test_support_messages_forwarded_while_state_active(monkeypatch):
         second_reply = await send_user_message(11, "Второе сообщение")
 
         assert first_reply.await_count == 1
-        assert second_reply.await_count == 1
+        assert second_reply.await_count == 0
         assert bot.copy_message.await_count == 2
         assert bot.send_message.await_count == 2
         assert context.user_data['state'] == 'awaiting_support_message'
         assert context.user_data['support_llm_history'] == ['keep']
+        assert context.user_data['support_thank_you_sent'] is True
 
     asyncio.run(run_test())

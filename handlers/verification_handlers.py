@@ -99,8 +99,9 @@ async def handle_support_message(update: Update, context: ContextTypes.DEFAULT_T
     except TelegramError as e:
         logger.error(f"Не удалось отправить сообщение поддержки админу: {e.message}")
     finally:
+        # Оставляем пользователя в режиме ручной поддержки и сохраняем историю,
+        # чтобы он мог продолжать диалог без повторного подтверждения.
         context.user_data['state'] = 'awaiting_support_message'
-        context.user_data['support_thank_you_sent'] = False
 
 async def user_actions_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
