@@ -107,6 +107,7 @@ async def stop_chatgpt_session(update: Update, context: ContextTypes.DEFAULT_TYP
 SupportPromptSender = Callable[[str], Awaitable[object]]
 SUPPORT_ESCALATION_PROMPT = "Опишите вашу проблему одним сообщением, и мы передадим его администратору."
 
+
 def _ensure_manual_support_state(context: ContextTypes.DEFAULT_TYPE) -> bool:
     """Готовит состояние для ручной поддержки.
 
