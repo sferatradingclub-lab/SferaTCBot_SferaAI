@@ -9,7 +9,7 @@ from config import (
     logger, ADMIN_CHAT_ID, WELCOME_IMAGE_ID, TRAINING_IMAGE_ID,
     PSYCHOLOGIST_IMAGE_ID, CHATGPT_IMAGE_ID, SUPPORT_IMAGE_ID,
     SUPPORT_LLM_SYSTEM_PROMPT, SUPPORT_ESCALATION_BUTTON_TEXT,
-    SUPPORT_LLM_HISTORY_LIMIT
+    SUPPORT_LLM_HISTORY_LIMIT, get_safe_file_id
 )
 from keyboards import (
     get_main_menu_keyboard, get_channel_keyboard, get_training_keyboard,
@@ -51,15 +51,23 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             await start_verification_process(update, context)
             return
         
-    await update.message.reply_photo(
-        photo=WELCOME_IMAGE_ID,
-        caption=(
-            f"Привет, {user.first_name}!\n\n"
-            "Добро пожаловать в экосистему SferaTC. Здесь ты найдешь все для успешного старта в трейдинге.\n\n"
-            "Чтобы быть в курсе всех обновлений, подпишись на наш основной канал!"
-        ),
-        reply_markup=get_channel_keyboard()
+    welcome_caption = (
+        f"Привет, {user.first_name}!\n\n"
+        "Добро пожаловать в экосистему SferaTC. Здесь ты найдешь все для успешного старта в трейдинге.\n\n"
+        "Чтобы быть в курсе всех обновлений, подпишись на наш основной канал!"
     )
+    welcome_photo_id = get_safe_file_id(WELCOME_IMAGE_ID, "welcome_image")
+    if welcome_photo_id:
+        await update.message.reply_photo(
+            photo=welcome_photo_id,
+            caption=welcome_caption,
+            reply_markup=get_channel_keyboard()
+        )
+    else:
+        await update.message.reply_text(
+            welcome_caption,
+            reply_markup=get_channel_keyboard()
+        )
     await update.message.reply_text(
         "Выберите действие в меню ниже:",
         reply_markup=get_main_menu_keyboard(user.id)
@@ -76,10 +84,33 @@ async def show_training_menu(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if is_approved:
         await update.message.reply_text(text, reply_markup=get_training_keyboard(is_approved))
     else:
-        await update.message.reply_photo(photo=TRAINING_IMAGE_ID, caption=caption, reply_markup=get_training_keyboard(is_approved))
+        training_photo_id = get_safe_file_id(TRAINING_IMAGE_ID, "training_image")
+        if training_photo_id:
+            await update.message.reply_photo(
+                photo=training_photo_id,
+                caption=caption,
+                reply_markup=get_training_keyboard(is_approved)
+            )
+        else:
+            await update.message.reply_text(
+                caption,
+                reply_markup=get_training_keyboard(is_approved)
+            )
 
 async def show_psychologist_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_photo(photo=PSYCHOLOGIST_IMAGE_ID, caption="Наш ИИ-психолог поможет справиться со стрессом в трейдинге.", reply_markup=get_psychologist_keyboard())
+    psychologist_photo_id = get_safe_file_id(PSYCHOLOGIST_IMAGE_ID, "psychologist_image")
+    caption = "Наш ИИ-психолог поможет справиться со стрессом в трейдинге."
+    if psychologist_photo_id:
+        await update.message.reply_photo(
+            photo=psychologist_photo_id,
+            caption=caption,
+            reply_markup=get_psychologist_keyboard()
+        )
+    else:
+        await update.message.reply_text(
+            caption,
+            reply_markup=get_psychologist_keyboard()
+        )
 
 async def show_chatgpt_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Начинает сессию с LLM через OpenRouter."""
@@ -145,14 +176,22 @@ async def _activate_manual_support(
 async def show_support_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     context.user_data['state'] = 'support_llm_active'
     context.user_data['support_llm_history'] = [{"role": "system", "content": SUPPORT_LLM_SYSTEM_PROMPT}]
-    await update.message.reply_photo(
-        photo=SUPPORT_IMAGE_ID,
-        caption=(
-            "Я — ИИ-поддержка SferaTC и готов помочь. Опишите проблему текстом, а если понадобится человек, "
-            f"нажмите кнопку «{SUPPORT_ESCALATION_BUTTON_TEXT}»."
-        ),
-        reply_markup=get_support_llm_keyboard(),
+    support_caption = (
+        "Я — ИИ-поддержка SferaTC и готов помочь. Опишите проблему текстом, а если понадобится человек, "
+        f"нажмите кнопку «{SUPPORT_ESCALATION_BUTTON_TEXT}»."
     )
+    support_photo_id = get_safe_file_id(SUPPORT_IMAGE_ID, "support_image")
+    if support_photo_id:
+        await update.message.reply_photo(
+            photo=support_photo_id,
+            caption=support_caption,
+            reply_markup=get_support_llm_keyboard(),
+        )
+    else:
+        await update.message.reply_text(
+            support_caption,
+            reply_markup=get_support_llm_keyboard(),
+        )
 
 async def escalate_support_to_admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
