@@ -109,7 +109,14 @@ SUPPORT_ESCALATION_PROMPT = "Опишите вашу проблему одним
 
 
 def _ensure_manual_support_state(context: ContextTypes.DEFAULT_TYPE) -> bool:
-    """Устанавливает состояние ручной поддержки и очищает историю только при первом входе."""
+    """Устанавливает состояние ручной поддержки.
+
+    Возвращает ``True``, если состояние переключилось с LLM-поддержки на ручную,
+    и ``False``, если пользователь уже находился в ручной поддержке. История LLM
+    и флаг благодарности очищаются только при первом переходе, чтобы не терять
+    данные при повторных вызовах.
+    """
+
     already_manual = context.user_data.get('state') == 'awaiting_support_message'
     context.user_data['state'] = 'awaiting_support_message'
     if not already_manual:
