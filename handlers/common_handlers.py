@@ -111,21 +111,36 @@ SUPPORT_ESCALATION_PROMPT = "Опишите вашу проблему одним
 def _ensure_manual_support_state(context: ContextTypes.DEFAULT_TYPE) -> bool:
     """Готовит состояние для ручной поддержки.
 
-    Возвращает ``True``, если переход в ручной режим произошёл впервые и состояние
-    было изменено в рамках текущего запроса. В этом случае мы очищаем историю
-    ИИ-чата и сбрасываем флаг благодарности, чтобы пользователь получил
-    подтверждение только один раз за сессию. При повторных вызовах внутри той же
-    сессии данные остаются нетронутыми.
+    Возвращает ``True``, если переход в ручной режим произошёл впервые и
+    состояние было изменено в рамках текущего запроса. При повторных вызовах
+    внутри той же сессии данные остаются нетронутыми.
     """
 
     already_manual = context.user_data.get('state') == 'awaiting_support_message'
     context.user_data['state'] = 'awaiting_support_message'
 
-    if not already_manual:
+    return not already_manual
+
+
+async def _activate_manual_support(
+    context: ContextTypes.DEFAULT_TYPE,
+    prompt_sender: SupportPromptSender,
+) -> None:
+    """Переводит пользователя в ручной режим и отправляет подсказку, если нужно."""
+
+    first_manual_transition = _ensure_manual_support_state(context)
+
+    if first_manual_transition:
         context.user_data.pop('support_llm_history', None)
         context.user_data['support_thank_you_sent'] = False
 
-    return not already_manual
+        try:
+            await prompt_sender(SUPPORT_ESCALATION_PROMPT)
+        except Exception as error:  # pragma: no cover - логирование ошибки
+            logger.error(
+                "Не удалось отправить подсказку для ручной поддержки: %s",
+                error,
+            )
 
 async def show_support_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     context.user_data['state'] = 'support_llm_active'

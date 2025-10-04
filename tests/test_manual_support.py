@@ -4,14 +4,13 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 
-def test_ensure_manual_support_state_clears_history_once():
+def test_ensure_manual_support_state_detects_first_transition():
     from handlers.common_handlers import _ensure_manual_support_state
 
     context = SimpleNamespace(user_data={'state': 'support_llm_active', 'support_llm_history': ['history']})
 
     first_transition = _ensure_manual_support_state(context)
     assert first_transition is True
-    assert 'support_llm_history' not in context.user_data
     assert context.user_data['state'] == 'awaiting_support_message'
 
     context.user_data['support_llm_history'] = ['keep']
@@ -56,5 +55,48 @@ def test_support_messages_forwarded_while_state_active(monkeypatch):
         assert context.user_data['state'] == 'awaiting_support_message'
         assert context.user_data['support_llm_history'] == ['keep']
         assert context.user_data['support_thank_you_sent'] is True
+
+    asyncio.run(run_test())
+
+
+def test_escalation_prompt_sent_once_on_manual_support_transition():
+    from handlers import common_handlers as ch
+
+    async def run_test():
+        context = SimpleNamespace(
+            user_data={
+                'state': 'support_llm_active',
+                'support_llm_history': ['history'],
+                'support_thank_you_sent': True,
+            }
+        )
+
+        message = SimpleNamespace(
+            text="Нужна помощь",
+            caption=None,
+            reply_text=AsyncMock(),
+            edit_reply_markup=AsyncMock(),
+            edit_caption=AsyncMock(),
+        )
+
+        query = SimpleNamespace(answer=AsyncMock(), message=message)
+        update = SimpleNamespace(callback_query=query)
+
+        await ch.escalate_support_to_admin(update, context)
+
+        query.answer.assert_awaited_once()
+        message.edit_reply_markup.assert_awaited_once_with(reply_markup=None)
+        message.reply_text.assert_awaited_once_with(ch.SUPPORT_ESCALATION_PROMPT)
+        assert context.user_data['state'] == 'awaiting_support_message'
+        assert 'support_llm_history' not in context.user_data
+        assert context.user_data['support_thank_you_sent'] is False
+
+        message.reply_text.reset_mock()
+        context.user_data['support_llm_history'] = ['keep']
+
+        await ch.escalate_support_to_admin(update, context)
+
+        message.reply_text.assert_not_awaited()
+        assert context.user_data['support_llm_history'] == ['keep']
 
     asyncio.run(run_test())
