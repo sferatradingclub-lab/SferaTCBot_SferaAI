@@ -71,16 +71,14 @@ def main() -> None:
     # Проверяем наличие обязательных настроек перед запуском бота
     ensure_required_settings()
 
-    # Собираем приложение
+    # --- ОКОНЧАТЕЛЬНО ИСПРАВЛЕННЫЙ БЛОК ---
+    # Собираем приложение и добавляем post_shutdown callback ПРАВИЛЬНЫМ СПОСОБОМ для версии 21.1.1
     application = (
         Application.builder()
         .token(TELEGRAM_TOKEN)
+        .post_shutdown(close_chatgpt_client)
         .build()
     )
-
-    # --- ИСПРАВЛЕННЫЙ БЛОК ---
-    # Добавляем callback для корректного закрытия http-клиента при остановке бота
-    application.add_post_shutdown_callback(close_chatgpt_client)
     # --- КОНЕЦ ИСПРАВЛЕННОГО БЛОКА ---
 
 
