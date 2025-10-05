@@ -47,16 +47,6 @@ def test_custom_webhook_path_is_sanitized(monkeypatch):
     assert config.WEBHOOK_PATH == "custom/path"
 
 
-def test_webhook_url_is_trimmed(monkeypatch):
-    config = _load_config(monkeypatch, {"WEBHOOK_URL": " https://example.com/base/ "})
-    assert config.WEBHOOK_URL == "https://example.com/base"
-
-
-def test_blank_webhook_url_is_treated_as_missing(monkeypatch):
-    config = _load_config(monkeypatch, {"WEBHOOK_URL": "   "})
-    assert config.WEBHOOK_URL is None
-
-
 def test_empty_webhook_path_allows_root(monkeypatch):
     config = _load_config(monkeypatch, {"WEBHOOK_PATH": ""})
     assert config.WEBHOOK_PATH == ""

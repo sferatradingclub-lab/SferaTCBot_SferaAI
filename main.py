@@ -129,7 +129,7 @@ def main() -> None:
     # --- ЗАПУСК БОТА ---
     if WEBHOOK_URL:
         webhook_path = WEBHOOK_PATH
-        webhook_full_url = WEBHOOK_URL
+        webhook_full_url = WEBHOOK_URL.rstrip('/')
         if webhook_path:
             webhook_full_url = f"{webhook_full_url}/{webhook_path}"
         else:
