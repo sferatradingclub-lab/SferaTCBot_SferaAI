@@ -1,5 +1,4 @@
 import asyncio
-import atexit
 from datetime import time
 from telegram.ext import (
     Application,
@@ -76,41 +75,17 @@ def main() -> None:
     application = (
         Application.builder()
         .token(TELEGRAM_TOKEN)
-        .post_shutdown(close_chatgpt_client)
         .build()
     )
 
-    post_shutdown = getattr(application, "post_shutdown", None)
-    if not hasattr(post_shutdown, "append"):
-        logger.warning(
-            "post_shutdown callbacks are unavailable; relying on atexit to close the ChatGPT client."
-        )
+    # --- ИЗМЕНЕННЫЙ БЛОК ---
+    # Добавляем post_shutdown напрямую для корректного закрытия клиента
+    if hasattr(application, 'post_shutdown'):
+        application.post_shutdown(close_chatgpt_client)
+    else:
+        logger.warning("Не удалось добавить post_shutdown callback. Убедитесь, что версия python-telegram-bot совместима.")
+    # --- КОНЕЦ ИЗМЕНЕННОГО БЛОКА ---
 
-    def _close_client_on_exit() -> None:
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
-
-        if loop and loop.is_running():
-            loop.create_task(close_chatgpt_client())
-            return
-
-        try:
-            asyncio.run(close_chatgpt_client())
-        except RuntimeError:
-            try:
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    loop.create_task(close_chatgpt_client())
-                else:
-                    loop.run_until_complete(close_chatgpt_client())
-            except Exception as exc:  # noqa: BLE001
-                logger.error(f"Ошибка при закрытии клиента OpenRouter в atexit: {exc}")
-        except Exception as exc:  # noqa: BLE001
-            logger.error(f"Ошибка при закрытии клиента OpenRouter в atexit: {exc}")
-
-    atexit.register(_close_client_on_exit)
 
     # --- РЕГИСТРАЦИЯ ОБРАБОТЧИКОВ ---
 
