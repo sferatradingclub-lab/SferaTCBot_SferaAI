@@ -2,7 +2,7 @@ from telegram import Update, InputMediaPhoto, InlineKeyboardButton, InlineKeyboa
 from telegram.ext import ContextTypes
 from telegram.error import TelegramError
 
-from config import logger, TOOLS_DATA, TOOLS_IMAGE_ID, get_safe_file_id
+from config import logger, TOOLS_DATA, TOOLS_IMAGE_URL, get_safe_url
 from keyboards import get_tools_categories_keyboard
 
 TOOLS_MENU_TEXT = "Здесь мы собрали полезные инструменты для трейдера. Выберите нужный раздел:"
@@ -12,12 +12,12 @@ async def show_tools_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     if not update.message:
         return
 
-    tools_image_id = get_safe_file_id(TOOLS_IMAGE_ID, "TOOLS_IMAGE_ID")
+    tools_image_url = get_safe_url(TOOLS_IMAGE_URL, "TOOLS_IMAGE_URL")
     keyboard = get_tools_categories_keyboard()
 
-    if tools_image_id:
+    if tools_image_url:
         await update.message.reply_photo(
-            photo=tools_image_id,
+            photo=tools_image_url,
             caption=TOOLS_MENU_TEXT,
             reply_markup=keyboard,
         )
@@ -35,10 +35,10 @@ async def tools_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     if query_data == 'tools_main':
         keyboard = get_tools_categories_keyboard()
-        tools_image_id = get_safe_file_id(TOOLS_IMAGE_ID, "TOOLS_IMAGE_ID")
+        tools_image_url = get_safe_url(TOOLS_IMAGE_URL, "TOOLS_IMAGE_URL")
 
-        if tools_image_id and query.message and query.message.photo:
-            media = InputMediaPhoto(media=tools_image_id, caption=TOOLS_MENU_TEXT)
+        if tools_image_url and query.message and query.message.photo:
+            media = InputMediaPhoto(media=tools_image_url, caption=TOOLS_MENU_TEXT)
             try:
                 await query.edit_message_media(media=media, reply_markup=keyboard)
             except TelegramError as e:
@@ -93,11 +93,11 @@ async def tools_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 ],
                 [InlineKeyboardButton("⬅️ Назад к списку", callback_data=parent_category_callback)]
             ]
-            tool_image_id = get_safe_file_id(selected_tool.get('image_id'), selected_tool['name'])
+            tool_image_url = get_safe_url(selected_tool.get('image_url'), selected_tool['name'])
             reply_markup = InlineKeyboardMarkup(keyboard_buttons)
 
-            if tool_image_id and query.message and query.message.photo:
-                media = InputMediaPhoto(media=tool_image_id, caption=caption, parse_mode='Markdown')
+            if tool_image_url and query.message and query.message.photo:
+                media = InputMediaPhoto(media=tool_image_url, caption=caption, parse_mode='Markdown')
                 try:
                     await query.edit_message_media(media=media, reply_markup=reply_markup)
                 except TelegramError as e:

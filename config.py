@@ -77,13 +77,13 @@ AI_PSYCHOLOGIST_URL = "https://chatgpt.com/g/g-68bb703f9a3881918d51f97375d7d128-
 FULL_COURSE_URL = "https://g-2NaO34S37-sferatc-full-course"
 TELEGRAM_CHANNEL_URL = "https://t.me/SferaTC"
 
-# --- FILE_ID ДЛЯ КАРТИНОК ---
-WELCOME_IMAGE_ID = os.getenv("WELCOME_IMAGE_ID")
-TRAINING_IMAGE_ID = os.getenv("TRAINING_IMAGE_ID")
-PSYCHOLOGIST_IMAGE_ID = os.getenv("PSYCHOLOGIST_IMAGE_ID")
-CHATGPT_IMAGE_ID = os.getenv("CHATGPT_IMAGE_ID")
-SUPPORT_IMAGE_ID = os.getenv("SUPPORT_IMAGE_ID")
-TOOLS_IMAGE_ID = os.getenv("TOOLS_IMAGE_ID")
+# --- URL АДРЕСА КАРТИНОК ---
+WELCOME_IMAGE_URL = os.getenv("WELCOME_IMAGE_URL")
+TRAINING_IMAGE_URL = os.getenv("TRAINING_IMAGE_URL")
+PSYCHOLOGIST_IMAGE_URL = os.getenv("PSYCHOLOGIST_IMAGE_URL")
+CHATGPT_IMAGE_URL = os.getenv("CHATGPT_IMAGE_URL")
+SUPPORT_IMAGE_URL = os.getenv("SUPPORT_IMAGE_URL")
+TOOLS_IMAGE_URL = os.getenv("TOOLS_IMAGE_URL")
 
 # --- НОВЫЕ НАСТРОЙКИ ДЛЯ ДВУХУРОВНЕВОЙ ПОДДЕРЖКИ ---
 SUPPORT_LLM_SYSTEM_PROMPT = (
@@ -96,13 +96,13 @@ SUPPORT_ESCALATION_CALLBACK = "support_llm_escalate"
 SUPPORT_LLM_HISTORY_LIMIT = 10
 # ---------------------------------------------------------
 
-def get_safe_file_id(file_id: Union[str, None], context_name: str) -> Union[str, None]:
-    """Возвращает file_id, если он задан, иначе логирует предупреждение."""
-    if file_id:
-        return file_id
+def get_safe_url(url: Union[str, None], context_name: str) -> Union[str, None]:
+    """Возвращает URL, если он задан, иначе логирует предупреждение."""
+    if url:
+        return url
 
     logger.warning(
-        "Отсутствует file_id для %s. Будет использован текстовый fallback.",
+        "Отсутствует URL для '%s'. Будет использован текстовый fallback.",
         context_name,
     )
     return None
@@ -113,9 +113,9 @@ TOOLS_DATA = {
         'title': "💰 Скидки на комиссии",
         'intro_text': "В этом разделе собраны лучшие биржи и брокеры. Откройте счет по этим ссылкам, чтобы получить максимальные скидки и экономить на комиссиях!",
         'items': [
-            { 'name': 'Крипто Брокер Tiger.com', 'callback': 'tool_tiger', 'description': 'Единая платформа для торговли на нескольких биржах. Экономьте на комиссиях, ведите автоматический дневник сделок и управляйте рисками.', 'image_id': os.getenv("TIGER_IMAGE_ID"), 'site_url': 'https://account.tiger.com/signup?referral=sferatc', 'video_url': 'https://www.youtube.com/@sferaTC' },
-            { 'name': 'Крипто Брокер Vataga Crypto', 'callback': 'tool_vataga', 'description': 'Торгуйте на всех крупных биржах через одну платформу: продвинутые графики, мультиаккаунт и круглосуточная поддержка.', 'image_id': os.getenv("VATAGA_IMAGE_ID"), 'site_url': 'https://app.vataga.trading/register', 'video_url': 'https://www.youtube.com/@sferaTC' },
-            { 'name': 'Крипто Брокер Whitelist', 'callback': 'tool_whitelist', 'description': 'Онлайн-офис для скальперов с мощным торговым терминалом Scalpee для ПК и большим сообществом трейдеров.', 'image_id': os.getenv("WHITELIST_IMAGE_ID"), 'site_url': 'https://passport.whitelist.capital/signup/?ref=sferatc', 'video_url': 'https://www.youtube.com/@sferaTC' }
+            { 'name': 'Крипто Брокер Tiger.com', 'callback': 'tool_tiger', 'description': 'Единая платформа для торговли на нескольких биржах. Экономьте на комиссиях, ведите автоматический дневник сделок и управляйте рисками.', 'image_url': os.getenv("TIGER_IMAGE_URL"), 'site_url': 'https://account.tiger.com/signup?referral=sferatc', 'video_url': 'https://www.youtube.com/@sferaTC' },
+            { 'name': 'Крипто Брокер Vataga Crypto', 'callback': 'tool_vataga', 'description': 'Торгуйте на всех крупных биржах через одну платформу: продвинутые графики, мультиаккаунт и круглосуточная поддержка.', 'image_url': os.getenv("VATAGA_IMAGE_URL"), 'site_url': 'https://app.vataga.trading/register', 'video_url': 'https://www.youtube.com/@sferaTC' },
+            { 'name': 'Крипто Брокер Whitelist', 'callback': 'tool_whitelist', 'description': 'Онлайн-офис для скальперов с мощным торговым терминалом Scalpee для ПК и большим сообществом трейдеров.', 'image_url': os.getenv("WHITELIST_IMAGE_URL"), 'site_url': 'https://passport.whitelist.capital/signup/?ref=sferatc', 'video_url': 'https://www.youtube.com/@sferaTC' }
         ]
     },
     'screeners': {'title': "📈 Скринеры", 'intro_text': "Выберите скринер:", 'items': []},

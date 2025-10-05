@@ -6,10 +6,10 @@ from telegram.helpers import escape_markdown
 from telegram.error import TelegramError
 
 from config import (
-    logger, ADMIN_CHAT_ID, WELCOME_IMAGE_ID, TRAINING_IMAGE_ID,
-    PSYCHOLOGIST_IMAGE_ID, CHATGPT_IMAGE_ID, SUPPORT_IMAGE_ID,
+    logger, ADMIN_CHAT_ID, WELCOME_IMAGE_URL, TRAINING_IMAGE_URL,
+    PSYCHOLOGIST_IMAGE_URL, CHATGPT_IMAGE_URL, SUPPORT_IMAGE_URL,
     SUPPORT_LLM_SYSTEM_PROMPT, SUPPORT_ESCALATION_BUTTON_TEXT,
-    SUPPORT_LLM_HISTORY_LIMIT, get_safe_file_id
+    SUPPORT_LLM_HISTORY_LIMIT, get_safe_url
 )
 from keyboards import (
     get_main_menu_keyboard, get_channel_keyboard, get_training_keyboard,
@@ -56,10 +56,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "Добро пожаловать в экосистему SferaTC. Здесь ты найдешь все для успешного старта в трейдинге.\n\n"
         "Чтобы быть в курсе всех обновлений, подпишись на наш основной канал!"
     )
-    welcome_photo_id = get_safe_file_id(WELCOME_IMAGE_ID, "welcome_image")
-    if welcome_photo_id:
+    welcome_photo_url = get_safe_url(WELCOME_IMAGE_URL, "welcome_image")
+    if welcome_photo_url:
         await update.message.reply_photo(
-            photo=welcome_photo_id,
+            photo=welcome_photo_url,
             caption=welcome_caption,
             reply_markup=get_channel_keyboard()
         )
@@ -84,10 +84,10 @@ async def show_training_menu(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if is_approved:
         await update.message.reply_text(text, reply_markup=get_training_keyboard(is_approved))
     else:
-        training_photo_id = get_safe_file_id(TRAINING_IMAGE_ID, "training_image")
-        if training_photo_id:
+        training_photo_url = get_safe_url(TRAINING_IMAGE_URL, "training_image")
+        if training_photo_url:
             await update.message.reply_photo(
-                photo=training_photo_id,
+                photo=training_photo_url,
                 caption=caption,
                 reply_markup=get_training_keyboard(is_approved)
             )
@@ -98,11 +98,11 @@ async def show_training_menu(update: Update, context: ContextTypes.DEFAULT_TYPE)
             )
 
 async def show_psychologist_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    psychologist_photo_id = get_safe_file_id(PSYCHOLOGIST_IMAGE_ID, "psychologist_image")
+    psychologist_photo_url = get_safe_url(PSYCHOLOGIST_IMAGE_URL, "psychologist_image")
     caption = "Наш ИИ-психолог поможет справиться со стрессом в трейдинге."
-    if psychologist_photo_id:
+    if psychologist_photo_url:
         await update.message.reply_photo(
-            photo=psychologist_photo_id,
+            photo=psychologist_photo_url,
             caption=caption,
             reply_markup=get_psychologist_keyboard()
         )
@@ -181,10 +181,10 @@ async def show_support_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         "Я — ИИ-поддержка SferaTC и готов помочь. Опишите проблему текстом, а если понадобится человек, "
         f"нажмите кнопку «{SUPPORT_ESCALATION_BUTTON_TEXT}»."
     )
-    support_photo_id = get_safe_file_id(SUPPORT_IMAGE_ID, "support_image")
-    if support_photo_id:
+    support_photo_url = get_safe_url(SUPPORT_IMAGE_URL, "support_image")
+    if support_photo_url:
         await update.message.reply_photo(
-            photo=support_photo_id,
+            photo=support_photo_url,
             caption=support_caption,
             reply_markup=get_support_llm_keyboard(),
         )
