@@ -12,6 +12,10 @@ from config import (
     TELEGRAM_TOKEN,
     WEBHOOK_URL,
     WEBHOOK_PORT,
+    WEBHOOK_PATH,
+    WEBHOOK_LISTEN,
+    WEBHOOK_SECRET_TOKEN,
+    WEBHOOK_DROP_PENDING_UPDATES,
     BOT_USERNAME,
     logger,
     ensure_required_settings,
@@ -124,14 +128,28 @@ def main() -> None:
 
     # --- ЗАПУСК БОТА ---
     if WEBHOOK_URL:
-        url_path = TELEGRAM_TOKEN.split(':')[-1]
-        webhook_full_url = f"{WEBHOOK_URL.rstrip('/')}/{url_path}"
-        logger.info(f"Бот @{BOT_USERNAME} запускается через Webhook.")
+        webhook_path = WEBHOOK_PATH or (TELEGRAM_TOKEN.split(':')[-1] if TELEGRAM_TOKEN else "")
+        webhook_full_url = WEBHOOK_URL.rstrip('/')
+        if webhook_path:
+            webhook_full_url = f"{webhook_full_url}/{webhook_path}"
+
+        logger.info(
+            "Бот @%s запускается через Webhook (listen=%s, port=%s, path='/%s').",
+            BOT_USERNAME,
+            WEBHOOK_LISTEN,
+            WEBHOOK_PORT,
+            webhook_path,
+        )
+        if WEBHOOK_SECRET_TOKEN:
+            logger.info("Используется секретный токен вебхука.")
+
         application.run_webhook(
-            listen="0.0.0.0",
+            listen=WEBHOOK_LISTEN,
             port=WEBHOOK_PORT,
-            url_path=url_path,
-            webhook_url=webhook_full_url
+            url_path=webhook_path,
+            webhook_url=webhook_full_url,
+            secret_token=WEBHOOK_SECRET_TOKEN,
+            drop_pending_updates=WEBHOOK_DROP_PENDING_UPDATES,
         )
     else:
         logger.info(f"Бот @{BOT_USERNAME} запускается в режиме Polling.")

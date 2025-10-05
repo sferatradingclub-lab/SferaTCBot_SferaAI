@@ -16,7 +16,7 @@ def _fake_get_db():
 def test_start_fallbacks_to_text_when_no_welcome_image(monkeypatch):
     from handlers import common_handlers as ch
 
-    monkeypatch.setattr(ch, "get_safe_file_id", lambda file_id, context: None)
+    monkeypatch.setattr(ch, "get_safe_url", lambda url, context: None)
     monkeypatch.setattr(ch, "get_db", _fake_get_db)
     monkeypatch.setattr(ch, "get_user", lambda db, user_id: None)
     monkeypatch.setattr(ch, "create_user", lambda db, data: SimpleNamespace(is_banned=False))
@@ -62,7 +62,7 @@ def test_start_fallbacks_to_text_when_no_welcome_image(monkeypatch):
 def test_training_menu_fallbacks_to_text_when_image_missing(monkeypatch):
     from handlers import common_handlers as ch
 
-    monkeypatch.setattr(ch, "get_safe_file_id", lambda file_id, context: None)
+    monkeypatch.setattr(ch, "get_safe_url", lambda url, context: None)
     monkeypatch.setattr(ch, "get_db", _fake_get_db)
     monkeypatch.setattr(
         ch,
@@ -94,7 +94,7 @@ def test_training_menu_fallbacks_to_text_when_image_missing(monkeypatch):
 def test_psychologist_menu_fallbacks_to_text(monkeypatch):
     from handlers import common_handlers as ch
 
-    monkeypatch.setattr(ch, "get_safe_file_id", lambda file_id, context: None)
+    monkeypatch.setattr(ch, "get_safe_url", lambda url, context: None)
     monkeypatch.setattr(ch, "get_psychologist_keyboard", lambda: "psych_keyboard")
 
     async def run_test():
@@ -116,7 +116,7 @@ def test_psychologist_menu_fallbacks_to_text(monkeypatch):
 def test_support_menu_fallbacks_to_text(monkeypatch):
     from handlers import common_handlers as ch
 
-    monkeypatch.setattr(ch, "get_safe_file_id", lambda file_id, context: None)
+    monkeypatch.setattr(ch, "get_safe_url", lambda url, context: None)
     monkeypatch.setattr(ch, "get_support_llm_keyboard", lambda: "support_keyboard")
 
     async def run_test():

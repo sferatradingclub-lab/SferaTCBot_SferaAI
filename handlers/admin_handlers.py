@@ -65,6 +65,9 @@ async def handle_admin_message(update: Update, context: ContextTypes.DEFAULT_TYP
                     send_kwargs = {
                         "chat_id": target_user_id,
                         "text": text_to_send,
+                        "reply_markup": InlineKeyboardMarkup(
+                            [[InlineKeyboardButton("✍️ Ответить", callback_data='support_from_dm')]]
+                        ),
                     }
                     if reply_to_message_id is not None:
                         send_kwargs["reply_to_message_id"] = reply_to_message_id
