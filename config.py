@@ -60,11 +60,13 @@ def _sanitize_webhook_path(path: Union[str, None]) -> str:
 
 
 def _resolve_webhook_path(token: Union[str, None], override: Union[str, None]) -> str:
-    """Возвращает путь для вебхука, предпочитая override, но сохраняя прошлое поведение по умолчанию."""
+    """Возвращает путь для вебхука, учитывая явное переопределение."""
 
-    sanitized_override = _sanitize_webhook_path(override)
-    if sanitized_override:
-        return sanitized_override
+    if override is not None:
+        # Позволяем использовать корневой путь ("/") — после санитизации он превратится в пустую строку,
+        # что корректно обрабатывается как корневой URL. Ранее такая конфигурация была невозможна, и бот
+        # всегда возвращался к постфиксу токена.
+        return _sanitize_webhook_path(override)
 
     if token:
         # Раньше использовалась последняя часть токена (без двоеточия), чтобы избежать проблем с символом ':' в пути.
@@ -103,7 +105,20 @@ def _resolve_webhook_port() -> int:
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 BOT_USERNAME = os.getenv("BOT_USERNAME", "SferaTC_bot")
 ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")
+def _normalize_webhook_url(raw_url: Union[str, None]) -> Union[str, None]:
+    """Очищает URL вебхука от пробелов и бесполезных слешей."""
+
+    if raw_url is None:
+        return None
+
+    cleaned = raw_url.strip()
+    if not cleaned:
+        return None
+
+    return cleaned.rstrip("/")
+
+
+WEBHOOK_URL = _normalize_webhook_url(os.getenv("WEBHOOK_URL"))
 WEBHOOK_LISTEN = os.getenv("WEBHOOK_LISTEN", "0.0.0.0")
 WEBHOOK_PORT = _resolve_webhook_port()
 WEBHOOK_PATH = _resolve_webhook_path(TELEGRAM_TOKEN, os.getenv("WEBHOOK_PATH"))
