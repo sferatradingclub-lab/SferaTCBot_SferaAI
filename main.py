@@ -1,4 +1,5 @@
 import asyncio
+import atexit
 from datetime import time
 from telegram.ext import (
     Application,
@@ -15,7 +16,10 @@ from config import (
     BOT_USERNAME,
     logger,
     ensure_required_settings,
+    SUPPORT_ESCALATION_CALLBACK
 )
+
+from services.chatgpt_service import close_chatgpt_client
 
 # Импорты для настройки базы данных
 from models.base import Base, engine
@@ -31,6 +35,7 @@ from handlers.common_handlers import (
     show_chatgpt_menu,
     show_support_menu,
     stop_chatgpt_session,
+    escalate_support_to_admin
 )
 from handlers.admin_handlers import (
     show_admin_panel,
@@ -39,6 +44,7 @@ from handlers.admin_handlers import (
     approve_user,
     reset_user,
     show_stats,
+    show_status,
     daily_stats_job,
 )
 from handlers.tools_handlers import (
@@ -59,7 +65,7 @@ def setup_database():
 
 def main() -> None:
     """Главная функция, которая собирает и запускает бота."""
-    
+
     # Сначала настраиваем базу данных
     setup_database()
 
@@ -67,7 +73,44 @@ def main() -> None:
     ensure_required_settings()
 
     # Собираем приложение
-    application = Application.builder().token(TELEGRAM_TOKEN).build()
+    application = (
+        Application.builder()
+        .token(TELEGRAM_TOKEN)
+        .post_shutdown(close_chatgpt_client)
+        .build()
+    )
+
+    post_shutdown = getattr(application, "post_shutdown", None)
+    if not hasattr(post_shutdown, "append"):
+        logger.warning(
+            "post_shutdown callbacks are unavailable; relying on atexit to close the ChatGPT client."
+        )
+
+    def _close_client_on_exit() -> None:
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            loop.create_task(close_chatgpt_client())
+            return
+
+        try:
+            asyncio.run(close_chatgpt_client())
+        except RuntimeError:
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    loop.create_task(close_chatgpt_client())
+                else:
+                    loop.run_until_complete(close_chatgpt_client())
+            except Exception as exc:  # noqa: BLE001
+                logger.error(f"Ошибка при закрытии клиента OpenRouter в atexit: {exc}")
+        except Exception as exc:  # noqa: BLE001
+            logger.error(f"Ошибка при закрытии клиента OpenRouter в atexit: {exc}")
+
+    atexit.register(_close_client_on_exit)
 
     # --- РЕГИСТРАЦИЯ ОБРАБОТЧИКОВ ---
 
@@ -86,6 +129,7 @@ def main() -> None:
     application.add_handler(CommandHandler("admin", show_admin_panel))
     application.add_handler(CommandHandler("approve", approve_user))
     application.add_handler(CommandHandler("stats", show_stats))
+    application.add_handler(CommandHandler("status", show_status))
     application.add_handler(CommandHandler("reset_user", reset_user))
 
     # Инлайн-кнопки (CallbackQueryHandler)
@@ -95,6 +139,8 @@ def main() -> None:
     application.add_handler(CallbackQueryHandler(user_actions_handler, pattern='^user_'))
     application.add_handler(CallbackQueryHandler(support_rejection_handler, pattern='^support_from_rejection$'))
     application.add_handler(CallbackQueryHandler(support_dm_handler, pattern='^support_from_dm$'))
+    # --- НОВЫЙ ОБРАБОТЧИК ДЛЯ КНОПКИ "ПОЗВАТЬ АДМИНИСТРАТОРА" ---
+    application.add_handler(CallbackQueryHandler(escalate_support_to_admin, pattern=rf'^{SUPPORT_ESCALATION_CALLBACK}$'))
 
     # Кнопки главного меню (MessageHandler)
     application.add_handler(MessageHandler(filters.TEXT & filters.Regex('^Пройти бесплатное обучение$'), show_training_menu))

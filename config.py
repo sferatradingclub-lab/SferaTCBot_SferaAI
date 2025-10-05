@@ -2,6 +2,7 @@ from typing import Union
 import os
 import logging
 from dotenv import load_dotenv
+from typing import Union
 
 # --- ЗАГРУЗКА ПЕРЕМЕННЫХ ОКРУЖЕНИЯ ---
 load_dotenv()
@@ -84,6 +85,16 @@ CHATGPT_IMAGE_ID = os.getenv("CHATGPT_IMAGE_ID")
 SUPPORT_IMAGE_ID = os.getenv("SUPPORT_IMAGE_ID")
 TOOLS_IMAGE_ID = os.getenv("TOOLS_IMAGE_ID")
 
+# --- НОВЫЕ НАСТРОЙКИ ДЛЯ ДВУХУРОВНЕВОЙ ПОДДЕРЖКИ ---
+SUPPORT_LLM_SYSTEM_PROMPT = (
+    "Ты — ИИ-агент поддержки SferaTC Bot. Твоя задача — помогать пользователям решать "
+    "технические и организационные вопросы, связанные с ботом и трейдингом. Будь вежливым, "
+    "говори по делу, не выдумывай факты и честно признавай, если чего-то не знаешь."
+)
+SUPPORT_ESCALATION_BUTTON_TEXT = "Позвать администратора"
+SUPPORT_ESCALATION_CALLBACK = "support_llm_escalate"
+SUPPORT_LLM_HISTORY_LIMIT = 10
+# ---------------------------------------------------------
 
 def get_safe_file_id(file_id: Union[str, None], context_name: str) -> Union[str, None]:
     """Возвращает file_id, если он задан, иначе логирует предупреждение."""

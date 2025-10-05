@@ -8,7 +8,20 @@ from telegram.error import TelegramError
 from config import logger, ADMIN_CHAT_ID, FULL_COURSE_URL
 from keyboards import get_admin_panel_keyboard
 from db_session import get_db
-from models.crud import get_all_users, get_user, approve_user_in_db, ban_user_in_db
+from models.crud import (
+    get_all_users,
+    get_user,
+    get_user_by_username,
+    approve_user_in_db,
+    ban_user_in_db,
+    count_total_users,
+    count_approved_users,
+    count_awaiting_verification_users,
+    count_new_users_on_date,
+    count_active_users_on_date,
+    count_approved_users_on_date,
+    count_active_users_since,
+)
 
 async def show_admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if str(update.effective_user.id) == ADMIN_CHAT_ID:
@@ -35,11 +48,7 @@ async def handle_admin_message(update: Update, context: ContextTypes.DEFAULT_TYP
                 found_user = get_user(db, int(target_id_str))
             else:
                 cleaned_username = target_id_str.replace('@', '').lower()
-                all_users = get_all_users(db)
-                for user in all_users:
-                    if user.username and user.username.lower() == cleaned_username:
-                        found_user = user
-                        break
+                found_user = get_user_by_username(db, cleaned_username)
 
             if found_user:
                 await display_user_card(update, context, found_user.user_id)
@@ -48,19 +57,16 @@ async def handle_admin_message(update: Update, context: ContextTypes.DEFAULT_TYP
 
         elif admin_state == 'users_awaiting_dm':
             target_user_id = context.user_data.pop('dm_target_user_id', None)
+            reply_to_message_id = context.user_data.pop('reply_to_message_id', None)
             context.user_data['admin_state'] = None
             if target_user_id:
                 text_to_send = update.message.text
-                reply_to_message_id = context.user_data.pop('reply_to_message_id', None)
                 try:
-                    send_kwargs = dict(
-                        chat_id=target_user_id,
-                        text=text_to_send,
-                        reply_markup=InlineKeyboardMarkup(
-                            [[InlineKeyboardButton("✍️ Ответить", callback_data="support_from_dm")]]
-                        ),
-                    )
-                    if reply_to_message_id:
+                    send_kwargs = {
+                        "chat_id": target_user_id,
+                        "text": text_to_send,
+                    }
+                    if reply_to_message_id is not None:
                         send_kwargs["reply_to_message_id"] = reply_to_message_id
 
                     await context.bot.send_message(**send_kwargs)
@@ -77,6 +83,8 @@ async def admin_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     if command == 'admin_main':
         await query.edit_message_text("Добро пожаловать в админ-панель:", reply_markup=get_admin_panel_keyboard())
+    elif command == 'admin_status':
+        await show_status(update, context, query=query)
     elif command == 'admin_stats':
         stats_keyboard = [
             [InlineKeyboardButton("За сегодня", callback_data='admin_stats_today')],
@@ -134,28 +142,61 @@ async def reset_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
 async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, query=None, period="all") -> None:
     if str(update.effective_user.id) != ADMIN_CHAT_ID: return
-    
-    with get_db() as db:
-        all_users = get_all_users(db)
 
     today = datetime.now().date()
-    
-    if period == "today":
-        new_today = sum(1 for u in all_users if u.first_seen and u.first_seen.date() == today)
-        approved_today = sum(1 for u in all_users if u.approval_date and u.approval_date.date() == today)
-        active_today = sum(1 for u in all_users if u.last_seen and u.last_seen.date() == today)
-        awaiting = sum(1 for u in all_users if u.awaiting_verification)
-        stats_text = (f"📊 *Статистика за сегодня*\n\n➕ Новых: *{new_today}*\n🏃‍♂️ Активных: *{active_today}*\n✅ Одобрено: *{approved_today}*\n⏳ Ожидает: *{awaiting}*")
-    else:
-        total = len(all_users)
-        approved = sum(1 for u in all_users if u.is_approved)
-        awaiting = sum(1 for u in all_users if u.awaiting_verification)
-        stats_text = (f"📊 *Статистика за все время*\n\n👤 Всего: *{total}*\n✅ Одобрено: *{approved}*\n⏳ Ожидает: *{awaiting}*")
+
+    with get_db() as db:
+        if period == "today":
+            new_today = count_new_users_on_date(db, today)
+            approved_today = count_approved_users_on_date(db, today)
+            active_today = count_active_users_on_date(db, today)
+            awaiting = count_awaiting_verification_users(db)
+            stats_text = (
+                f"📊 *Статистика за сегодня*\n\n"
+                f"➕ Новых: *{new_today}*\n"
+                f"🏃‍♂️ Активных: *{active_today}*\n"
+                f"✅ Одобрено: *{approved_today}*\n"
+                f"⏳ Ожидает: *{awaiting}*"
+            )
+        else:
+            total = count_total_users(db)
+            approved = count_approved_users(db)
+            awaiting = count_awaiting_verification_users(db)
+            stats_text = (
+                f"📊 *Статистика за все время*\n\n"
+                f"👤 Всего: *{total}*\n"
+                f"✅ Одобрено: *{approved}*\n"
+                f"⏳ Ожидает: *{awaiting}*"
+            )
 
     if query:
         await query.edit_message_text(stats_text, parse_mode='MarkdownV2', reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Назад", callback_data='admin_stats')]]))
     else:
         await update.message.reply_text(stats_text, parse_mode='MarkdownV2')
+
+
+async def show_status(update: Update, context: ContextTypes.DEFAULT_TYPE, query=None) -> None:
+    if str(update.effective_user.id) != ADMIN_CHAT_ID:
+        return
+
+    now = datetime.now()
+    since = now - timedelta(hours=24)
+
+    with get_db() as db:
+        total_users = count_total_users(db)
+        active_users = count_active_users_since(db, since)
+
+    status_text = (
+        "📈 Статус системы\n"
+        f"Обновлено: {now.strftime('%d.%m.%Y %H:%M')}\n\n"
+        f"👥 Всего пользователей: {total_users}\n"
+        f"🕒 Активны за 24 часа: {active_users}"
+    )
+
+    if query:
+        await query.message.reply_text(status_text)
+    else:
+        await update.message.reply_text(status_text)
 
 async def run_broadcast(context: ContextTypes.DEFAULT_TYPE) -> None:
     admin_user_data = context.application.user_data.get(int(ADMIN_CHAT_ID), {})
@@ -187,12 +228,10 @@ async def run_broadcast(context: ContextTypes.DEFAULT_TYPE) -> None:
     await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text=report_text, parse_mode='MarkdownV2', reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ В админку", callback_data='admin_main')]]))
 
 async def daily_stats_job(context: ContextTypes.DEFAULT_TYPE) -> None:
-    with get_db() as db:
-        all_users = get_all_users(db)
-
     yesterday = (datetime.now() - timedelta(days=1)).date()
-    new_yesterday = sum(1 for u in all_users if u.first_seen and u.first_seen.date() == yesterday)
-    approved_yesterday = sum(1 for u in all_users if u.approval_date and u.approval_date.date() == yesterday)
+    with get_db() as db:
+        new_yesterday = count_new_users_on_date(db, yesterday)
+        approved_yesterday = count_approved_users_on_date(db, yesterday)
     report_text = (f"🗓️ *Отчет за {yesterday.strftime('%d.%m.%Y')}*\n\n➕ Новых: *{new_yesterday}*\n✅ Одобрено: *{approved_yesterday}*")
     await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text=report_text, parse_mode='MarkdownV2')
 

@@ -1,15 +1,19 @@
 from datetime import datetime
+from typing import Awaitable, Callable
 from telegram import Update
 from telegram.ext import ContextTypes
 from telegram.helpers import escape_markdown
+from telegram.error import TelegramError
 
 from config import (
     logger, ADMIN_CHAT_ID, WELCOME_IMAGE_ID, TRAINING_IMAGE_ID,
-    PSYCHOLOGIST_IMAGE_ID, CHATGPT_IMAGE_ID, SUPPORT_IMAGE_ID
+    PSYCHOLOGIST_IMAGE_ID, CHATGPT_IMAGE_ID, SUPPORT_IMAGE_ID,
+    SUPPORT_LLM_SYSTEM_PROMPT, SUPPORT_ESCALATION_BUTTON_TEXT,
+    SUPPORT_LLM_HISTORY_LIMIT, get_safe_file_id
 )
 from keyboards import (
     get_main_menu_keyboard, get_channel_keyboard, get_training_keyboard,
-    get_psychologist_keyboard, get_chatgpt_keyboard, get_support_keyboard
+    get_psychologist_keyboard, get_chatgpt_keyboard, get_support_llm_keyboard
 )
 from db_session import get_db
 from models.crud import get_user, create_user, update_user_last_seen
@@ -47,19 +51,28 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             await start_verification_process(update, context)
             return
         
-    await update.message.reply_photo(
-        photo=WELCOME_IMAGE_ID,
-        caption=(
-            f"Привет, {user.first_name}!\n\n"
-            "Добро пожаловать в экосистему SferaTC. Здесь ты найдешь все для успешного старта в трейдинге.\n\n"
-            "Чтобы быть в курсе всех обновлений, подпишись на наш основной канал!"
-        ),
-        reply_markup=get_channel_keyboard()
+    welcome_caption = (
+        f"Привет, {user.first_name}!\n\n"
+        "Добро пожаловать в экосистему SferaTC. Здесь ты найдешь все для успешного старта в трейдинге.\n\n"
+        "Чтобы быть в курсе всех обновлений, подпишись на наш основной канал!"
     )
+    welcome_photo_id = get_safe_file_id(WELCOME_IMAGE_ID, "welcome_image")
+    if welcome_photo_id:
+        await update.message.reply_photo(
+            photo=welcome_photo_id,
+            caption=welcome_caption,
+            reply_markup=get_channel_keyboard()
+        )
+    else:
+        await update.message.reply_text(
+            welcome_caption,
+            reply_markup=get_channel_keyboard()
+        )
     await update.message.reply_text(
         "Выберите действие в меню ниже:",
         reply_markup=get_main_menu_keyboard(user.id)
     )
+
 async def show_training_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     with get_db() as db:
         db_user = get_user(db, update.effective_user.id)
@@ -71,10 +84,33 @@ async def show_training_menu(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if is_approved:
         await update.message.reply_text(text, reply_markup=get_training_keyboard(is_approved))
     else:
-        await update.message.reply_photo(photo=TRAINING_IMAGE_ID, caption=caption, reply_markup=get_training_keyboard(is_approved))
+        training_photo_id = get_safe_file_id(TRAINING_IMAGE_ID, "training_image")
+        if training_photo_id:
+            await update.message.reply_photo(
+                photo=training_photo_id,
+                caption=caption,
+                reply_markup=get_training_keyboard(is_approved)
+            )
+        else:
+            await update.message.reply_text(
+                caption,
+                reply_markup=get_training_keyboard(is_approved)
+            )
 
 async def show_psychologist_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_photo(photo=PSYCHOLOGIST_IMAGE_ID, caption="Наш ИИ-психолог поможет справиться со стрессом в трейдинге.", reply_markup=get_psychologist_keyboard())
+    psychologist_photo_id = get_safe_file_id(PSYCHOLOGIST_IMAGE_ID, "psychologist_image")
+    caption = "Наш ИИ-психолог поможет справиться со стрессом в трейдинге."
+    if psychologist_photo_id:
+        await update.message.reply_photo(
+            photo=psychologist_photo_id,
+            caption=caption,
+            reply_markup=get_psychologist_keyboard()
+        )
+    else:
+        await update.message.reply_text(
+            caption,
+            reply_markup=get_psychologist_keyboard()
+        )
 
 async def show_chatgpt_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Начинает сессию с LLM через OpenRouter."""
@@ -97,17 +133,82 @@ async def stop_chatgpt_session(update: Update, context: ContextTypes.DEFAULT_TYP
         reply_markup=get_main_menu_keyboard(update.effective_user.id)
     )
 
-async def show_support_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+# --- НОВЫЙ БЛОК ЛОГИКИ ДЛЯ ДВУХУРОВНЕВОЙ ПОДДЕРЖКИ ---
+
+SupportPromptSender = Callable[[str], Awaitable[object]]
+SUPPORT_ESCALATION_PROMPT = "Опишите вашу проблему одним сообщением, и мы передадим его администратору."
+FRIENDLY_MAIN_MENU_REMINDER = "Выберите действие в меню ниже:"
+
+
+def _ensure_manual_support_state(context: ContextTypes.DEFAULT_TYPE) -> bool:
+    """Готовит состояние для ручной поддержки.
+
+    Возвращает ``True``, если переход в ручной режим произошёл впервые и
+    состояние было изменено в рамках текущего запроса. При повторных вызовах
+    внутри той же сессии данные остаются нетронутыми.
+    """
+
+    already_manual = context.user_data.get('state') == 'awaiting_support_message'
     context.user_data['state'] = 'awaiting_support_message'
-    await update.message.reply_photo(
-        photo=SUPPORT_IMAGE_ID,
-        caption=(
-            "Слушаю твой вопрос. Просто отправь его следующим сообщением "
-            "(можно текст, фото, видео или голосовое). Если передумал — нажми"
-            " кнопку ниже, чтобы вернуться в главное меню."
-        ),
-        reply_markup=get_support_keyboard()
+
+    return not already_manual
+
+
+async def _activate_manual_support(
+    context: ContextTypes.DEFAULT_TYPE,
+    prompt_sender: SupportPromptSender,
+) -> None:
+    """Переводит пользователя в ручной режим и отправляет подсказку, если нужно."""
+
+    first_manual_transition = _ensure_manual_support_state(context)
+
+    if first_manual_transition:
+        context.user_data.pop('support_llm_history', None)
+        context.user_data['support_thank_you_sent'] = False
+
+        try:
+            await prompt_sender(SUPPORT_ESCALATION_PROMPT)
+        except Exception as error:  # pragma: no cover - логирование ошибки
+            logger.error(
+                "Не удалось отправить подсказку для ручной поддержки: %s",
+                error,
+            )
+
+async def show_support_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    context.user_data['state'] = 'support_llm_active'
+    context.user_data['support_llm_history'] = [{"role": "system", "content": SUPPORT_LLM_SYSTEM_PROMPT}]
+    support_caption = (
+        "Я — ИИ-поддержка SferaTC и готов помочь. Опишите проблему текстом, а если понадобится человек, "
+        f"нажмите кнопку «{SUPPORT_ESCALATION_BUTTON_TEXT}»."
     )
+    support_photo_id = get_safe_file_id(SUPPORT_IMAGE_ID, "support_image")
+    if support_photo_id:
+        await update.message.reply_photo(
+            photo=support_photo_id,
+            caption=support_caption,
+            reply_markup=get_support_llm_keyboard(),
+        )
+    else:
+        await update.message.reply_text(
+            support_caption,
+            reply_markup=get_support_llm_keyboard(),
+        )
+
+async def escalate_support_to_admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer("Подключаю администратора…")
+    message = query.message
+    if message:
+        try:
+            if message.text:
+                await message.edit_reply_markup(reply_markup=None)
+            elif message.caption:
+                await message.edit_caption(caption=message.caption, reply_markup=None)
+        except TelegramError as error:
+            logger.warning(f"Не удалось обновить сообщение поддержки: {error}")
+        await _activate_manual_support(context, message.reply_text)
+
+# ----------------------------------------------------------------
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("Это бот образовательной экосистемы SferaTC. Используйте меню для навигации по разделам.")
@@ -128,13 +229,41 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     admin_state = context.user_data.get('admin_state')
     user_state = context.user_data.get('state')
     
+    if str(user.id) == ADMIN_CHAT_ID and admin_state:
+        await handle_admin_message(update, context)
+        return
+
     if user_state == 'chatgpt_active':
-        if update.message.text == "Закончить диалог":
+        message = update.message
+
+        if not message or not getattr(message, "text", None):
+            prompt_text = (
+                "Пожалуйста, отправьте текстовое сообщение для ИИ-ассистента "
+                "или завершите диалог с помощью кнопки ниже."
+            )
+
+            if message and hasattr(message, "reply_text"):
+                await message.reply_text(prompt_text, reply_markup=get_chatgpt_keyboard())
+            elif update.effective_chat:
+                try:
+                    await context.bot.send_message(
+                        chat_id=update.effective_chat.id,
+                        text=prompt_text,
+                        reply_markup=get_chatgpt_keyboard(),
+                    )
+                except TelegramError as error:
+                    logger.warning(f"Не удалось отправить подсказку без текстового сообщения: {error}")
+            else:
+                logger.warning("Получено сообщение без текста и информации о чате.")
+
+            return
+
+        if message.text == "Закончить диалог":
             await stop_chatgpt_session(update, context)
             return
 
         history = context.user_data.get('chat_history', [])
-        history.append({"role": "user", "content": update.message.text})
+        history.append({"role": "user", "content": message.text})
         
         if len(history) > 11:
             context.user_data['chat_history'] = [history[0]] + history[-10:]
@@ -152,9 +281,41 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 "Мне не удалось сгенерировать ответ. Попробуйте переформулировать ваш запрос.", 
                 reply_markup=get_chatgpt_keyboard()
             )
+            
+    elif user_state == 'support_llm_active':
+        text = (update.message.text or "").strip()
 
-    elif str(user.id) == ADMIN_CHAT_ID and admin_state:
-        await handle_admin_message(update, context)
+        if text.lower() == SUPPORT_ESCALATION_BUTTON_TEXT.lower():
+            await _activate_manual_support(context, update.message.reply_text)
+            return
+
+        if not text:
+            await update.message.reply_text(
+                f"ИИ-поддержка сейчас работает только с текстовыми сообщениями. "
+                f"Опишите вопрос словами или нажмите «{SUPPORT_ESCALATION_BUTTON_TEXT}».",
+                reply_markup=get_support_llm_keyboard(),
+            )
+            return
+
+        history = context.user_data.get('support_llm_history') or [{"role": "system", "content": SUPPORT_LLM_SYSTEM_PROMPT}]
+        history = history + [{"role": "user", "content": text}]
+
+        if len(history) > SUPPORT_LLM_HISTORY_LIMIT + 1:
+            history = [history[0]] + history[-SUPPORT_LLM_HISTORY_LIMIT:]
+
+        context.user_data['support_llm_history'] = history
+        response_text = await get_chatgpt_response(history)
+
+        if response_text and response_text.strip():
+            history.append({"role": "assistant", "content": response_text})
+            context.user_data['support_llm_history'] = history
+            await update.message.reply_text(response_text, reply_markup=get_support_llm_keyboard())
+        else:
+            await update.message.reply_text(
+                f"Мне не удалось решить вопрос. Попробуйте переформулировать или нажмите «{SUPPORT_ESCALATION_BUTTON_TEXT}».",
+                reply_markup=get_support_llm_keyboard(),
+            )
+
     elif user_state == 'awaiting_support_message':
         if update.message.text == "Вернуться в меню":
             context.user_data.pop('state', None)
@@ -167,3 +328,24 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await handle_support_message(update, context)
     elif db_user and db_user.awaiting_verification:
         await handle_id_submission(update, context)
+    else:
+        reminder_text = FRIENDLY_MAIN_MENU_REMINDER
+        menu_keyboard = get_main_menu_keyboard(user.id)
+        message = update.message
+
+        if message and hasattr(message, "reply_text"):
+            await message.reply_text(reminder_text, reply_markup=menu_keyboard)
+        elif update.effective_chat:
+            try:
+                await context.bot.send_message(
+                    chat_id=update.effective_chat.id,
+                    text=reminder_text,
+                    reply_markup=menu_keyboard,
+                )
+            except TelegramError as error:
+                logger.warning(
+                    "Не удалось отправить напоминание без текстового сообщения: %s",
+                    error,
+                )
+        else:
+            logger.warning("Получено сообщение без состояния и информации о чате.")
