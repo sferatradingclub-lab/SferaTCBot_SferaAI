@@ -72,12 +72,15 @@ def main() -> None:
     ensure_required_settings()
 
     # Собираем приложение
-    application = Application.builder().token(TELEGRAM_TOKEN).build()
+    application = (
+        Application.builder()
+        .token(TELEGRAM_TOKEN)
+        .post_shutdown(close_chatgpt_client)
+        .build()
+    )
 
     post_shutdown = getattr(application, "post_shutdown", None)
-    if hasattr(post_shutdown, "append"):
-        post_shutdown.append(close_chatgpt_client)
-    else:
+    if not hasattr(post_shutdown, "append"):
         logger.warning(
             "post_shutdown callbacks are unavailable; relying on atexit to close the ChatGPT client."
         )
