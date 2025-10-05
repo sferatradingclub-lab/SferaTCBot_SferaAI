@@ -27,7 +27,7 @@ async def get_async_client() -> httpx.AsyncClient:
     return _async_client
 
 
-async def close_chatgpt_client() -> None:
+async def close_chatgpt_client(application=None) -> None: # <-- ИЗМЕНЕНИЕ ЗДЕСЬ
     """Закрывает общий AsyncClient и обнуляет ссылку."""
     global _async_client, _client_lock
 
