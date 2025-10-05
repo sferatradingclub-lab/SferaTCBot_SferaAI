@@ -48,11 +48,19 @@ async def handle_admin_message(update: Update, context: ContextTypes.DEFAULT_TYP
 
         elif admin_state == 'users_awaiting_dm':
             target_user_id = context.user_data.pop('dm_target_user_id', None)
+            reply_to_message_id = context.user_data.pop('reply_to_message_id', None)
             context.user_data['admin_state'] = None
             if target_user_id:
                 text_to_send = update.message.text
                 try:
-                    await context.bot.send_message(chat_id=target_user_id, text=text_to_send)
+                    send_kwargs = {
+                        "chat_id": target_user_id,
+                        "text": text_to_send,
+                    }
+                    if reply_to_message_id is not None:
+                        send_kwargs["reply_to_message_id"] = reply_to_message_id
+
+                    await context.bot.send_message(**send_kwargs)
                     await update.message.reply_text("✅ Сообщение успешно отправлено!")
                 except TelegramError as e:
                     logger.error(f"Не удалось отправить DM пользователю {target_user_id}: {e.message}")
