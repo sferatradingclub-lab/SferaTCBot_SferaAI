@@ -20,6 +20,7 @@ from models.crud import (
     count_new_users_on_date,
     count_active_users_on_date,
     count_approved_users_on_date,
+    count_active_users_since,
 )
 
 async def show_admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -82,6 +83,8 @@ async def admin_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     if command == 'admin_main':
         await query.edit_message_text("Добро пожаловать в админ-панель:", reply_markup=get_admin_panel_keyboard())
+    elif command == 'admin_status':
+        await show_status(update, context, query=query)
     elif command == 'admin_stats':
         stats_keyboard = [
             [InlineKeyboardButton("За сегодня", callback_data='admin_stats_today')],
@@ -139,7 +142,7 @@ async def reset_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
 async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, query=None, period="all") -> None:
     if str(update.effective_user.id) != ADMIN_CHAT_ID: return
-    
+
     today = datetime.now().date()
 
     with get_db() as db:
@@ -170,6 +173,30 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, query=N
         await query.edit_message_text(stats_text, parse_mode='MarkdownV2', reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Назад", callback_data='admin_stats')]]))
     else:
         await update.message.reply_text(stats_text, parse_mode='MarkdownV2')
+
+
+async def show_status(update: Update, context: ContextTypes.DEFAULT_TYPE, query=None) -> None:
+    if str(update.effective_user.id) != ADMIN_CHAT_ID:
+        return
+
+    now = datetime.now()
+    since = now - timedelta(hours=24)
+
+    with get_db() as db:
+        total_users = count_total_users(db)
+        active_users = count_active_users_since(db, since)
+
+    status_text = (
+        "📈 Статус системы\n"
+        f"Обновлено: {now.strftime('%d.%m.%Y %H:%M')}\n\n"
+        f"👥 Всего пользователей: {total_users}\n"
+        f"🕒 Активны за 24 часа: {active_users}"
+    )
+
+    if query:
+        await query.message.reply_text(status_text)
+    else:
+        await update.message.reply_text(status_text)
 
 async def run_broadcast(context: ContextTypes.DEFAULT_TYPE) -> None:
     admin_user_data = context.application.user_data.get(int(ADMIN_CHAT_ID), {})

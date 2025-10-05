@@ -133,3 +133,12 @@ def count_approved_users_on_date(db: Session, target_date: date) -> int:
         User.approval_date.isnot(None),
         func.date(User.approval_date) == target_date,
     )
+
+
+def count_active_users_since(db: Session, since_datetime: datetime) -> int:
+    """Подсчитывает количество пользователей, активных начиная с указанного времени."""
+    return _count_users(
+        db,
+        User.last_seen.isnot(None),
+        User.last_seen >= since_datetime,
+    )
