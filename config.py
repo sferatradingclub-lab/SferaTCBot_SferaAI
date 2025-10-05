@@ -105,7 +105,20 @@ def _resolve_webhook_port() -> int:
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 BOT_USERNAME = os.getenv("BOT_USERNAME", "SferaTC_bot")
 ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")
+def _normalize_webhook_url(raw_url: Union[str, None]) -> Union[str, None]:
+    """Очищает URL вебхука от пробелов и бесполезных слешей."""
+
+    if raw_url is None:
+        return None
+
+    cleaned = raw_url.strip()
+    if not cleaned:
+        return None
+
+    return cleaned.rstrip("/")
+
+
+WEBHOOK_URL = _normalize_webhook_url(os.getenv("WEBHOOK_URL"))
 WEBHOOK_LISTEN = os.getenv("WEBHOOK_LISTEN", "0.0.0.0")
 WEBHOOK_PORT = _resolve_webhook_port()
 WEBHOOK_PATH = _resolve_webhook_path(TELEGRAM_TOKEN, os.getenv("WEBHOOK_PATH"))

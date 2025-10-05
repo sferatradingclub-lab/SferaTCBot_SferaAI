@@ -132,13 +132,18 @@ def main() -> None:
         webhook_full_url = WEBHOOK_URL.rstrip('/')
         if webhook_path:
             webhook_full_url = f"{webhook_full_url}/{webhook_path}"
+        else:
+            webhook_full_url = f"{webhook_full_url}/"
+
+        display_path = f"/{webhook_path}" if webhook_path else "/"
 
         logger.info(
-            "Бот @%s запускается через Webhook (listen=%s, port=%s, path='/%s').",
+            "Бот @%s запускается через Webhook (listen=%s, port=%s, path='%s', url='%s').",
             BOT_USERNAME,
             WEBHOOK_LISTEN,
             WEBHOOK_PORT,
-            webhook_path,
+            display_path,
+            webhook_full_url,
         )
         if WEBHOOK_SECRET_TOKEN:
             logger.info("Используется секретный токен вебхука.")
@@ -146,7 +151,7 @@ def main() -> None:
         application.run_webhook(
             listen=WEBHOOK_LISTEN,
             port=WEBHOOK_PORT,
-            url_path=webhook_path,
+            url_path=display_path,
             webhook_url=webhook_full_url,
             secret_token=WEBHOOK_SECRET_TOKEN,
             drop_pending_updates=WEBHOOK_DROP_PENDING_UPDATES,
