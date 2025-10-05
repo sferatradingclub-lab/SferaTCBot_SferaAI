@@ -128,14 +128,17 @@ def main() -> None:
 
     # --- ЗАПУСК БОТА ---
     if WEBHOOK_URL:
+        # WEBHOOK_PATH уже очищен от лишних символов в config._resolve_webhook_path
         webhook_path = WEBHOOK_PATH
-        webhook_full_url = WEBHOOK_URL.rstrip('/')
-        if webhook_path:
-            webhook_full_url = f"{webhook_full_url}/{webhook_path}"
-        else:
-            webhook_full_url = f"{webhook_full_url}/"
+        base_webhook_url = WEBHOOK_URL.rstrip('/')
 
-        display_path = f"/{webhook_path}" if webhook_path else "/"
+        if webhook_path:
+            webhook_full_url = f"{base_webhook_url}/{webhook_path}"
+            display_path = f"/{webhook_path}"
+        else:
+            # Для корневого пути Telegram ожидает URL, заканчивающийся на '/'
+            webhook_full_url = f"{base_webhook_url}/"
+            display_path = "/"
 
         logger.info(
             "Бот @%s запускается через Webhook (listen=%s, port=%s, path='%s', url='%s').",
@@ -151,7 +154,7 @@ def main() -> None:
         application.run_webhook(
             listen=WEBHOOK_LISTEN,
             port=WEBHOOK_PORT,
-            url_path=display_path,
+            url_path=webhook_path or None,
             webhook_url=webhook_full_url,
             secret_token=WEBHOOK_SECRET_TOKEN,
             drop_pending_updates=WEBHOOK_DROP_PENDING_UPDATES,
