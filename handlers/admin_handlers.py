@@ -8,7 +8,13 @@ from telegram.error import TelegramError
 from config import logger, ADMIN_CHAT_ID, FULL_COURSE_URL
 from keyboards import get_admin_panel_keyboard
 from db_session import get_db
-from models.crud import get_all_users, get_user, approve_user_in_db, ban_user_in_db
+from models.crud import (
+    get_all_users,
+    get_user,
+    get_user_by_username,
+    approve_user_in_db,
+    ban_user_in_db,
+)
 
 async def show_admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if str(update.effective_user.id) == ADMIN_CHAT_ID:
@@ -35,11 +41,7 @@ async def handle_admin_message(update: Update, context: ContextTypes.DEFAULT_TYP
                 found_user = get_user(db, int(target_id_str))
             else:
                 cleaned_username = target_id_str.replace('@', '').lower()
-                all_users = get_all_users(db)
-                for user in all_users:
-                    if user.username and user.username.lower() == cleaned_username:
-                        found_user = user
-                        break
+                found_user = get_user_by_username(db, cleaned_username)
 
             if found_user:
                 await display_user_card(update, context, found_user.user_id)
