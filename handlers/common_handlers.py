@@ -229,12 +229,36 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     user_state = context.user_data.get('state')
     
     if user_state == 'chatgpt_active':
-        if update.message.text == "Закончить диалог":
+        message = update.message
+
+        if not message or not getattr(message, "text", None):
+            prompt_text = (
+                "Пожалуйста, отправьте текстовое сообщение для ИИ-ассистента "
+                "или завершите диалог с помощью кнопки ниже."
+            )
+
+            if message and hasattr(message, "reply_text"):
+                await message.reply_text(prompt_text, reply_markup=get_chatgpt_keyboard())
+            elif update.effective_chat:
+                try:
+                    await context.bot.send_message(
+                        chat_id=update.effective_chat.id,
+                        text=prompt_text,
+                        reply_markup=get_chatgpt_keyboard(),
+                    )
+                except TelegramError as error:
+                    logger.warning(f"Не удалось отправить подсказку без текстового сообщения: {error}")
+            else:
+                logger.warning("Получено сообщение без текста и информации о чате.")
+
+            return
+
+        if message.text == "Закончить диалог":
             await stop_chatgpt_session(update, context)
             return
 
         history = context.user_data.get('chat_history', [])
-        history.append({"role": "user", "content": update.message.text})
+        history.append({"role": "user", "content": message.text})
         
         if len(history) > 11:
             context.user_data['chat_history'] = [history[0]] + history[-10:]
