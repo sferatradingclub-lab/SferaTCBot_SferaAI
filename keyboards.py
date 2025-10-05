@@ -52,6 +52,7 @@ def get_verification_links_keyboard() -> InlineKeyboardMarkup:
 
 def get_admin_panel_keyboard() -> InlineKeyboardMarkup:
     keyboard = [
+        [InlineKeyboardButton("Статус", callback_data='admin_status')],
         [InlineKeyboardButton("📊 Статистика", callback_data='admin_stats')],
         [InlineKeyboardButton("📤 Сделать рассылку", callback_data='admin_broadcast')],
         [InlineKeyboardButton("👤 Управление пользователями", callback_data='admin_users')]
