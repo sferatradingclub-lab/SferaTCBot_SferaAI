@@ -228,6 +228,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     admin_state = context.user_data.get('admin_state')
     user_state = context.user_data.get('state')
     
+    if str(user.id) == ADMIN_CHAT_ID and admin_state:
+        await handle_admin_message(update, context)
+        return
+
     if user_state == 'chatgpt_active':
         message = update.message
 
@@ -311,8 +315,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 reply_markup=get_support_llm_keyboard(),
             )
 
-    elif str(user.id) == ADMIN_CHAT_ID and admin_state:
-        await handle_admin_message(update, context)
     elif user_state == 'awaiting_support_message':
         await handle_support_message(update, context)
     elif db_user and db_user.awaiting_verification:
