@@ -78,13 +78,10 @@ def main() -> None:
         .build()
     )
 
-    # --- ИЗМЕНЕННЫЙ БЛОК ---
-    # Добавляем post_shutdown напрямую для корректного закрытия клиента
-    if hasattr(application, 'post_shutdown'):
-        application.post_shutdown(close_chatgpt_client)
-    else:
-        logger.warning("Не удалось добавить post_shutdown callback. Убедитесь, что версия python-telegram-bot совместима.")
-    # --- КОНЕЦ ИЗМЕНЕННОГО БЛОКА ---
+    # --- ИСПРАВЛЕННЫЙ БЛОК ---
+    # Добавляем callback для корректного закрытия http-клиента при остановке бота
+    application.add_post_shutdown_callback(close_chatgpt_client)
+    # --- КОНЕЦ ИСПРАВЛЕННОГО БЛОКА ---
 
 
     # --- РЕГИСТРАЦИЯ ОБРАБОТЧИКОВ ---
