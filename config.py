@@ -1,11 +1,24 @@
 from typing import Union
+
 import os
 import logging
 from dotenv import load_dotenv
-from typing import Union
 
 # --- ЗАГРУЗКА ПЕРЕМЕННЫХ ОКРУЖЕНИЯ ---
 load_dotenv()
+
+
+# --- НАСТРОЙКА ЛОГИРОВАНИЯ ---
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler("bot.log", encoding='utf-8'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
+
 
 DEFAULT_CHATGPT_FREE_MODELS = [
     "deepseek/deepseek-chat-v3.1:free",
@@ -15,17 +28,75 @@ DEFAULT_CHATGPT_FREE_MODELS = [
 
 def ensure_free_models(models: list[str]) -> list[str]:
     """Возвращает только бесплатные модели и подставляет значения по умолчанию при необходимости."""
-    logger_instance = logging.getLogger(__name__)
     free_models = [model for model in models if model and model.endswith(":free")]
 
     if free_models:
         return free_models
 
-    logger_instance.warning(
+    logger.warning(
         "Не найдены бесплатные модели в конфигурации. Будут использованы значения по умолчанию: %s.",
         ", ".join(DEFAULT_CHATGPT_FREE_MODELS),
     )
     return DEFAULT_CHATGPT_FREE_MODELS.copy()
+
+
+def _env_flag(name: str, *, default: bool = False) -> bool:
+    """Возвращает булеву переменную окружения, поддерживая несколько вариантов записи."""
+
+    value = os.getenv(name)
+    if value is None:
+        return default
+
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _sanitize_webhook_path(path: Union[str, None]) -> str:
+    """Удаляет лишние слеши и пробелы из пути вебхука."""
+
+    if not path:
+        return ""
+
+    return path.strip().strip("/")
+
+
+def _resolve_webhook_path(token: Union[str, None], override: Union[str, None]) -> str:
+    """Возвращает путь для вебхука, предпочитая override, но сохраняя прошлое поведение по умолчанию."""
+
+    sanitized_override = _sanitize_webhook_path(override)
+    if sanitized_override:
+        return sanitized_override
+
+    if token:
+        # Раньше использовалась последняя часть токена (без двоеточия), чтобы избежать проблем с символом ':' в пути.
+        return token.split(":")[-1]
+
+    return ""
+
+
+def _resolve_webhook_port() -> int:
+    """Определяет порт вебхука, учитывая особенности PaaS-провайдеров (Render, Railway, Heroku и т.д.)."""
+
+    fallback_port = 8443
+    candidates = [
+        ("PORT", os.getenv("PORT")),
+        ("WEBHOOK_PORT", os.getenv("WEBHOOK_PORT")),
+    ]
+
+    for name, raw_value in candidates:
+        if not raw_value:
+            continue
+
+        try:
+            return int(raw_value)
+        except ValueError:
+            logger.warning(
+                "Некорректное значение %s='%s'. Будет использовано значение по умолчанию %d.",
+                name,
+                raw_value,
+                fallback_port,
+            )
+
+    return fallback_port
 
 
 # --- ВАЖНЫЕ НАСТРОЙКИ ---
@@ -33,7 +104,11 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 BOT_USERNAME = os.getenv("BOT_USERNAME", "SferaTC_bot")
 ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
-WEBHOOK_PORT = int(os.getenv("WEBHOOK_PORT", "8443"))
+WEBHOOK_LISTEN = os.getenv("WEBHOOK_LISTEN", "0.0.0.0")
+WEBHOOK_PORT = _resolve_webhook_port()
+WEBHOOK_PATH = _resolve_webhook_path(TELEGRAM_TOKEN, os.getenv("WEBHOOK_PATH"))
+WEBHOOK_SECRET_TOKEN = os.getenv("WEBHOOK_SECRET_TOKEN") or None
+WEBHOOK_DROP_PENDING_UPDATES = _env_flag("WEBHOOK_DROP_PENDING_UPDATES", default=True)
 
 # --- Настройки подключения к базе данных ---
 # По умолчанию используется локальная база данных SQLite для удобства разработки.
@@ -53,17 +128,6 @@ DISCARDED_PAID_MODELS = [
 ]
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
-
-# --- НАСТРОЙКА ЛОГИРОВАНИЯ ---
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler("bot.log", encoding='utf-8'),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger(__name__)
 
 if DISCARDED_PAID_MODELS:
     logger.warning(
