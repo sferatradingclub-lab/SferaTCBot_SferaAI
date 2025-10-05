@@ -5,7 +5,7 @@ import httpx
 
 from config import logger, CHATGPT_BASE_URL, CHATGPT_MODELS, OPENROUTER_API_KEY
 
-_async_client: httpx.AsyncClient | None = None
+_async_client: Union[httpx.AsyncClient, None] = None
 try:
     _client_lock = asyncio.Lock()
 except RuntimeError:
