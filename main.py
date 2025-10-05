@@ -34,7 +34,8 @@ from handlers.common_handlers import (
     show_chatgpt_menu,
     show_support_menu,
     stop_chatgpt_session,
-    escalate_support_to_admin
+    escalate_support_to_admin,
+    get_photo_file_id  # <-- ДОБАВЛЕН ИМПОРТ
 )
 from handlers.admin_handlers import (
     show_admin_panel,
@@ -71,15 +72,13 @@ def main() -> None:
     # Проверяем наличие обязательных настроек перед запуском бота
     ensure_required_settings()
 
-    # --- ОКОНЧАТЕЛЬНО ИСПРАВЛЕННЫЙ БЛОК ---
-    # Собираем приложение и добавляем post_shutdown callback ПРАВИЛЬНЫМ СПОСОБОМ для версии 21.1.1
+    # Собираем приложение и добавляем post_shutdown callback
     application = (
         Application.builder()
         .token(TELEGRAM_TOKEN)
         .post_shutdown(close_chatgpt_client)
         .build()
     )
-    # --- КОНЕЦ ИСПРАВЛЕННОГО БЛОКА ---
 
 
     # --- РЕГИСТРАЦИЯ ОБРАБОТЧИКОВ ---
@@ -92,7 +91,6 @@ def main() -> None:
     application.add_handler(CommandHandler("tools", show_tools_menu))
     application.add_handler(CommandHandler("chatgpt", show_chatgpt_menu))
     application.add_handler(CommandHandler("support", show_support_menu))
-    # Команда для принудительного завершения диалога с ИИ
     application.add_handler(CommandHandler("stop_chat", stop_chatgpt_session))
 
     # Команды только для админа
@@ -109,7 +107,6 @@ def main() -> None:
     application.add_handler(CallbackQueryHandler(user_actions_handler, pattern='^user_'))
     application.add_handler(CallbackQueryHandler(support_rejection_handler, pattern='^support_from_rejection$'))
     application.add_handler(CallbackQueryHandler(support_dm_handler, pattern='^support_from_dm$'))
-    # --- НОВЫЙ ОБРАБОТЧИК ДЛЯ КНОПКИ "ПОЗВАТЬ АДМИНИСТРАТОРА" ---
     application.add_handler(CallbackQueryHandler(escalate_support_to_admin, pattern=rf'^{SUPPORT_ESCALATION_CALLBACK}$'))
 
     # Кнопки главного меню (MessageHandler)
@@ -120,8 +117,12 @@ def main() -> None:
     application.add_handler(MessageHandler(filters.TEXT & filters.Regex('^Поддержка$'), show_support_menu))
     application.add_handler(MessageHandler(filters.TEXT & filters.Regex('^👑 Админка$'), show_admin_panel))
 
+    # --- НОВЫЙ ОБРАБОТЧИК ДЛЯ ФОТО ---
+    # Добавляем обработчик для всех входящих фотографий
+    application.add_handler(MessageHandler(filters.PHOTO, get_photo_file_id))
+    # ------------------------------------
+
     # Все остальные текстовые сообщения (должен быть последним!)
-    # Обработчик для "Закончить диалог" удален, т.к. логика перенесена в handle_message
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     # Задачи

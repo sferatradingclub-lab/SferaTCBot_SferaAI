@@ -349,3 +349,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 )
         else:
             logger.warning("Получено сообщение без состояния и информации о чате.")
+
+# --- НОВЫЙ ОБРАБОТЧИК ДЛЯ ПОЛУЧЕНИЯ FILE_ID ---
+async def get_photo_file_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Отвечает на присланную картинку ее file_id."""
+    if update.message and update.message.photo:
+        # Берем картинку самого большого размера
+        file_id = update.message.photo[-1].file_id
+        await update.message.reply_text(f"File ID: `{file_id}`", parse_mode='MarkdownV2')
