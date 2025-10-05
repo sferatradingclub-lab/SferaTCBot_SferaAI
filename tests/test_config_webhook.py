@@ -47,6 +47,16 @@ def test_custom_webhook_path_is_sanitized(monkeypatch):
     assert config.WEBHOOK_PATH == "custom/path"
 
 
+def test_empty_webhook_path_allows_root(monkeypatch):
+    config = _load_config(monkeypatch, {"WEBHOOK_PATH": ""})
+    assert config.WEBHOOK_PATH == ""
+
+
+def test_root_webhook_path_from_slash(monkeypatch):
+    config = _load_config(monkeypatch, {"WEBHOOK_PATH": "/"})
+    assert config.WEBHOOK_PATH == ""
+
+
 def test_platform_port_has_priority(monkeypatch):
     config = _load_config(monkeypatch, {"PORT": "9000", "WEBHOOK_PORT": "8443"})
     assert config.WEBHOOK_PORT == 9000
