@@ -1,5 +1,6 @@
 # models/crud.py
 from datetime import datetime
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from .user import User
 
@@ -76,3 +77,8 @@ def ban_user_in_db(db: Session, user_id: int, ban_status: bool):
 def get_all_users(db: Session):
     """Возвращает всех пользователей."""
     return db.query(User).all()
+
+
+def get_user_by_username(db: Session, username: str):
+    """Возвращает пользователя по его username без учета регистра."""
+    return db.query(User).filter(func.lower(User.username) == username).first()
