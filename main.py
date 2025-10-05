@@ -1,4 +1,5 @@
 import asyncio
+import atexit
 from datetime import time
 from telegram.ext import (
     Application,
@@ -17,6 +18,8 @@ from config import (
     ensure_required_settings,
     SUPPORT_ESCALATION_CALLBACK
 )
+
+from services.chatgpt_service import close_chatgpt_client
 
 # Импорты для настройки базы данных
 from models.base import Base, engine
@@ -70,6 +73,34 @@ def main() -> None:
 
     # Собираем приложение
     application = Application.builder().token(TELEGRAM_TOKEN).build()
+
+    application.post_shutdown.append(close_chatgpt_client)
+
+    def _close_client_on_exit() -> None:
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            loop.create_task(close_chatgpt_client())
+            return
+
+        try:
+            asyncio.run(close_chatgpt_client())
+        except RuntimeError:
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    loop.create_task(close_chatgpt_client())
+                else:
+                    loop.run_until_complete(close_chatgpt_client())
+            except Exception as exc:  # noqa: BLE001
+                logger.error(f"Ошибка при закрытии клиента OpenRouter в atexit: {exc}")
+        except Exception as exc:  # noqa: BLE001
+            logger.error(f"Ошибка при закрытии клиента OpenRouter в atexit: {exc}")
+
+    atexit.register(_close_client_on_exit)
 
     # --- РЕГИСТРАЦИЯ ОБРАБОТЧИКОВ ---
 
