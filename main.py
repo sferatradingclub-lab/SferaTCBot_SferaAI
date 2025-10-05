@@ -34,8 +34,7 @@ from handlers.common_handlers import (
     show_chatgpt_menu,
     show_support_menu,
     stop_chatgpt_session,
-    escalate_support_to_admin,
-    get_photo_file_id  # <-- ДОБАВЛЕН ИМПОРТ
+    escalate_support_to_admin
 )
 from handlers.admin_handlers import (
     show_admin_panel,
@@ -116,11 +115,6 @@ def main() -> None:
     application.add_handler(MessageHandler(filters.TEXT & filters.Regex('^Бесплатный ChatGPT$'), show_chatgpt_menu))
     application.add_handler(MessageHandler(filters.TEXT & filters.Regex('^Поддержка$'), show_support_menu))
     application.add_handler(MessageHandler(filters.TEXT & filters.Regex('^👑 Админка$'), show_admin_panel))
-
-    # --- НОВЫЙ ОБРАБОТЧИК ДЛЯ ФОТО ---
-    # Добавляем обработчик для всех входящих фотографий
-    application.add_handler(MessageHandler(filters.PHOTO, get_photo_file_id))
-    # ------------------------------------
 
     # Все остальные текстовые сообщения (должен быть последним!)
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
