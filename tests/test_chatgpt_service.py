@@ -43,19 +43,16 @@ def test_get_chatgpt_response_fallback(monkeypatch):
             pass
 
     dummy_client = DummyAsyncClient()
-
-    client_ids = []
-
-    async def dummy_get_async_client():
-        client_ids.append(id(dummy_client))
-        return dummy_client
+    dummy_application = type("DummyApplication", (), {"bot_data": {"httpx_client": dummy_client}})()
 
     monkeypatch.setattr(chatgpt_service, "OPENROUTER_API_KEY", "test-key")
     monkeypatch.setattr(chatgpt_service, "CHATGPT_MODELS", ["model-a", "model-b"], raising=False)
-    monkeypatch.setattr(chatgpt_service, "get_async_client", dummy_get_async_client)
 
     async def run_test():
-        return await chatgpt_service.get_chatgpt_response([{"role": "user", "content": "hi"}])
+        return await chatgpt_service.get_chatgpt_response(
+            [{"role": "user", "content": "hi"}],
+            dummy_application,
+        )
 
     first_result = asyncio.run(run_test())
     second_result = asyncio.run(run_test())
@@ -64,7 +61,6 @@ def test_get_chatgpt_response_fallback(monkeypatch):
     assert second_result == "second call success"
     assert requested_models == ["model-a", "model-b", "model-a"]
     assert DummyAsyncClient.instances_created == 1
-    assert len(set(client_ids)) == 1
     assert dummy_client.post_calls == 3
 
 
@@ -96,16 +92,16 @@ def test_get_chatgpt_response_missing_choices(monkeypatch):
             pass
 
     dummy_client = DummyAsyncClient()
-
-    async def dummy_get_async_client():
-        return dummy_client
+    dummy_application = type("DummyApplication", (), {"bot_data": {"httpx_client": dummy_client}})()
 
     monkeypatch.setattr(chatgpt_service, "OPENROUTER_API_KEY", "test-key")
     monkeypatch.setattr(chatgpt_service, "CHATGPT_MODELS", ["model-a", "model-b"], raising=False)
-    monkeypatch.setattr(chatgpt_service, "get_async_client", dummy_get_async_client)
 
     async def run_test():
-        return await chatgpt_service.get_chatgpt_response([{"role": "user", "content": "hi"}])
+        return await chatgpt_service.get_chatgpt_response(
+            [{"role": "user", "content": "hi"}],
+            dummy_application,
+        )
 
     result = asyncio.run(run_test())
 

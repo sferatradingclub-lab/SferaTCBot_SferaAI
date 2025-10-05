@@ -270,7 +270,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         else:
             context.user_data['chat_history'] = history
 
-        response_text = await get_chatgpt_response(context.user_data['chat_history'])
+        response_text = await get_chatgpt_response(
+            context.user_data['chat_history'],
+            context.application,
+        )
         
         if response_text and response_text.strip():
             context.user_data['chat_history'].append({"role": "assistant", "content": response_text})
@@ -304,7 +307,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             history = [history[0]] + history[-SUPPORT_LLM_HISTORY_LIMIT:]
 
         context.user_data['support_llm_history'] = history
-        response_text = await get_chatgpt_response(history)
+        response_text = await get_chatgpt_response(
+            history,
+            context.application,
+        )
 
         if response_text and response_text.strip():
             history.append({"role": "assistant", "content": response_text})

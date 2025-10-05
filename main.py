@@ -1,7 +1,8 @@
-import asyncio
 from datetime import time
+import httpx
 from telegram.ext import (
     Application,
+    ApplicationBuilder,
     CommandHandler,
     MessageHandler,
     filters,
@@ -21,8 +22,6 @@ from config import (
     ensure_required_settings,
     SUPPORT_ESCALATION_CALLBACK
 )
-
-from services.chatgpt_service import close_chatgpt_client
 
 # Импорты для настройки базы данных
 from models.base import Base, engine
@@ -66,6 +65,27 @@ def setup_database():
     Base.metadata.create_all(bind=engine)
     logger.info("База данных успешно настроена.")
 
+async def post_init(application: Application) -> None:
+    """Инициализирует HTTP-клиент OpenRouter после запуска приложения."""
+    if "httpx_client" in application.bot_data:
+        client = application.bot_data["httpx_client"]
+        if isinstance(client, httpx.AsyncClient) and not getattr(client, "is_closed", False):
+            return
+
+    application.bot_data["httpx_client"] = httpx.AsyncClient(timeout=60.0)
+
+
+async def post_shutdown(application: Application) -> None:
+    """Корректно закрывает HTTP-клиент перед остановкой приложения."""
+    client = application.bot_data.pop("httpx_client", None)
+
+    if isinstance(client, httpx.AsyncClient) and not getattr(client, "is_closed", False):
+        try:
+            await client.aclose()
+        except Exception as exc:  # noqa: BLE001
+            logger.error("Не удалось корректно закрыть AsyncClient OpenRouter: %s", exc)
+
+
 def main() -> None:
     """Главная функция, которая собирает и запускает бота."""
 
@@ -77,9 +97,10 @@ def main() -> None:
 
     # Собираем приложение и добавляем post_shutdown callback
     application = (
-        Application.builder()
+        ApplicationBuilder()
         .token(TELEGRAM_TOKEN)
-        .post_shutdown(close_chatgpt_client)
+        .post_init(post_init)
+        .post_shutdown(post_shutdown)
         .build()
     )
 
