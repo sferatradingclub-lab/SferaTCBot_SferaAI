@@ -137,6 +137,7 @@ async def stop_chatgpt_session(update: Update, context: ContextTypes.DEFAULT_TYP
 
 SupportPromptSender = Callable[[str], Awaitable[object]]
 SUPPORT_ESCALATION_PROMPT = "Опишите вашу проблему одним сообщением, и мы передадим его администратору."
+FRIENDLY_MAIN_MENU_REMINDER = "Выберите действие в меню ниже:"
 
 
 def _ensure_manual_support_state(context: ContextTypes.DEFAULT_TYPE) -> bool:
@@ -319,3 +320,24 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await handle_support_message(update, context)
     elif db_user and db_user.awaiting_verification:
         await handle_id_submission(update, context)
+    else:
+        reminder_text = FRIENDLY_MAIN_MENU_REMINDER
+        menu_keyboard = get_main_menu_keyboard(user.id)
+        message = update.message
+
+        if message and hasattr(message, "reply_text"):
+            await message.reply_text(reminder_text, reply_markup=menu_keyboard)
+        elif update.effective_chat:
+            try:
+                await context.bot.send_message(
+                    chat_id=update.effective_chat.id,
+                    text=reminder_text,
+                    reply_markup=menu_keyboard,
+                )
+            except TelegramError as error:
+                logger.warning(
+                    "Не удалось отправить напоминание без текстового сообщения: %s",
+                    error,
+                )
+        else:
+            logger.warning("Получено сообщение без состояния и информации о чате.")
