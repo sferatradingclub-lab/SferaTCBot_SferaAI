@@ -1,5 +1,5 @@
 # models/crud.py
-from datetime import datetime
+from datetime import datetime, date
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from .user import User
@@ -82,3 +82,54 @@ def get_all_users(db: Session):
 def get_user_by_username(db: Session, username: str):
     """Возвращает пользователя по его username без учета регистра."""
     return db.query(User).filter(func.lower(User.username) == username).first()
+
+
+def _count_users(db: Session, *conditions) -> int:
+    """Возвращает количество пользователей, удовлетворяющих условиям."""
+    query = db.query(func.count()).select_from(User)
+    if conditions:
+        query = query.filter(*conditions)
+    result = query.scalar()
+    return int(result or 0)
+
+
+def count_total_users(db: Session) -> int:
+    """Подсчитывает общее количество пользователей."""
+    return _count_users(db)
+
+
+def count_approved_users(db: Session) -> int:
+    """Подсчитывает количество одобренных пользователей."""
+    return _count_users(db, User.is_approved.is_(True))
+
+
+def count_awaiting_verification_users(db: Session) -> int:
+    """Подсчитывает количество пользователей в ожидании верификации."""
+    return _count_users(db, User.awaiting_verification.is_(True))
+
+
+def count_new_users_on_date(db: Session, target_date: date) -> int:
+    """Подсчитывает количество пользователей, впервые появившихся в указанную дату."""
+    return _count_users(
+        db,
+        User.first_seen.isnot(None),
+        func.date(User.first_seen) == target_date,
+    )
+
+
+def count_active_users_on_date(db: Session, target_date: date) -> int:
+    """Подсчитывает количество пользователей, которые были активны в указанную дату."""
+    return _count_users(
+        db,
+        User.last_seen.isnot(None),
+        func.date(User.last_seen) == target_date,
+    )
+
+
+def count_approved_users_on_date(db: Session, target_date: date) -> int:
+    """Подсчитывает количество пользователей, одобренных в указанную дату."""
+    return _count_users(
+        db,
+        User.approval_date.isnot(None),
+        func.date(User.approval_date) == target_date,
+    )

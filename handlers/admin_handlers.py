@@ -14,6 +14,12 @@ from models.crud import (
     get_user_by_username,
     approve_user_in_db,
     ban_user_in_db,
+    count_total_users,
+    count_approved_users,
+    count_awaiting_verification_users,
+    count_new_users_on_date,
+    count_active_users_on_date,
+    count_approved_users_on_date,
 )
 
 async def show_admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -134,22 +140,31 @@ async def reset_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, query=None, period="all") -> None:
     if str(update.effective_user.id) != ADMIN_CHAT_ID: return
     
-    with get_db() as db:
-        all_users = get_all_users(db)
-
     today = datetime.now().date()
-    
-    if period == "today":
-        new_today = sum(1 for u in all_users if u.first_seen and u.first_seen.date() == today)
-        approved_today = sum(1 for u in all_users if u.approval_date and u.approval_date.date() == today)
-        active_today = sum(1 for u in all_users if u.last_seen and u.last_seen.date() == today)
-        awaiting = sum(1 for u in all_users if u.awaiting_verification)
-        stats_text = (f"📊 *Статистика за сегодня*\n\n➕ Новых: *{new_today}*\n🏃‍♂️ Активных: *{active_today}*\n✅ Одобрено: *{approved_today}*\n⏳ Ожидает: *{awaiting}*")
-    else:
-        total = len(all_users)
-        approved = sum(1 for u in all_users if u.is_approved)
-        awaiting = sum(1 for u in all_users if u.awaiting_verification)
-        stats_text = (f"📊 *Статистика за все время*\n\n👤 Всего: *{total}*\n✅ Одобрено: *{approved}*\n⏳ Ожидает: *{awaiting}*")
+
+    with get_db() as db:
+        if period == "today":
+            new_today = count_new_users_on_date(db, today)
+            approved_today = count_approved_users_on_date(db, today)
+            active_today = count_active_users_on_date(db, today)
+            awaiting = count_awaiting_verification_users(db)
+            stats_text = (
+                f"📊 *Статистика за сегодня*\n\n"
+                f"➕ Новых: *{new_today}*\n"
+                f"🏃‍♂️ Активных: *{active_today}*\n"
+                f"✅ Одобрено: *{approved_today}*\n"
+                f"⏳ Ожидает: *{awaiting}*"
+            )
+        else:
+            total = count_total_users(db)
+            approved = count_approved_users(db)
+            awaiting = count_awaiting_verification_users(db)
+            stats_text = (
+                f"📊 *Статистика за все время*\n\n"
+                f"👤 Всего: *{total}*\n"
+                f"✅ Одобрено: *{approved}*\n"
+                f"⏳ Ожидает: *{awaiting}*"
+            )
 
     if query:
         await query.edit_message_text(stats_text, parse_mode='MarkdownV2', reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Назад", callback_data='admin_stats')]]))
@@ -186,12 +201,10 @@ async def run_broadcast(context: ContextTypes.DEFAULT_TYPE) -> None:
     await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text=report_text, parse_mode='MarkdownV2', reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ В админку", callback_data='admin_main')]]))
 
 async def daily_stats_job(context: ContextTypes.DEFAULT_TYPE) -> None:
-    with get_db() as db:
-        all_users = get_all_users(db)
-
     yesterday = (datetime.now() - timedelta(days=1)).date()
-    new_yesterday = sum(1 for u in all_users if u.first_seen and u.first_seen.date() == yesterday)
-    approved_yesterday = sum(1 for u in all_users if u.approval_date and u.approval_date.date() == yesterday)
+    with get_db() as db:
+        new_yesterday = count_new_users_on_date(db, yesterday)
+        approved_yesterday = count_approved_users_on_date(db, yesterday)
     report_text = (f"🗓️ *Отчет за {yesterday.strftime('%d.%m.%Y')}*\n\n➕ Новых: *{new_yesterday}*\n✅ Одобрено: *{approved_yesterday}*")
     await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text=report_text, parse_mode='MarkdownV2')
 
