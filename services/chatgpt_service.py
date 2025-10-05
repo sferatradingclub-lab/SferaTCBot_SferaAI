@@ -32,7 +32,21 @@ async def get_chatgpt_response(history: list) -> Union[str, None]:
                     # Если запрос успешен, возвращаем результат
                     if response.status_code == 200:
                         data = response.json()
-                        return data["choices"][0]["message"]["content"]
+                        choices = data.get("choices") if isinstance(data, dict) else None
+
+                        if not isinstance(choices, list) or not choices:
+                            logger.error(
+                                f"Ответ от модели {model} не содержит массива choices или он пуст: {data}"
+                            )
+                            continue
+
+                        try:
+                            return choices[0]["message"]["content"]
+                        except (KeyError, IndexError) as e:
+                            logger.error(
+                                f"Ответ от модели {model} не содержит ожидаемых ключей message/content: {e}"
+                            )
+                            continue
 
                     # Если достигнут лимит запросов, пробуем следующую модель
                     elif response.status_code == 429:
