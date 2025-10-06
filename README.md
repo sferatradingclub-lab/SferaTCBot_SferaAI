@@ -33,6 +33,12 @@ pip install -r requirements.txt
 python main.py
 ```
 
+Для запуска вебхука через ASGI-сервер Uvicorn используйте:
+
+```bash
+uvicorn main:asgi_app --host 0.0.0.0 --port 8443
+```
+
 ## Настройка моделей OpenRouter
 
 По умолчанию бот использует бесплатные модели OpenRouter, чтобы исключить ошибки `402 Payment Required`:
@@ -51,6 +57,6 @@ python main.py
 1. Укажите `WEBHOOK_URL` и (при необходимости) `WEBHOOK_PATH` в `.env`.
 2. На PaaS-платформах (Render, Railway, Fly.io и т. п.) не задавайте `WEBHOOK_PORT` вручную: бот автоматически возьмёт значение из переменной `PORT`, которую выставляет платформа.
 3. При необходимости задайте `WEBHOOK_SECRET_TOKEN`, чтобы Telegram отправлял заголовок `X-Telegram-Bot-Api-Secret-Token`. Это позволяет отсекать запросы не от Telegram.
-4. Перезапустите процесс бота. В логах должно появиться сообщение вида `Бот @SferaTC_bot запускается через Webhook (listen=0.0.0.0, port=443, path='/your-path')`.
+4. Перезапустите процесс бота. В логах должно появиться сообщение вида `Бот @SferaTC_bot запускается через Webhook (listen=0.0.0.0, port=443, path='/your-path') с сервером Uvicorn.`.
 
 Чтобы временно перейти в режим polling (например, для локальной отладки), просто уберите `WEBHOOK_URL` из `.env`.
