@@ -202,6 +202,8 @@ if WEBHOOK_URL:
                 return Response(status_code=403)
 
         try:
+            await _ensure_started()
+
             update_data = await request.json()
             update = Update.de_json(data=update_data, bot=application.bot)
             await application.update_queue.put(update)
