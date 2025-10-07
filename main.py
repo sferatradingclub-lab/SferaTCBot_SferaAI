@@ -158,21 +158,40 @@ if WEBHOOK_URL:
     asgi_app = FastAPI()
     application = main()
 
+    async def _ensure_started() -> None:
+        """Гарантирует корректный запуск приложения и инициализацию ресурсов."""
+        if not application._initialized:  # noqa: SLF001 - внутреннее свойство PTB
+            await application.initialize()
+
+        await post_init(application)
+
+        if not application.running:
+            await application.start()
+
+    async def _ensure_shutdown() -> None:
+        """Корректно останавливает приложение и освобождает ресурсы."""
+        if application.running:
+            await application.stop()
+
+        if application._initialized:  # noqa: SLF001 - внутреннее свойство PTB
+            await application.shutdown()
+
+        await post_shutdown(application)
+
     @asgi_app.on_event("startup")
-    async def on_startup():
+    async def on_startup() -> None:
         """Выполняется при старте сервера."""
+        await _ensure_started()
         await application.bot.set_webhook(
             url=f"{WEBHOOK_URL.rstrip('/')}/{WEBHOOK_PATH}",
             secret_token=WEBHOOK_SECRET_TOKEN,
-            drop_pending_updates=WEBHOOK_DROP_PENDING_UPDATES
+            drop_pending_updates=WEBHOOK_DROP_PENDING_UPDATES,
         )
-        # ИСПРАВЛЕНИЕ: Вызываем post_init для создания httpx-клиента
-        await post_init(application)
 
     @asgi_app.on_event("shutdown")
-    async def on_shutdown():
+    async def on_shutdown() -> None:
         """Выполняется при остановке сервера."""
-        await post_shutdown(application)
+        await _ensure_shutdown()
 
     @asgi_app.post(f"/{WEBHOOK_PATH}")
     async def telegram(request: Request) -> Response:
@@ -181,13 +200,16 @@ if WEBHOOK_URL:
             secret_header = request.headers.get("X-Telegram-Bot-Api-Secret-Token")
             if secret_header != WEBHOOK_SECRET_TOKEN:
                 return Response(status_code=403)
+
         try:
+            await _ensure_started()
+
             update_data = await request.json()
             update = Update.de_json(data=update_data, bot=application.bot)
             await application.process_update(update)
             return Response(status_code=200)
-        except Exception as e:
-            logger.error(f"Ошибка обработки обновления: {e}")
+        except Exception as error:  # noqa: BLE001
+            logger.error("Ошибка обработки обновления: %s", error)
             return Response(status_code=500)
 
     # Запуск Uvicorn, если файл запущен напрямую (для локальной отладки)
@@ -195,7 +217,7 @@ if WEBHOOK_URL:
         uvicorn.run(
             asgi_app,
             host=WEBHOOK_LISTEN,
-            port=WEBHOOK_PORT
+            port=WEBHOOK_PORT,
         )
 else:
     # --- ЗАПУСК В РЕЖИМЕ POLLING ---
