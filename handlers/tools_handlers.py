@@ -5,8 +5,12 @@ from telegram.error import TelegramError
 from config import logger, TOOLS_DATA, TOOLS_IMAGE_URL, get_safe_url
 from keyboards import get_tools_categories_keyboard
 
+from .error_handler import handle_errors
+
 TOOLS_MENU_TEXT = "Здесь мы собрали полезные инструменты для трейдера. Выберите нужный раздел:"
 
+
+@handle_errors
 async def show_tools_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Отправляет начальное меню раздела 'Полезные инструменты'."""
     if not update.message:
@@ -27,12 +31,14 @@ async def show_tools_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             reply_markup=keyboard,
         )
 
+
+@handle_errors
 async def tools_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обрабатывает все нажатия на инлайн-кнопки в разделе 'Полезные инструменты'."""
     query = update.callback_query
     await query.answer()
     query_data = query.data
-    
+
     if query_data == 'tools_main':
         keyboard = get_tools_categories_keyboard()
         tools_image_url = get_safe_url(TOOLS_IMAGE_URL, "TOOLS_IMAGE_URL")
@@ -58,7 +64,7 @@ async def tools_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if query_data.startswith('tools_'):
         category_key = query_data.split('_', 1)[1]
         category = TOOLS_DATA.get(category_key)
-        
+
         if not category or not category.get('items'):
             text = "Этот раздел пока пуст, но скоро мы его наполним!"
             keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Назад к разделам", callback_data='tools_main')]])
@@ -81,9 +87,9 @@ async def tools_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 if item['callback'] == query_data:
                     selected_tool, parent_category_callback = item, f"tools_{cat_name}"
                     break
-            if selected_tool: 
+            if selected_tool:
                 break
-        
+
         if selected_tool:
             caption = f"*{selected_tool['name']}*\n\n{selected_tool['description']}"
             keyboard_buttons = [

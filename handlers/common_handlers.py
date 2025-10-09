@@ -20,10 +20,12 @@ from models.crud import get_user, create_user, update_user_last_seen
 from services.chatgpt_service import get_chatgpt_response
 
 # Импортируем обработчики из других модулей, чтобы передать им управление
+from .error_handler import handle_errors
 from .admin_handlers import handle_admin_message
 from .verification_handlers import start_verification_process, handle_id_submission, handle_support_message
 
 
+@handle_errors
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     with get_db() as db:
@@ -73,6 +75,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         reply_markup=get_main_menu_keyboard(user.id)
     )
 
+@handle_errors
 async def show_training_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     with get_db() as db:
         db_user = get_user(db, update.effective_user.id)
@@ -97,6 +100,7 @@ async def show_training_menu(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 reply_markup=get_training_keyboard(is_approved)
             )
 
+@handle_errors
 async def show_psychologist_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     psychologist_photo_url = get_safe_url(PSYCHOLOGIST_IMAGE_URL, "psychologist_image")
     caption = "Наш ИИ-психолог поможет справиться со стрессом в трейдинге."
@@ -112,6 +116,7 @@ async def show_psychologist_menu(update: Update, context: ContextTypes.DEFAULT_T
             reply_markup=get_psychologist_keyboard()
         )
 
+@handle_errors
 async def show_chatgpt_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Начинает сессию с LLM через OpenRouter."""
     context.user_data['state'] = 'chatgpt_active'
@@ -123,6 +128,7 @@ async def show_chatgpt_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         reply_markup=get_chatgpt_keyboard()
     )
 
+@handle_errors
 async def stop_chatgpt_session(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Завершает сессию с LLM и возвращает в главное меню."""
     context.user_data.pop('state', None)
@@ -174,6 +180,7 @@ async def _activate_manual_support(
                 error,
             )
 
+@handle_errors
 async def show_support_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     context.user_data['state'] = 'support_llm_active'
     context.user_data['support_llm_history'] = [{"role": "system", "content": SUPPORT_LLM_SYSTEM_PROMPT}]
@@ -194,6 +201,7 @@ async def show_support_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             reply_markup=get_support_llm_keyboard(),
         )
 
+@handle_errors
 async def escalate_support_to_admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer("Подключаю администратора…")
@@ -210,9 +218,11 @@ async def escalate_support_to_admin(update: Update, context: ContextTypes.DEFAUL
 
 # ----------------------------------------------------------------
 
+@handle_errors
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("Это бот образовательной экосистемы SferaTC. Используйте меню для навигации по разделам.")
 
+@handle_errors
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     with get_db() as db:

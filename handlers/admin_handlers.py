@@ -23,12 +23,16 @@ from models.crud import (
     count_active_users_since,
 )
 
+from .error_handler import handle_errors
+
+@handle_errors
 async def show_admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if str(update.effective_user.id) == ADMIN_CHAT_ID:
         await update.message.reply_text("Добро пожаловать в админ-панель:", reply_markup=get_admin_panel_keyboard())
     else:
         await update.message.reply_text("Извините, эта команда вам недоступна.")
 
+@handle_errors
 async def handle_admin_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     admin_state = context.user_data.get('admin_state')
     with get_db() as db:
@@ -79,6 +83,7 @@ async def handle_admin_message(update: Update, context: ContextTypes.DEFAULT_TYP
                     await update.message.reply_text(f"❌ Не удалось отправить сообщение. Ошибка: {e.message}")
 
 
+@handle_errors
 async def admin_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
@@ -104,6 +109,7 @@ async def admin_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         context.user_data['admin_state'] = 'users_awaiting_id'
         await query.edit_message_text("Режим управления. Отправьте User ID или @username пользователя для поиска.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Назад в админку", callback_data='admin_main')]]))
 
+@handle_errors
 async def broadcast_confirmation_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
@@ -116,6 +122,7 @@ async def broadcast_confirmation_handler(update: Update, context: ContextTypes.D
         await query.edit_message_text("Рассылка отменена.")
         context.user_data.pop('broadcast_message_id', None)
 
+@handle_errors
 async def approve_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if str(update.effective_user.id) != ADMIN_CHAT_ID:
         return
@@ -139,10 +146,12 @@ async def approve_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         else:
             await update.message.reply_text(f"Ошибка! Пользователь с ID {user_id_to_approve} не найден.")
 
+@handle_errors
 async def reset_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("Функция сброса пользователя требует обновления для работы с БД.")
 
 
+@handle_errors
 async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, query=None, period="all") -> None:
     if str(update.effective_user.id) != ADMIN_CHAT_ID: return
 
@@ -178,6 +187,7 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, query=N
         await update.message.reply_text(stats_text, parse_mode='MarkdownV2')
 
 
+@handle_errors
 async def show_status(update: Update, context: ContextTypes.DEFAULT_TYPE, query=None) -> None:
     if str(update.effective_user.id) != ADMIN_CHAT_ID:
         return
@@ -201,6 +211,7 @@ async def show_status(update: Update, context: ContextTypes.DEFAULT_TYPE, query=
     else:
         await update.message.reply_text(status_text)
 
+@handle_errors
 async def run_broadcast(context: ContextTypes.DEFAULT_TYPE) -> None:
     admin_user_data = context.application.user_data.get(int(ADMIN_CHAT_ID), {})
     message_id_to_send = admin_user_data.pop('broadcast_message_id', None)
@@ -230,6 +241,7 @@ async def run_broadcast(context: ContextTypes.DEFAULT_TYPE) -> None:
     report_text = (f"✅ **Рассылка завершена\\!**\n\n• Успешно: *{success}*\n• Заблокировали: *{blocked}*\n• Ошибки: *{error}*")
     await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text=report_text, parse_mode='MarkdownV2', reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ В админку", callback_data='admin_main')]]))
 
+@handle_errors
 async def daily_stats_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     yesterday = (datetime.now() - timedelta(days=1)).date()
     with get_db() as db:
@@ -238,6 +250,7 @@ async def daily_stats_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     report_text = (f"🗓️ *Отчет за {yesterday.strftime('%d.%m.%Y')}*\n\n➕ Новых: *{new_yesterday}*\n✅ Одобрено: *{approved_yesterday}*")
     await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text=report_text, parse_mode='MarkdownV2')
 
+@handle_errors
 async def display_user_card(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: int):
     with get_db() as db:
         db_user = get_user(db, user_id)
