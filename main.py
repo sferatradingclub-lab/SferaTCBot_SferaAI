@@ -1,14 +1,19 @@
 from datetime import time
+import traceback
+from pprint import pformat
+
 import httpx
 from telegram import Update
 from telegram.ext import (
     Application,
     ApplicationBuilder,
     CommandHandler,
+    ContextTypes,
     MessageHandler,
     filters,
     CallbackQueryHandler,
 )
+from telegram.helpers import escape_markdown
 from fastapi import FastAPI, Request, Response
 import uvicorn
 
@@ -23,7 +28,8 @@ from config import (
     BOT_USERNAME,
     logger,
     ensure_required_settings,
-    SUPPORT_ESCALATION_CALLBACK
+    SUPPORT_ESCALATION_CALLBACK,
+    ADMIN_CHAT_ID,
 )
 
 # Импорты для настройки базы данных
@@ -61,7 +67,6 @@ from handlers.verification_handlers import (
     support_rejection_handler,
     support_dm_handler,
 )
-from handlers.error_handler import global_error_handler
 
 def setup_database():
     """Создает все таблицы в базе данных на основе моделей SQLAlchemy."""
@@ -88,6 +93,59 @@ async def post_shutdown(application: Application) -> None:
             await client.aclose()
         except Exception as exc:  # noqa: BLE001
             logger.error("Не удалось корректно закрыть AsyncClient OpenRouter: %s", exc)
+
+
+async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Глобальный обработчик ошибок PTB на случай неперехваченных исключений."""
+
+    error = getattr(context, "error", None)
+    logger.error("Неперехваченное исключение в PTB: %s", error, exc_info=True)
+
+    if isinstance(update, Update):
+        try:
+            update_repr = pformat(update.to_dict())
+        except Exception:  # noqa: BLE001
+            update_repr = repr(update)
+    else:
+        update_repr = repr(update)
+
+    update_block = update_repr.replace("```", "\\`\\`\\`") if update_repr else "None"
+
+    if isinstance(error, Exception):
+        traceback_text = "".join(
+            traceback.format_exception(type(error), error, error.__traceback__)
+        )
+    elif error is not None:
+        traceback_text = f"Неизвестный тип ошибки: {escape_markdown(str(error), version=2)}"
+    else:
+        traceback_text = "Неизвестная ошибка"
+
+    traceback_block = traceback_text.replace("```", "\\`\\`\\`") if traceback_text else "Нет данных"
+
+    admin_message = (
+        "🔴 *Глобальная ошибка в боте* 🔴\n\n"
+        "*Update:*\n"
+        f"```\n{update_block}\n```\n\n"
+        "*Traceback:*\n"
+        f"```traceback\n{traceback_block}\n```"
+    )
+
+    bot = getattr(context, "bot", None)
+    if not bot:
+        return
+
+    try:
+        await bot.send_message(
+            chat_id=ADMIN_CHAT_ID,
+            text=admin_message,
+            parse_mode="MarkdownV2",
+            disable_web_page_preview=True,
+        )
+    except Exception as send_error:  # noqa: BLE001
+        logger.error(
+            "Не удалось отправить сообщение админу о глобальной ошибке: %s",
+            send_error,
+        )
 
 
 def main() -> Application:
