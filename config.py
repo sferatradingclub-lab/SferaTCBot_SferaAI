@@ -1,235 +1,382 @@
-from typing import Union
+from __future__ import annotations
 
-import os
 import logging
+import os
+from dataclasses import dataclass, field
+from functools import lru_cache
+from typing import ClassVar, Dict, List, Optional
+
 from dotenv import load_dotenv
 
-# --- ЗАГРУЗКА ПЕРЕМЕННЫХ ОКРУЖЕНИЯ ---
 load_dotenv()
 
 
-# --- НАСТРОЙКА ЛОГИРОВАНИЯ ---
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler("bot.log", encoding='utf-8'),
-        logging.StreamHandler()
+@dataclass
+class Settings:
+    """Application configuration loaded from environment variables."""
+
+    DEFAULT_CHATGPT_FREE_MODELS: ClassVar[List[str]] = [
+        "deepseek/deepseek-chat-v3.1:free",
+        "qwen/qwen3-8b:free",
     ]
-)
-logger = logging.getLogger(__name__)
 
+    CHATGPT_BASE_URL: str = field(default="https://openrouter.ai/api/v1", init=False)
 
-DEFAULT_CHATGPT_FREE_MODELS = [
-    "deepseek/deepseek-chat-v3.1:free",
-    "qwen/qwen3-8b:free",
-]
+    logger: logging.Logger = field(init=False)
+    LOG_TO_FILE: bool = field(init=False)
+    LOG_FILE_PATH: str = field(init=False)
 
+    TELEGRAM_TOKEN: str = field(init=False)
+    BOT_USERNAME: str = field(init=False)
+    ADMIN_CHAT_ID: str = field(init=False)
 
-def ensure_free_models(models: list[str]) -> list[str]:
-    """Возвращает только бесплатные модели и подставляет значения по умолчанию при необходимости."""
-    free_models = [model for model in models if model and model.endswith(":free")]
+    WEBHOOK_URL: Optional[str] = field(init=False)
+    WEBHOOK_LISTEN: str = field(init=False)
+    WEBHOOK_PORT: int = field(init=False)
+    WEBHOOK_PATH: str = field(init=False)
+    WEBHOOK_SECRET_TOKEN: Optional[str] = field(init=False)
+    WEBHOOK_DROP_PENDING_UPDATES: bool = field(init=False)
 
-    if free_models:
-        return free_models
+    DATABASE_URL: str = field(init=False)
 
-    logger.warning(
-        "Не найдены бесплатные модели в конфигурации. Будут использованы значения по умолчанию: %s.",
-        ", ".join(DEFAULT_CHATGPT_FREE_MODELS),
+    CHATGPT_MODELS: List[str] = field(init=False)
+    DISCARDED_PAID_MODELS: List[str] = field(init=False)
+    OPENROUTER_API_KEY: Optional[str] = field(init=False)
+
+    TRAINING_BOT_URL: str = field(
+        default="https://chatgpt.com/g/g-68d9b0f1d07c8191bba533ecfb9d1689-sferatc-lessons",
+        init=False,
     )
-    return DEFAULT_CHATGPT_FREE_MODELS.copy()
+    AI_PSYCHOLOGIST_URL: str = field(
+        default="https://chatgpt.com/g/g-68bb703f9a3881918d51f97375d7d128-sferatc-ai",
+        init=False,
+    )
+    FULL_COURSE_URL: str = field(
+        default="https://g-2NaO34S37-sferatc-full-course",
+        init=False,
+    )
+    TELEGRAM_CHANNEL_URL: str = field(default="https://t.me/SferaTC", init=False)
 
+    WELCOME_IMAGE_URL: Optional[str] = field(init=False)
+    TRAINING_IMAGE_URL: Optional[str] = field(init=False)
+    PSYCHOLOGIST_IMAGE_URL: Optional[str] = field(init=False)
+    CHATGPT_IMAGE_URL: Optional[str] = field(init=False)
+    SUPPORT_IMAGE_URL: Optional[str] = field(init=False)
+    TOOLS_IMAGE_URL: Optional[str] = field(init=False)
 
-def _env_flag(name: str, *, default: bool = False) -> bool:
-    """Возвращает булеву переменную окружения, поддерживая несколько вариантов записи."""
+    BOT_KNOWLEDGE_BASE: str = field(init=False)
+    SUPPORT_LLM_SYSTEM_PROMPT: str = field(init=False)
+    SUPPORT_ESCALATION_BUTTON_TEXT: str = field(default="Позвать администратора", init=False)
+    SUPPORT_ESCALATION_CALLBACK: str = field(default="support_llm_escalate", init=False)
+    SUPPORT_LLM_HISTORY_LIMIT: int = field(default=10, init=False)
 
-    value = os.getenv(name)
-    if value is None:
-        return default
+    TOOLS_DATA: Dict[str, Dict[str, object]] = field(init=False)
 
-    return value.strip().lower() in {"1", "true", "yes", "on"}
+    def __post_init__(self) -> None:
+        self.LOG_TO_FILE = self._env_flag("LOG_TO_FILE", default=False)
+        self.LOG_FILE_PATH = os.getenv("LOG_FILE_PATH", "bot.log")
+        self.logger = self._configure_logging()
 
+        self._load_core_settings()
+        self._load_webhook_settings()
+        self._load_database_settings()
+        self._load_chatgpt_settings()
+        self._load_image_urls()
+        self._load_tools_settings()
+        self._load_support_settings()
+        self._emit_warnings()
 
-def _sanitize_webhook_path(path: Union[str, None]) -> str:
-    """Удаляет лишние слеши и пробелы из пути вебхука."""
+    # ------------------------------------------------------------------
+    # Loading helpers
+    # ------------------------------------------------------------------
+    def _load_core_settings(self) -> None:
+        token = os.getenv("TELEGRAM_TOKEN")
+        admin_chat_id = os.getenv("ADMIN_CHAT_ID")
 
-    if not path:
-        return ""
+        missing: List[str] = []
+        if not token:
+            missing.append("TELEGRAM_TOKEN")
+        if not admin_chat_id:
+            missing.append("ADMIN_CHAT_ID")
 
-    return path.strip().strip("/")
+        if missing:
+            message = (
+                "Отсутствуют обязательные переменные окружения: "
+                + ", ".join(missing)
+            )
+            self.logger.critical(message)
+            raise ValueError(message)
 
+        self.TELEGRAM_TOKEN = token
+        self.ADMIN_CHAT_ID = admin_chat_id
+        self.BOT_USERNAME = os.getenv("BOT_USERNAME", "SferaTC_bot")
 
-def _resolve_webhook_path(token: Union[str, None], override: Union[str, None]) -> str:
-    """Возвращает путь для вебхука, учитывая явное переопределение."""
+    def _load_webhook_settings(self) -> None:
+        self.WEBHOOK_URL = self._normalize_webhook_url(os.getenv("WEBHOOK_URL"))
+        self.WEBHOOK_LISTEN = os.getenv("WEBHOOK_LISTEN", "0.0.0.0")
+        self.WEBHOOK_PORT = self._resolve_webhook_port()
+        self.WEBHOOK_PATH = self._resolve_webhook_path(
+            self.TELEGRAM_TOKEN, os.getenv("WEBHOOK_PATH")
+        )
+        secret = os.getenv("WEBHOOK_SECRET_TOKEN")
+        self.WEBHOOK_SECRET_TOKEN = secret.strip() if secret else None
+        self.WEBHOOK_DROP_PENDING_UPDATES = self._env_flag(
+            "WEBHOOK_DROP_PENDING_UPDATES", default=True
+        )
 
-    if override is not None:
-        # Позволяем использовать корневой путь ("/") — после санитизации он превратится в пустую строку,
-        # что корректно обрабатывается как корневой URL. Ранее такая конфигурация была невозможна, и бот
-        # всегда возвращался к постфиксу токена.
-        return _sanitize_webhook_path(override)
+    def _load_database_settings(self) -> None:
+        self.DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./sferatc_dev.db")
 
-    if token:
-        # Раньше использовалась последняя часть токена (без двоеточия), чтобы избежать проблем с символом ':' в пути.
-        return token.split(":")[-1]
+    def _load_chatgpt_settings(self) -> None:
+        raw_models = [
+            os.getenv("CHATGPT_MODEL_PRIMARY", self.DEFAULT_CHATGPT_FREE_MODELS[0]),
+            os.getenv("CHATGPT_MODEL_FALLBACK", self.DEFAULT_CHATGPT_FREE_MODELS[1]),
+        ]
+        free_models, discarded = self._ensure_free_models(raw_models)
+        self.CHATGPT_MODELS = free_models
+        self.DISCARDED_PAID_MODELS = discarded
+        self.OPENROUTER_API_KEY = self._read_optional("OPENROUTER_API_KEY")
 
-    return ""
+    def _load_image_urls(self) -> None:
+        self.WELCOME_IMAGE_URL = self._read_optional("WELCOME_IMAGE_URL")
+        self.TRAINING_IMAGE_URL = self._read_optional("TRAINING_IMAGE_URL")
+        self.PSYCHOLOGIST_IMAGE_URL = self._read_optional("PSYCHOLOGIST_IMAGE_URL")
+        self.CHATGPT_IMAGE_URL = self._read_optional("CHATGPT_IMAGE_URL")
+        self.SUPPORT_IMAGE_URL = self._read_optional("SUPPORT_IMAGE_URL")
+        self.TOOLS_IMAGE_URL = self._read_optional("TOOLS_IMAGE_URL")
 
+    def _load_tools_settings(self) -> None:
+        self.TOOLS_DATA = {
+            "discounts": {
+                "title": "💰 Скидки на комиссии",
+                "intro_text": (
+                    "В этом разделе собраны лучшие биржи и брокеры. Откройте счет по этим "
+                    "ссылкам, чтобы получить максимальные скидки и экономить на комиссиях!"
+                ),
+                "items": [
+                    {
+                        "name": "Крипто Брокер Tiger.com",
+                        "callback": "tool_tiger",
+                        "description": (
+                            "Единая платформа для торговли на нескольких биржах. Экономьте на "
+                            "комиссиях, ведите автоматический дневник сделок и управляйте "
+                            "рисками."
+                        ),
+                        "image_url": self._read_optional("TIGER_IMAGE_URL"),
+                        "site_url": "https://account.tiger.com/signup?referral=sferatc",
+                        "video_url": "https://www.youtube.com/@sferaTC",
+                    },
+                    {
+                        "name": "Крипто Брокер Vataga Crypto",
+                        "callback": "tool_vataga",
+                        "description": (
+                            "Торгуйте на всех крупных биржах через одну платформу: продвинутые "
+                            "графики, мультиаккаунт и круглосуточная поддержка."
+                        ),
+                        "image_url": self._read_optional("VATAGA_IMAGE_URL"),
+                        "site_url": "https://app.vataga.trading/register",
+                        "video_url": "https://www.youtube.com/@sferaTC",
+                    },
+                    {
+                        "name": "Крипто Брокер Whitelist",
+                        "callback": "tool_whitelist",
+                        "description": (
+                            "Онлайн-офис для скальперов с мощным торговым терминалом Scalpee "
+                            "для ПК и большим сообществом трейдеров."
+                        ),
+                        "image_url": self._read_optional("WHITELIST_IMAGE_URL"),
+                        "site_url": "https://passport.whitelist.capital/signup/?ref=sferatc",
+                        "video_url": "https://www.youtube.com/@sferaTC",
+                    },
+                ],
+            },
+            "screeners": {
+                "title": "📈 Скринеры",
+                "intro_text": "Выберите скринер:",
+                "items": [],
+            },
+            "terminals": {
+                "title": "🖥️ Торговые терминалы",
+                "intro_text": "Выберите терминал:",
+                "items": [],
+            },
+            "ping": {
+                "title": "⚡️ Снизить ping",
+                "intro_text": "Выберите сервис:",
+                "items": [],
+            },
+        }
 
-def _resolve_webhook_port() -> int:
-    """Определяет порт вебхука, учитывая особенности PaaS-провайдеров (Render, Railway, Heroku и т.д.)."""
+    def _load_support_settings(self) -> None:
+        self.BOT_KNOWLEDGE_BASE = os.getenv(
+            "BOT_KNOWLEDGE_BASE", "Информация о функциях бота не загружена."
+        )
+        self.SUPPORT_LLM_SYSTEM_PROMPT = (
+            "Ты — ИИ-агент поддержки Telegram-бота SferaTC Bot. Твоя главная задача — "
+            "точно и по делу помогать пользователям, основываясь на реальных функциях "
+            "бота, описанных ниже. "
+            "Не придумывай функции, которых нет. Всегда ссылайся на названия кнопок. "
+            "Будь кратким и веди пользователя по шагам (на какую кнопку нажать).\n\n"
+            "Вот актуальное описание функций бота:\n"
+            f"{self.BOT_KNOWLEDGE_BASE}\n\n"
+            "Если ты не знаешь ответа на вопрос, честно скажи об этом и предложи позвать "
+            "администратора, нажав на кнопку 'Позвать администратора'."
+        )
 
-    fallback_port = 8443
-    candidates = [
-        ("PORT", os.getenv("PORT")),
-        ("WEBHOOK_PORT", os.getenv("WEBHOOK_PORT")),
-    ]
-
-    for name, raw_value in candidates:
-        if not raw_value:
-            continue
-
-        try:
-            return int(raw_value)
-        except ValueError:
-            logger.warning(
-                "Некорректное значение %s='%s'. Будет использовано значение по умолчанию %d.",
-                name,
-                raw_value,
-                fallback_port,
+    def _emit_warnings(self) -> None:
+        if self.DISCARDED_PAID_MODELS:
+            self.logger.warning(
+                "Платные модели были проигнорированы и не будут использоваться: %s.",
+                ", ".join(self.DISCARDED_PAID_MODELS),
             )
 
-    return fallback_port
+        if "sqlite" in self.DATABASE_URL:
+            self.logger.warning(
+                "Используется локальная база данных SQLite для разработки. Для продакшена "
+                "укажите DATABASE_URL."
+            )
+
+        if not self.OPENROUTER_API_KEY:
+            self.logger.warning(
+                "OPENROUTER_API_KEY не найден. Функция 'Бесплатный ChatGPT' будет недоступна."
+            )
+
+    # ------------------------------------------------------------------
+    # Utility helpers
+    # ------------------------------------------------------------------
+    def _configure_logging(self) -> logging.Logger:
+        formatter = logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        )
+        handlers: List[logging.Handler] = []
+
+        stream_handler = logging.StreamHandler()
+        stream_handler.setFormatter(formatter)
+        handlers.append(stream_handler)
+
+        if self.LOG_TO_FILE:
+            try:
+                file_handler = logging.FileHandler(self.LOG_FILE_PATH, encoding="utf-8")
+            except OSError as exc:  # pragma: no cover - зависимость от окружения
+                raise ValueError(
+                    f"Не удалось открыть файл лога '{self.LOG_FILE_PATH}': {exc}"
+                ) from exc
+            file_handler.setFormatter(formatter)
+            handlers.append(file_handler)
+
+        root_logger = logging.getLogger()
+        root_logger.setLevel(logging.INFO)
+        root_logger.handlers.clear()
+        for handler in handlers:
+            root_logger.addHandler(handler)
+
+        configured_logger = logging.getLogger("sferatc_bot")
+        configured_logger.propagate = True
+        return configured_logger
+
+    @staticmethod
+    def _env_flag(name: str, *, default: bool = False) -> bool:
+        value = os.getenv(name)
+        if value is None:
+            return default
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+
+    @staticmethod
+    def _read_optional(name: str) -> Optional[str]:
+        value = os.getenv(name)
+        if value is None:
+            return None
+        cleaned = value.strip()
+        return cleaned or None
+
+    @staticmethod
+    def _normalize_webhook_url(raw_url: Optional[str]) -> Optional[str]:
+        if raw_url is None:
+            return None
+        cleaned = raw_url.strip()
+        if not cleaned:
+            return None
+        return cleaned.rstrip("/")
+
+    @staticmethod
+    def _sanitize_webhook_path(path: Optional[str]) -> str:
+        if not path:
+            return ""
+        return path.strip().strip("/")
+
+    def _resolve_webhook_path(self, token: str, override: Optional[str]) -> str:
+        if override is not None:
+            return self._sanitize_webhook_path(override)
+        return token.split(":")[-1] if token else ""
+
+    def _resolve_webhook_port(self) -> int:
+        fallback_port = 8443
+        candidates = [
+            ("PORT", os.getenv("PORT")),
+            ("WEBHOOK_PORT", os.getenv("WEBHOOK_PORT")),
+        ]
+
+        for name, raw_value in candidates:
+            if raw_value is None or raw_value.strip() == "":
+                continue
+            try:
+                port = int(raw_value)
+            except ValueError as exc:
+                raise ValueError(
+                    f"Переменная окружения {name} должна быть целым числом, получено '{raw_value}'."
+                ) from exc
+            if port <= 0:
+                raise ValueError(
+                    f"Переменная окружения {name} должна быть положительным числом, получено '{raw_value}'."
+                )
+            return port
+
+        return fallback_port
+
+    def _ensure_free_models(
+        self, models: List[Optional[str]]
+    ) -> tuple[List[str], List[str]]:
+        free_models: List[str] = []
+        discarded: List[str] = []
+
+        for raw_model in models:
+            if raw_model is None:
+                continue
+            sanitized = raw_model.strip()
+            if not sanitized:
+                continue
+            normalized = sanitized.lower()
+            if normalized.endswith(":free"):
+                free_models.append(sanitized)
+            else:
+                discarded.append(sanitized)
+
+        if not free_models:
+            self.logger.warning(
+                "Не найдены бесплатные модели в конфигурации. Будут использованы значения по умолчанию: %s.",
+                ", ".join(self.DEFAULT_CHATGPT_FREE_MODELS),
+            )
+            free_models = self.DEFAULT_CHATGPT_FREE_MODELS.copy()
+
+        return free_models, discarded
 
 
-# --- ВАЖНЫЕ НАСТРОЙКИ ---
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-BOT_USERNAME = os.getenv("BOT_USERNAME", "SferaTC_bot")
-ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID")
-def _normalize_webhook_url(raw_url: Union[str, None]) -> Union[str, None]:
-    """Очищает URL вебхука от пробелов и бесполезных слешей."""
+@lru_cache(maxsize=1)
+def get_settings() -> Settings:
+    """Возвращает кэшированный экземпляр настроек."""
 
-    if raw_url is None:
-        return None
-
-    cleaned = raw_url.strip()
-    if not cleaned:
-        return None
-
-    return cleaned.rstrip("/")
+    return Settings()
 
 
-WEBHOOK_URL = _normalize_webhook_url(os.getenv("WEBHOOK_URL"))
-WEBHOOK_LISTEN = os.getenv("WEBHOOK_LISTEN", "0.0.0.0")
-WEBHOOK_PORT = _resolve_webhook_port()
-WEBHOOK_PATH = _resolve_webhook_path(TELEGRAM_TOKEN, os.getenv("WEBHOOK_PATH"))
-WEBHOOK_SECRET_TOKEN = os.getenv("WEBHOOK_SECRET_TOKEN") or None
-WEBHOOK_DROP_PENDING_UPDATES = _env_flag("WEBHOOK_DROP_PENDING_UPDATES", default=True)
-
-# --- Настройки подключения к базе данных ---
-# По умолчанию используется локальная база данных SQLite для удобства разработки.
-# Для продакшена необходимо в .env файле указать DATABASE_URL для PostgreSQL.
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./sferatc_dev.db")
-
-# --- Настройки для ИИ-чата через OpenRouter ---
-CHATGPT_BASE_URL = "https://openrouter.ai/api/v1"
-# Список бесплатных моделей OpenRouter (можно переопределить через .env, платные модели требуют положительный баланс)
-_RAW_CHATGPT_MODELS = [
-    os.getenv("CHATGPT_MODEL_PRIMARY", DEFAULT_CHATGPT_FREE_MODELS[0]),
-    os.getenv("CHATGPT_MODEL_FALLBACK", DEFAULT_CHATGPT_FREE_MODELS[1]),
-]
-CHATGPT_MODELS = ensure_free_models(_RAW_CHATGPT_MODELS)
-DISCARDED_PAID_MODELS = [
-    model for model in _RAW_CHATGPT_MODELS if model and not model.endswith(":free")
-]
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
-
-
-if DISCARDED_PAID_MODELS:
-    logger.warning(
-        "Платные модели были проигнорированы и не будут использоваться: %s.",
-        ", ".join(DISCARDED_PAID_MODELS),
-    )
-
-# --- ССЫЛКИ ---
-TRAINING_BOT_URL = "https://chatgpt.com/g/g-68d9b0f1d07c8191bba533ecfb9d1689-sferatc-lessons"
-AI_PSYCHOLOGIST_URL = "https://chatgpt.com/g/g-68bb703f9a3881918d51f97375d7d128-sferatc-ai"
-FULL_COURSE_URL = "https://g-2NaO34S37-sferatc-full-course"
-TELEGRAM_CHANNEL_URL = "https://t.me/SferaTC"
-
-# --- URL АДРЕСА КАРТИНОК ---
-WELCOME_IMAGE_URL = os.getenv("WELCOME_IMAGE_URL")
-TRAINING_IMAGE_URL = os.getenv("TRAINING_IMAGE_URL")
-PSYCHOLOGIST_IMAGE_URL = os.getenv("PSYCHOLOGIST_IMAGE_URL")
-CHATGPT_IMAGE_URL = os.getenv("CHATGPT_IMAGE_URL")
-SUPPORT_IMAGE_URL = os.getenv("SUPPORT_IMAGE_URL")
-TOOLS_IMAGE_URL = os.getenv("TOOLS_IMAGE_URL")
-
-# 1. СНАЧАЛА определяем базу знаний
-BOT_KNOWLEDGE_BASE = os.getenv("BOT_KNOWLEDGE_BASE", "Информация о функциях бота не загружена.")
-
-# --- НОВЫЕ НАСТРОЙКИ ДЛЯ ДВУХУРОВНЕВОЙ ПОДДЕРЖКИ ---
-SUPPORT_LLM_SYSTEM_PROMPT = (
-    "Ты — ИИ-агент поддержки Telegram-бота SferaTC Bot. Твоя главная задача — точно и по делу помогать пользователям, основываясь на реальных функциях бота, описанных ниже. "
-    "Не придумывай функции, которых нет. Всегда ссылайся на названия кнопок. Будь кратким и веди пользователя по шагам (на какую кнопку нажать).\n\n"
-    "Вот актуальное описание функций бота:\n"
-    f"{BOT_KNOWLEDGE_BASE}\n\n"
-    "Если ты не знаешь ответа на вопрос, честно скажи об этом и предложи позвать администратора, нажав на кнопку 'Позвать администратора'."
-)
-SUPPORT_ESCALATION_BUTTON_TEXT = "Позвать администратора"
-SUPPORT_ESCALATION_CALLBACK = "support_llm_escalate"
-SUPPORT_LLM_HISTORY_LIMIT = 10
-# ---------------------------------------------------------
-
-def get_safe_url(url: Union[str, None], context_name: str) -> Union[str, None]:
+def get_safe_url(url: Optional[str], context_name: str) -> Optional[str]:
     """Возвращает URL, если он задан, иначе логирует предупреждение."""
+
     if url:
         return url
 
-    logger.warning(
+    settings = get_settings()
+    settings.logger.warning(
         "Отсутствует URL для '%s'. Будет использован текстовый fallback.",
         context_name,
     )
     return None
-
-# --- ДАННЫЕ ДЛЯ РАЗДЕЛА "ПОЛЕЗНЫЕ ИНСТРУМЕНТЫ" ---
-TOOLS_DATA = {
-    'discounts': {
-        'title': "💰 Скидки на комиссии",
-        'intro_text': "В этом разделе собраны лучшие биржи и брокеры. Откройте счет по этим ссылкам, чтобы получить максимальные скидки и экономить на комиссиях!",
-        'items': [
-            { 'name': 'Крипто Брокер Tiger.com', 'callback': 'tool_tiger', 'description': 'Единая платформа для торговли на нескольких биржах. Экономьте на комиссиях, ведите автоматический дневник сделок и управляйте рисками.', 'image_url': os.getenv("TIGER_IMAGE_URL"), 'site_url': 'https://account.tiger.com/signup?referral=sferatc', 'video_url': 'https://www.youtube.com/@sferaTC' },
-            { 'name': 'Крипто Брокер Vataga Crypto', 'callback': 'tool_vataga', 'description': 'Торгуйте на всех крупных биржах через одну платформу: продвинутые графики, мультиаккаунт и круглосуточная поддержка.', 'image_url': os.getenv("VATAGA_IMAGE_URL"), 'site_url': 'https://app.vataga.trading/register', 'video_url': 'https://www.youtube.com/@sferaTC' },
-            { 'name': 'Крипто Брокер Whitelist', 'callback': 'tool_whitelist', 'description': 'Онлайн-офис для скальперов с мощным торговым терминалом Scalpee для ПК и большим сообществом трейдеров.', 'image_url': os.getenv("WHITELIST_IMAGE_URL"), 'site_url': 'https://passport.whitelist.capital/signup/?ref=sferatc', 'video_url': 'https://www.youtube.com/@sferaTC' }
-        ]
-    },
-    'screeners': {'title': "📈 Скринеры", 'intro_text': "Выберите скринер:", 'items': []},
-    'terminals': {'title': "🖥️ Торговые терминалы", 'intro_text': "Выберите терминал:", 'items': []},
-    'ping': {'title': "⚡️ Снизить ping", 'intro_text': "Выберите сервис:", 'items': []}
-}
-
-# Проверка обязательных настроек выполняется через ensure_required_settings().
-def ensure_required_settings() -> None:
-    """Убеждается, что заданы обязательные переменные окружения."""
-    missing_settings = []
-
-    if not TELEGRAM_TOKEN:
-        missing_settings.append("TELEGRAM_TOKEN")
-    if not ADMIN_CHAT_ID:
-        missing_settings.append("ADMIN_CHAT_ID")
-
-    if missing_settings:
-        message = (
-            "КРИТИЧЕСКАЯ ОШИБКА: Отсутствуют обязательные переменные окружения "
-            + ", ".join(missing_settings)
-            + "."
-        )
-        logger.critical(message)
-        raise RuntimeError(message)
-
-# Предупреждение, если используется БД для разработки
-if "sqlite" in DATABASE_URL:
-    logger.warning("Используется локальная база данных SQLite для разработки. Для продакшена укажите DATABASE_URL.")
-
-# Предупреждение, если не задан ключ для ИИ-чата
-if not OPENROUTER_API_KEY:
-    logger.warning("OPENROUTER_API_KEY не найден. Функция 'Бесплатный ChatGPT' будет недоступна.")

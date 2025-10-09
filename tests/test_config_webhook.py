@@ -3,11 +3,12 @@
 import importlib
 import sys
 
+import pytest
 
-def _load_config(monkeypatch, overrides: dict[str, str | None]):
-    """Переинициализирует модуль config с заданными переменными окружения."""
 
-    # Очистка переменных окружения, которые могут влиять на конфигурацию вебхука.
+def _load_settings(monkeypatch, overrides: dict[str, str | None]):
+    """Переинициализирует настройки с заданными переменными окружения."""
+
     for name in [
         "PORT",
         "WEBHOOK_PORT",
@@ -16,6 +17,8 @@ def _load_config(monkeypatch, overrides: dict[str, str | None]):
         "WEBHOOK_URL",
         "WEBHOOK_SECRET_TOKEN",
         "WEBHOOK_DROP_PENDING_UPDATES",
+        "LOG_TO_FILE",
+        "LOG_FILE_PATH",
     ]:
         monkeypatch.delenv(name, raising=False)
 
@@ -34,44 +37,51 @@ def _load_config(monkeypatch, overrides: dict[str, str | None]):
             monkeypatch.setenv(key, value)
 
     sys.modules.pop("config", None)
-    return importlib.import_module("config")
+    config = importlib.import_module("config")
+    config.get_settings.cache_clear()
+    return config.get_settings()
 
 
 def test_webhook_path_defaults_to_token_postfix(monkeypatch):
-    config = _load_config(monkeypatch, {})
-    assert config.WEBHOOK_PATH == "ABCDE"
+    settings = _load_settings(monkeypatch, {})
+    assert settings.WEBHOOK_PATH == "ABCDE"
 
 
 def test_custom_webhook_path_is_sanitized(monkeypatch):
-    config = _load_config(monkeypatch, {"WEBHOOK_PATH": " /custom/path/ "})
-    assert config.WEBHOOK_PATH == "custom/path"
+    settings = _load_settings(monkeypatch, {"WEBHOOK_PATH": " /custom/path/ "})
+    assert settings.WEBHOOK_PATH == "custom/path"
 
 
 def test_empty_webhook_path_allows_root(monkeypatch):
-    config = _load_config(monkeypatch, {"WEBHOOK_PATH": ""})
-    assert config.WEBHOOK_PATH == ""
+    settings = _load_settings(monkeypatch, {"WEBHOOK_PATH": ""})
+    assert settings.WEBHOOK_PATH == ""
 
 
 def test_root_webhook_path_from_slash(monkeypatch):
-    config = _load_config(monkeypatch, {"WEBHOOK_PATH": "/"})
-    assert config.WEBHOOK_PATH == ""
+    settings = _load_settings(monkeypatch, {"WEBHOOK_PATH": "/"})
+    assert settings.WEBHOOK_PATH == ""
 
 
 def test_platform_port_has_priority(monkeypatch):
-    config = _load_config(monkeypatch, {"PORT": "9000", "WEBHOOK_PORT": "8443"})
-    assert config.WEBHOOK_PORT == 9000
+    settings = _load_settings(monkeypatch, {"PORT": "9000", "WEBHOOK_PORT": "8443"})
+    assert settings.WEBHOOK_PORT == 9000
 
 
-def test_fallback_to_explicit_webhook_port(monkeypatch):
-    config = _load_config(monkeypatch, {"PORT": "invalid", "WEBHOOK_PORT": "9443"})
-    assert config.WEBHOOK_PORT == 9443
+def test_invalid_port_values_raise(monkeypatch):
+    with pytest.raises(ValueError):
+        _load_settings(monkeypatch, {"PORT": "invalid", "WEBHOOK_PORT": "9443"})
 
 
-def test_default_port_used_on_invalid_values(monkeypatch):
-    config = _load_config(monkeypatch, {"PORT": "invalid", "WEBHOOK_PORT": "broken"})
-    assert config.WEBHOOK_PORT == 8443
+def test_invalid_webhook_port_raises(monkeypatch):
+    with pytest.raises(ValueError):
+        _load_settings(monkeypatch, {"WEBHOOK_PORT": "broken"})
+
+
+def test_default_port_used_when_not_set(monkeypatch):
+    settings = _load_settings(monkeypatch, {})
+    assert settings.WEBHOOK_PORT == 8443
 
 
 def test_drop_pending_updates_flag(monkeypatch):
-    config = _load_config(monkeypatch, {"WEBHOOK_DROP_PENDING_UPDATES": "false"})
-    assert config.WEBHOOK_DROP_PENDING_UPDATES is False
+    settings = _load_settings(monkeypatch, {"WEBHOOK_DROP_PENDING_UPDATES": "false"})
+    assert settings.WEBHOOK_DROP_PENDING_UPDATES is False

@@ -10,7 +10,10 @@ from telegram.ext import ContextTypes
 from telegram.error import TelegramError
 from telegram.helpers import escape_markdown
 
-from config import ADMIN_CHAT_ID, logger
+from config import get_settings
+
+settings = get_settings()
+logger = settings.logger
 
 UserHandler = Callable[..., Awaitable[Any]]
 
@@ -68,7 +71,7 @@ async def _send_admin_notification(
 
     try:
         await context.bot.send_message(
-            chat_id=ADMIN_CHAT_ID,
+            chat_id=settings.ADMIN_CHAT_ID,
             text=admin_message,
             parse_mode="MarkdownV2",
             disable_web_page_preview=True,

@@ -7,7 +7,7 @@ from telegram.error import TelegramError
 from telegram.ext import ContextTypes
 from telegram.helpers import escape_markdown
 
-from config import ADMIN_CHAT_ID, FULL_COURSE_URL, logger
+from config import get_settings
 from db_session import get_db
 from keyboards import get_admin_panel_keyboard
 from models.crud import (
@@ -24,6 +24,9 @@ from models.crud import (
     get_user_by_username,
     iter_broadcast_targets,
 )
+
+settings = get_settings()
+logger = settings.logger
 
 from .error_handler import handle_errors
 from .states import AdminState
@@ -48,7 +51,7 @@ def _set_admin_state(context: ContextTypes.DEFAULT_TYPE, state: AdminState) -> N
 
 @handle_errors
 async def show_admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if str(update.effective_user.id) == ADMIN_CHAT_ID:
+    if str(update.effective_user.id) == settings.ADMIN_CHAT_ID:
         await update.message.reply_text(
             "Добро пожаловать в админ-панель:",
             reply_markup=get_admin_panel_keyboard(),
@@ -68,8 +71,8 @@ async def _handle_broadcast_message(
     _set_admin_state(context, AdminState.BROADCAST_AWAITING_CONFIRMATION)
     context.user_data["broadcast_message_id"] = message.message_id
     await context.bot.copy_message(
-        chat_id=ADMIN_CHAT_ID,
-        from_chat_id=ADMIN_CHAT_ID,
+        chat_id=settings.ADMIN_CHAT_ID,
+        from_chat_id=settings.ADMIN_CHAT_ID,
         message_id=message.message_id,
     )
     confirmation_keyboard = [
@@ -220,7 +223,7 @@ async def broadcast_confirmation_handler(
 
 @handle_errors
 async def approve_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if str(update.effective_user.id) != ADMIN_CHAT_ID:
+    if str(update.effective_user.id) != settings.ADMIN_CHAT_ID:
         return
 
     try:
@@ -244,7 +247,7 @@ async def approve_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 chat_id=user_id_to_approve,
                 text="🎉 Поздравляем! Ваша заявка одобрена! Теперь вам доступен полный курс.",
                 reply_markup=InlineKeyboardMarkup(
-                    [[InlineKeyboardButton("🎉 Перейти к полному курсу!", url=FULL_COURSE_URL)]]
+                    [[InlineKeyboardButton("🎉 Перейти к полному курсу!", url=settings.FULL_COURSE_URL)]]
                 ),
             )
         else:
@@ -267,7 +270,7 @@ async def show_stats(
     query=None,
     period="all",
 ) -> None:
-    if str(update.effective_user.id) != ADMIN_CHAT_ID:
+    if str(update.effective_user.id) != settings.ADMIN_CHAT_ID:
         return
 
     today = datetime.now().date()
@@ -310,7 +313,7 @@ async def show_stats(
 
 @handle_errors
 async def show_status(update: Update, context: ContextTypes.DEFAULT_TYPE, query=None) -> None:
-    if str(update.effective_user.id) != ADMIN_CHAT_ID:
+    if str(update.effective_user.id) != settings.ADMIN_CHAT_ID:
         return
 
     now = datetime.now()
@@ -335,11 +338,11 @@ async def show_status(update: Update, context: ContextTypes.DEFAULT_TYPE, query=
 
 @handle_errors
 async def run_broadcast(context: ContextTypes.DEFAULT_TYPE) -> None:
-    admin_user_data = context.application.user_data.get(int(ADMIN_CHAT_ID), {})
+    admin_user_data = context.application.user_data.get(int(settings.ADMIN_CHAT_ID), {})
     message_id_to_send = admin_user_data.pop("broadcast_message_id", None)
     if not message_id_to_send:
         await context.bot.send_message(
-            chat_id=ADMIN_CHAT_ID,
+            chat_id=settings.ADMIN_CHAT_ID,
             text="❌ Ошибка: не найдено сообщение для рассылки.",
         )
         return
@@ -354,7 +357,7 @@ async def run_broadcast(context: ContextTypes.DEFAULT_TYPE) -> None:
             try:
                 await context.bot.copy_message(
                     chat_id=user_id,
-                    from_chat_id=ADMIN_CHAT_ID,
+                    from_chat_id=settings.ADMIN_CHAT_ID,
                     message_id=message_id_to_send,
                 )
                 success += 1
@@ -375,7 +378,7 @@ async def run_broadcast(context: ContextTypes.DEFAULT_TYPE) -> None:
         f"• Ошибки: *{error}*"
     )
     await context.bot.send_message(
-        chat_id=ADMIN_CHAT_ID,
+        chat_id=settings.ADMIN_CHAT_ID,
         text=report_text,
         parse_mode="MarkdownV2",
         reply_markup=InlineKeyboardMarkup(
@@ -398,7 +401,7 @@ async def daily_stats_job(context: ContextTypes.DEFAULT_TYPE) -> None:
         approved=approved_yesterday,
     )
     await context.bot.send_message(
-        chat_id=ADMIN_CHAT_ID,
+        chat_id=settings.ADMIN_CHAT_ID,
         text=report_text,
         parse_mode="MarkdownV2",
     )
@@ -457,7 +460,7 @@ async def display_user_card(update: Update, context: ContextTypes.DEFAULT_TYPE, 
             InlineKeyboardButton("❌ Отозвать", callback_data=f"user_revoke_{user_id}")
         )
 
-    if user_id != int(ADMIN_CHAT_ID):
+    if user_id != int(settings.ADMIN_CHAT_ID):
         if db_user.is_banned:
             action_buttons.append(
                 InlineKeyboardButton("✅ Разблок", callback_data=f"user_unblock_{user_id}")

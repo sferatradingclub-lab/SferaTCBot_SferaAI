@@ -5,7 +5,9 @@ from typing import Iterator, Optional
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from config import ADMIN_CHAT_ID
+from config import get_settings
+
+settings = get_settings()
 from .user import User
 
 
@@ -100,9 +102,9 @@ def ban_user_in_db(db: Session, user_id: int, ban_status: bool) -> bool:
 def iter_broadcast_targets(db: Session, *, chunk_size: int = 500) -> Iterator[int]:
     """Итератор ID пользователей для рассылки без загрузки всей таблицы."""
     admin_id: Optional[int] = None
-    if ADMIN_CHAT_ID is not None:
+    if settings.ADMIN_CHAT_ID is not None:
         try:
-            admin_id = int(ADMIN_CHAT_ID)
+            admin_id = int(settings.ADMIN_CHAT_ID)
         except (TypeError, ValueError):
             admin_id = None
 

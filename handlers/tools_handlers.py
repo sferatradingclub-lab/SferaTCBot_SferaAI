@@ -2,8 +2,11 @@ from telegram import Update, InputMediaPhoto, InlineKeyboardButton, InlineKeyboa
 from telegram.ext import ContextTypes
 from telegram.error import TelegramError
 
-from config import logger, TOOLS_DATA, TOOLS_IMAGE_URL, get_safe_url
+from config import get_safe_url, get_settings
 from keyboards import get_tools_categories_keyboard
+
+settings = get_settings()
+logger = settings.logger
 
 from .error_handler import handle_errors
 
@@ -16,7 +19,7 @@ async def show_tools_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     if not update.message:
         return
 
-    tools_image_url = get_safe_url(TOOLS_IMAGE_URL, "TOOLS_IMAGE_URL")
+    tools_image_url = get_safe_url(settings.TOOLS_IMAGE_URL, "TOOLS_IMAGE_URL")
     keyboard = get_tools_categories_keyboard()
 
     if tools_image_url:
@@ -41,7 +44,7 @@ async def tools_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     if query_data == 'tools_main':
         keyboard = get_tools_categories_keyboard()
-        tools_image_url = get_safe_url(TOOLS_IMAGE_URL, "TOOLS_IMAGE_URL")
+        tools_image_url = get_safe_url(settings.TOOLS_IMAGE_URL, "TOOLS_IMAGE_URL")
 
         if tools_image_url and query.message and query.message.photo:
             media = InputMediaPhoto(media=tools_image_url, caption=TOOLS_MENU_TEXT)
@@ -63,7 +66,7 @@ async def tools_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     if query_data.startswith('tools_'):
         category_key = query_data.split('_', 1)[1]
-        category = TOOLS_DATA.get(category_key)
+        category = settings.TOOLS_DATA.get(category_key)
 
         if not category or not category.get('items'):
             text = "Этот раздел пока пуст, но скоро мы его наполним!"
@@ -82,7 +85,7 @@ async def tools_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     if query_data.startswith('tool_'):
         selected_tool, parent_category_callback = None, 'tools_main'
-        for cat_name, cat_data in TOOLS_DATA.items():
+        for cat_name, cat_data in settings.TOOLS_DATA.items():
             for item in cat_data['items']:
                 if item['callback'] == query_data:
                     selected_tool, parent_category_callback = item, f"tools_{cat_name}"
