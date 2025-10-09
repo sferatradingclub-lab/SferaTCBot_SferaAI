@@ -29,77 +29,60 @@ from models.crud import (
     count_approved_users_on_date,
 )
 
-# Фикстура для создания "чистого" объекта пользователя перед каждым тестом
+
 @pytest.fixture
-def sample_user():
-    user = User()
-    user.user_id = 12345
-    user.is_approved = False
-    user.awaiting_verification = True
-    user.approval_date = None
-    user.is_banned = False
-    return user
+def mock_db_session():
+    session = MagicMock()
+    query = MagicMock()
+    filtered_query = MagicMock()
+    filtered_query.update.return_value = 1
+    query.filter.return_value = filtered_query
+    session.query.return_value = query
+    return session
 
-# Фикстура для мокирования сессии БД
-@pytest.fixture
-def mock_db_session(sample_user):
-    # Создаем мок сессии
-    mock_session = MagicMock()
-    
-    # Настраиваем метод query().filter().first() так, чтобы он возвращал нашего пользователя
-    mock_session.query.return_value.filter.return_value.first.return_value = sample_user
-    
-    return mock_session
 
-def test_approve_user(mock_db_session, sample_user):
-    """
-    Тест: функция approve_user_in_db должна:
-    1. Установить is_approved в True.
-    2. Установить awaiting_verification в False.
-    3. Записать текущую дату в approval_date.
-    """
-    # Вызываем тестируемую функцию
-    approve_user_in_db(mock_db_session, sample_user.user_id)
-    
-    # Проверяем, что состояние пользователя изменилось как ожидалось
-    assert sample_user.is_approved is True
-    assert sample_user.awaiting_verification is False
-    assert sample_user.approval_date is not None
-    assert isinstance(sample_user.approval_date, datetime)
-    
-    # Проверяем, что сессия была закоммичена
+def test_approve_user(mock_db_session):
+    """Функция approve_user_in_db должна выполнять атомарное обновление."""
+    result = approve_user_in_db(mock_db_session, 12345)
+
+    filtered_query = mock_db_session.query.return_value.filter.return_value
+    filtered_query.update.assert_called_once()
+    update_payload = filtered_query.update.call_args.kwargs.get("values")
+    if update_payload is None:
+        update_payload = filtered_query.update.call_args.args[0]
+
+    assert update_payload[User.is_approved] is True
+    assert update_payload[User.awaiting_verification] is False
+    assert isinstance(update_payload[User.approval_date], datetime)
     mock_db_session.commit.assert_called_once()
+    assert result is True
 
-def test_reject_user(mock_db_session, sample_user):
-    """
-    Тест: функция reject_user_in_db должна:
-    1. Установить awaiting_verification в False.
-    2. Не изменять is_approved и approval_date.
-    """
-    # Вызываем тестируемую функцию
-    reject_user_in_db(mock_db_session, sample_user.user_id)
-    
-    # Проверяем, что состояние пользователя изменилось как ожидалось
-    assert sample_user.awaiting_verification is False
-    assert sample_user.is_approved is False
-    assert sample_user.approval_date is None
-    
-    # Проверяем, что сессия была закоммичена
+
+def test_reject_user(mock_db_session):
+    """Функция reject_user_in_db должна снимать флаг ожидания."""
+    result = reject_user_in_db(mock_db_session, 98765)
+
+    filtered_query = mock_db_session.query.return_value.filter.return_value
+    filtered_query.update.assert_called_once_with(
+        {User.awaiting_verification: False},
+        synchronize_session=False,
+    )
     mock_db_session.commit.assert_called_once()
+    assert result is True
 
-def test_ban_user(mock_db_session, sample_user):
-    """
-    Тест: функция ban_user_in_db должна корректно блокировать пользователя.
-    """
-    # Блокируем
-    ban_user_in_db(mock_db_session, sample_user.user_id, ban_status=True)
-    assert sample_user.is_banned is True
-    
-    # Разблокируем
-    ban_user_in_db(mock_db_session, sample_user.user_id, ban_status=False)
-    assert sample_user.is_banned is False
-    
-    # Проверяем, что commit был вызван дважды
+
+def test_ban_user(mock_db_session):
+    """Функция ban_user_in_db должна корректно блокировать и разблокировать пользователя."""
+    ban_user_in_db(mock_db_session, 111, ban_status=True)
+    ban_user_in_db(mock_db_session, 111, ban_status=False)
+
+    filtered_query = mock_db_session.query.return_value.filter.return_value
+    assert filtered_query.update.call_count == 2
+    first_call = filtered_query.update.call_args_list[0]
+    second_call = filtered_query.update.call_args_list[1]
+
+    assert first_call.kwargs.get("values", first_call.args[0]) == {User.is_banned: True}
+    assert second_call.kwargs.get("values", second_call.args[0]) == {User.is_banned: False}
     assert mock_db_session.commit.call_count == 2
 
 

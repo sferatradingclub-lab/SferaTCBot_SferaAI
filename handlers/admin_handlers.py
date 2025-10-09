@@ -20,9 +20,9 @@ from models.crud import (
     count_awaiting_verification_users,
     count_new_users_on_date,
     count_total_users,
-    get_all_users,
     get_user,
     get_user_by_username,
+    iter_broadcast_targets,
 )
 
 from .error_handler import handle_errors
@@ -230,8 +230,8 @@ async def approve_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         return
 
     with get_db() as db:
-        db_user = approve_user_in_db(db, user_id_to_approve)
-        if db_user:
+        was_updated = approve_user_in_db(db, user_id_to_approve)
+        if was_updated:
             logger.info(
                 "Админ (%s) одобрил %s",
                 update.effective_user.id,
@@ -344,28 +344,29 @@ async def run_broadcast(context: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    with get_db() as db:
-        all_users = get_all_users(db)
-    user_ids = [u.user_id for u in all_users if u.user_id != int(ADMIN_CHAT_ID)]
-
     success, blocked, error = 0, 0, 0
-    logger.info("Начинаю рассылку для %s пользователей.", len(user_ids))
+    total_targets = 0
+    logger.info("Начинаю рассылку сообщений.")
 
-    for user_id in user_ids:
-        try:
-            await context.bot.copy_message(
-                chat_id=user_id,
-                from_chat_id=ADMIN_CHAT_ID,
-                message_id=message_id_to_send,
-            )
-            success += 1
-        except TelegramError as err:
-            if "bot was blocked" in err.message or "user is deactivated" in err.message:
-                blocked += 1
-            else:
-                error += 1
-                logger.warning("Ошибка рассылки пользователю %s: %s", user_id, err)
-        await asyncio.sleep(0.1)
+    with get_db() as db:
+        for user_id in iter_broadcast_targets(db):
+            total_targets += 1
+            try:
+                await context.bot.copy_message(
+                    chat_id=user_id,
+                    from_chat_id=ADMIN_CHAT_ID,
+                    message_id=message_id_to_send,
+                )
+                success += 1
+            except TelegramError as err:
+                if "bot was blocked" in err.message or "user is deactivated" in err.message:
+                    blocked += 1
+                else:
+                    error += 1
+                    logger.warning("Ошибка рассылки пользователю %s: %s", user_id, err)
+            await asyncio.sleep(0.1)
+
+    logger.info("Рассылка завершена. Всего получателей: %s", total_targets)
 
     report_text = (
         "✅ **Рассылка завершена!**\n\n"
