@@ -9,6 +9,7 @@ from config import logger, ADMIN_CHAT_ID, FULL_COURSE_URL
 from keyboards import get_verification_links_keyboard, get_support_keyboard
 from .error_handler import handle_errors
 from .admin_handlers import display_user_card
+from .states import AdminState, UserState
 from db_session import get_db
 from models.crud import (
     get_user, set_awaiting_verification, approve_user_in_db,
@@ -20,6 +21,8 @@ async def start_verification_process(update: Update, context: ContextTypes.DEFAU
     user = update.effective_user
     with get_db() as db:
         set_awaiting_verification(db, user.id, True)
+
+    context.user_data['state'] = UserState.AWAITING_VERIFICATION_ID
 
     text = (
         f"С возвращением, {user.first_name}! Поздравляем с прохождением первых трех уроков нашего курса «Путь трейдера»! 🥳\n\n"
@@ -36,6 +39,8 @@ async def handle_id_submission(update: Update, context: ContextTypes.DEFAULT_TYP
     text = update.message.text or ""
     with get_db() as db:
         set_awaiting_verification(db, user.id, True)  # Устанавливаем флаг, что заявка подана
+
+    context.user_data['state'] = UserState.AWAITING_VERIFICATION_ID
 
     if 'verification_requests' not in context.bot_data:
         context.bot_data['verification_requests'] = {}
@@ -107,7 +112,7 @@ async def handle_support_message(update: Update, context: ContextTypes.DEFAULT_T
     finally:
         # Оставляем пользователя в режиме ручной поддержки и сохраняем историю,
         # чтобы он мог продолжать диалог без повторного подтверждения.
-        context.user_data['state'] = 'awaiting_support_message'
+        context.user_data['state'] = UserState.AWAITING_SUPPORT_MESSAGE
 
 @handle_errors
 async def user_actions_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -153,7 +158,7 @@ async def user_actions_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             await query.answer("Одобрение отозвано.")
 
         elif action in ["reply", "message"]:
-            context.user_data['admin_state'] = 'users_awaiting_dm'
+            context.user_data['admin_state'] = AdminState.USERS_AWAITING_DM
             context.user_data['dm_target_user_id'] = user_id
             if action == "reply":
                 context.user_data['reply_to_message_id'] = int(parts[3]) if len(parts) > 3 else None
@@ -179,9 +184,10 @@ async def user_actions_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 async def support_rejection_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
-    if context.user_data.get('state') != 'awaiting_support_message':
+    state = context.user_data.get('state')
+    if state not in {UserState.AWAITING_SUPPORT_MESSAGE, 'awaiting_support_message'}:
         context.user_data.pop('support_llm_history', None)
-    context.user_data['state'] = 'awaiting_support_message'
+    context.user_data['state'] = UserState.AWAITING_SUPPORT_MESSAGE
     context.user_data['support_thank_you_sent'] = False
     await query.edit_message_text("Ваша заявка была отклонена. Опишите вашу проблему или вопрос следующим сообщением, и мы постараемся помочь.")
     await query.message.reply_text(
@@ -193,9 +199,10 @@ async def support_rejection_handler(update: Update, context: ContextTypes.DEFAUL
 async def support_dm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
-    if context.user_data.get('state') != 'awaiting_support_message':
+    state = context.user_data.get('state')
+    if state not in {UserState.AWAITING_SUPPORT_MESSAGE, 'awaiting_support_message'}:
         context.user_data.pop('support_llm_history', None)
-    context.user_data['state'] = 'awaiting_support_message'
+    context.user_data['state'] = UserState.AWAITING_SUPPORT_MESSAGE
     context.user_data['support_thank_you_sent'] = False
     await query.edit_message_text("Опишите ваш ответ для администратора. Он будет отправлен в том же диалоге.")
 
