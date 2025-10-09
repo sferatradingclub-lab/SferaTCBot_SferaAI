@@ -86,7 +86,10 @@ async def get_chatgpt_response(
     headers = {
         "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
         "HTTP-Referer": "https://sferatc.com",
-        "X-Title": "SferaTC Bot",
+        # "X-Title" должен быть строго ASCII-строкой, иначе httpx поднимет LocalProtocolError.
+        # Используем статическое значение, чтобы исключить любые нелатинские символы
+        # (например, из названий чатов), попадающие в заголовок.
+        "X-Title": "SferaTCBot",
     }
 
     unrecoverable_error_detected = False
