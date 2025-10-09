@@ -45,8 +45,8 @@ def test_get_chatgpt_response_fallback(monkeypatch):
     dummy_client = DummyAsyncClient()
     dummy_application = type("DummyApplication", (), {"bot_data": {"httpx_client": dummy_client}})()
 
-    monkeypatch.setattr(chatgpt_service, "OPENROUTER_API_KEY", "test-key")
-    monkeypatch.setattr(chatgpt_service, "CHATGPT_MODELS", ["model-a", "model-b"], raising=False)
+    monkeypatch.setattr(chatgpt_service.settings, "OPENROUTER_API_KEY", "test-key")
+    monkeypatch.setattr(chatgpt_service.settings, "CHATGPT_MODELS", ["model-a", "model-b"], raising=False)
 
     async def run_test():
         return await chatgpt_service.get_chatgpt_response(
@@ -94,8 +94,8 @@ def test_get_chatgpt_response_missing_choices(monkeypatch):
     dummy_client = DummyAsyncClient()
     dummy_application = type("DummyApplication", (), {"bot_data": {"httpx_client": dummy_client}})()
 
-    monkeypatch.setattr(chatgpt_service, "OPENROUTER_API_KEY", "test-key")
-    monkeypatch.setattr(chatgpt_service, "CHATGPT_MODELS", ["model-a", "model-b"], raising=False)
+    monkeypatch.setattr(chatgpt_service.settings, "OPENROUTER_API_KEY", "test-key")
+    monkeypatch.setattr(chatgpt_service.settings, "CHATGPT_MODELS", ["model-a", "model-b"], raising=False)
 
     async def run_test():
         return await chatgpt_service.get_chatgpt_response(

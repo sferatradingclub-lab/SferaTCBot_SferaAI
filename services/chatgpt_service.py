@@ -1,13 +1,18 @@
+from __future__ import annotations
+
 from datetime import datetime, timedelta
 from typing import Any, Dict, Optional, Sequence, Union
 
 import httpx
 from telegram.ext import Application
 
-from config import logger, CHATGPT_BASE_URL, CHATGPT_MODELS, OPENROUTER_API_KEY
+from config import get_settings
 
+settings = get_settings()
+logger = settings.logger
 
 _DEFAULT_ERROR_MESSAGE = "Извините, сервис временно перегружен. Пожалуйста, попробуйте позже."
+HTTPX_CLIENT_KEY = "httpx_client"
 
 
 def _extract_message_content(response_data: Dict[str, Any], model: str) -> Optional[str]:
@@ -36,18 +41,16 @@ async def get_chatgpt_response(
     history: Sequence[Dict[str, Any]],
     application: Optional[Application],
 ) -> Union[str, None]:
-    """
-    Отправляет историю диалога в OpenRouter, используя список моделей с автоматическим переключением при ошибках.
-    HTTP-клиент берётся из bot_data приложения, чтобы избежать конфликтов event loop при работе через вебхуки.
-    """
-    if not OPENROUTER_API_KEY:
+    """Отправляет историю диалога в OpenRouter, переключаясь между моделями при ошибках."""
+
+    if not settings.OPENROUTER_API_KEY:
         return "Функция ИИ-чата не настроена. Обратитесь к администратору."
 
     if application is None:
         logger.error("Application контекст отсутствует при попытке обращения к OpenRouter.")
         return _DEFAULT_ERROR_MESSAGE
 
-    client: Optional[httpx.AsyncClient] = application.bot_data.get("httpx_client")
+    client: Optional[httpx.AsyncClient] = application.bot_data.get(HTTPX_CLIENT_KEY)
 
     if client is None:
         logger.error(
@@ -59,9 +62,9 @@ async def get_chatgpt_response(
         application.bot_data["circuit_breaker_state"] = {}
 
     breaker_state: Dict[str, Dict[str, Any]] = application.bot_data["circuit_breaker_state"]
-    available_models = []
+    available_models: list[str] = []
 
-    for configured_model in CHATGPT_MODELS:
+    for configured_model in settings.CHATGPT_MODELS:
         state = breaker_state.get(configured_model)
         disabled_until = state.get("disabled_until") if isinstance(state, dict) else None
 
@@ -79,9 +82,9 @@ async def get_chatgpt_response(
         logger.error("Все модели отключены circuit breaker'ом. Нет доступных моделей для запроса.")
         raise RuntimeError("Нет доступных моделей OpenRouter из-за срабатывания circuit breaker.")
 
-    url = f"{CHATGPT_BASE_URL}/chat/completions"
+    url = f"{settings.CHATGPT_BASE_URL}/chat/completions"
     headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
         "HTTP-Referer": "https://sferatc.com",
         "X-Title": "SferaTC Bot",
     }

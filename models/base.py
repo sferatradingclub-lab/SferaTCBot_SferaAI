@@ -1,7 +1,10 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-from config import DATABASE_URL
+from config import get_settings
+
+settings = get_settings()
+DATABASE_URL = settings.DATABASE_URL
 
 # Определяем, используется ли SQLite
 is_sqlite = DATABASE_URL.startswith("sqlite")

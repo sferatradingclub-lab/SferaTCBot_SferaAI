@@ -5,8 +5,11 @@ from telegram.ext import ContextTypes
 from telegram.helpers import escape_markdown
 from telegram.error import TelegramError
 
-from config import logger, ADMIN_CHAT_ID, FULL_COURSE_URL
+from config import get_settings
 from keyboards import get_verification_links_keyboard, get_support_keyboard
+settings = get_settings()
+logger = settings.logger
+
 from .error_handler import handle_errors
 from .admin_handlers import display_user_card
 from .states import AdminState, UserState
@@ -61,9 +64,13 @@ async def handle_id_submission(update: Update, context: ContextTypes.DEFAULT_TYP
     ]]
 
     try:
-        await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text=message_to_admin, parse_mode='MarkdownV2', reply_markup=InlineKeyboardMarkup(keyboard))
+        await context.bot.send_message(chat_id=settings.ADMIN_CHAT_ID, text=message_to_admin, parse_mode='MarkdownV2', reply_markup=InlineKeyboardMarkup(keyboard))
     except TelegramError as e:
-        logger.error(f"КРИТИЧЕСКАЯ ОШИБКА: Не удалось отправить заявку админу ({ADMIN_CHAT_ID}). Причина: {e.message}.")
+        logger.error(
+            "КРИТИЧЕСКАЯ ОШИБКА: Не удалось отправить заявку админу (%s). Причина: %s.",
+            settings.ADMIN_CHAT_ID,
+            e.message,
+        )
         raise
 
     await update.message.reply_text("Спасибо! Твоя заявка принята на ручную проверку. Обычно это занимает не более часа.")
@@ -79,7 +86,7 @@ async def handle_support_message(update: Update, context: ContextTypes.DEFAULT_T
         context.user_data['support_thank_you_sent'] = True
 
     try:
-        copied_message = await context.bot.copy_message(chat_id=ADMIN_CHAT_ID, from_chat_id=user.id, message_id=update.message.message_id)
+        copied_message = await context.bot.copy_message(chat_id=settings.ADMIN_CHAT_ID, from_chat_id=user.id, message_id=update.message.message_id)
 
         user_fullname = escape_markdown(user.full_name or "Имя не указано", version=2)
         user_username = f"@{escape_markdown(user.username, version=2)}" if user.username else "Нет"
@@ -100,7 +107,7 @@ async def handle_support_message(update: Update, context: ContextTypes.DEFAULT_T
             admin_keyboard = [[InlineKeyboardButton("💬 Ответить", callback_data=f'user_reply_{user.id}_{update.message.message_id}')]]
 
         await context.bot.send_message(
-            chat_id=ADMIN_CHAT_ID,
+            chat_id=settings.ADMIN_CHAT_ID,
             text=admin_info_text,
             reply_to_message_id=copied_message.message_id,
             reply_markup=InlineKeyboardMarkup(admin_keyboard),
@@ -136,7 +143,7 @@ async def user_actions_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             approve_user_in_db(db, user_id)
             logger.info(f"Админ ({query.from_user.id}) одобрил заявку {user_id}")
             try:
-                await context.bot.send_message(chat_id=user_id, text="🎉 Поздравляем! Ваша заявка одобрена! Теперь вам доступен полный курс.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🎉 Перейти к полному курсу!", url=FULL_COURSE_URL)]]))
+                await context.bot.send_message(chat_id=user_id, text="🎉 Поздравляем! Ваша заявка одобрена! Теперь вам доступен полный курс.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🎉 Перейти к полному курсу!", url=settings.FULL_COURSE_URL)]]))
             except TelegramError as e:
                 logger.error(f"Не удалось отправить уведомление об одобрении пользователю {user_id}: {e.message}")
             await query.edit_message_text(f"{original_message}\n\n*Статус: ✅ Одобрено*", parse_mode='MarkdownV2')
