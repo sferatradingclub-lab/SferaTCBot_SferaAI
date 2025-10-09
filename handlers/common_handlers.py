@@ -455,93 +455,117 @@ async def help_command(
 async def _handle_chatgpt_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     message = update.message
 
-    if message is None or not getattr(message, "text", None):
+    # 1. Handle non-text messages or empty message objects gracefully.
+    if not message or not message.text:
         prompt_text = (
             "Пожалуйста, отправьте текстовое сообщение для ИИ-ассистента "
             "или завершите диалог с помощью кнопки ниже."
         )
-
         if message and hasattr(message, "reply_text"):
             await message.reply_text(prompt_text, reply_markup=get_chatgpt_keyboard())
         elif update.effective_chat:
-            try:
-                await context.bot.send_message(
-                    chat_id=update.effective_chat.id,
-                    text=prompt_text,
-                    reply_markup=get_chatgpt_keyboard(),
-                )
-            except TelegramError as error:
-                logger.warning(
-                    "Не удалось отправить подсказку без текстового сообщения: %s",
-                    error,
-                )
-        else:
-            logger.warning("Получено сообщение без текста и информации о чате.")
-
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text=prompt_text,
+                reply_markup=get_chatgpt_keyboard(),
+            )
         return
 
+    # 2. Handle the "end chat" command.
     if message.text == "Закончить диалог":
         await stop_chatgpt_session(update, context)
         return
 
-    history = _normalize_chat_history(context.user_data.get("chat_history"))
+    # 3. Correctly retrieve and validate the history.
+    # It must be a list. If it doesn't exist or is not a list, initialize it correctly.
+    history = context.user_data.get("chat_history")
+    if not isinstance(history, list) or not history:
+        # Re-initialize with the system prompt if history is missing or corrupt.
+        logger.warning("chat_history was missing or corrupt. Re-initializing.")
+        history = [{
+            "role": "system",
+            "content": "Ты — универсальный ИИ-ассистент, созданный для помощи пользователю в самых разных задачах. "
+            "Твои главные принципы: полезность, точность и безопасность. Всегда стремись дать наиболее "
+            "полный и структурированный ответ. Если задача творческая — предлагай оригинальные идеи. "
+            "Если техническая — будь точным и приводи примеры. Общайся вежливо и нейтрально. "
+            "Категорически избегай генерации вредоносного, неэтичного или оскорбительного контента. "
+            "Не давай финансовых или медицинских советов. Твоя цель — быть лучшим инструментом для решения задач пользователя."
+        }]
 
-    user_message_entry: Dict[str, Any] = {"role": "user", "content": str(message.text)}
+    # 4. Append the new user message in the correct format.
+    user_entry = {"role": "user", "content": message.text}
     message_id = getattr(message, "message_id", None)
     if isinstance(message_id, int):
-        user_message_entry["message_id"] = message_id
+        user_entry["message_id"] = message_id
+    history.append(user_entry)
 
-    updated_history = [*history, user_message_entry]
-    trimmed_history = _trim_chat_history(updated_history)
-    normalized_trimmed_history = _normalize_chat_history(trimmed_history)
+    # 5. Apply history slicing logic correctly.
+    # This ensures the system prompt is always preserved.
+    if len(history) > 11:  # (1 system + 5 pairs of user/assistant)
+        history = [history[0]] + history[-10:]
 
-    if not normalized_trimmed_history or normalized_trimmed_history[-1].get("role") != "user":
-        normalized_trimmed_history.append(dict(user_message_entry))
+    # 6. Save the updated history BEFORE making the API call.
+    context.user_data["chat_history"] = history
 
-    context.user_data["chat_history"] = normalized_trimmed_history
-
-    api_history = _build_api_ready_history(normalized_trimmed_history, user_message_entry)
+    # 7. Make the API call with the now-guaranteed-correct history object.
+    api_history = [
+        {"role": entry.get("role", ""), "content": str(entry.get("content", ""))}
+        for entry in history
+    ]
 
     response_text = await get_chatgpt_response(
         api_history,
         context.application,
     )
 
-    if isinstance(response_text, str) and response_text.strip():
-        assistant_entry: Dict[str, Any] = {"role": "assistant", "content": response_text}
-
+    # 8. Handle the response and update history.
+    if response_text and response_text.strip():
+        # Append the assistant's response to the history.
+        assistant_entry = {"role": "assistant", "content": response_text}
         if isinstance(message_id, int):
             assistant_entry["reply_to"] = message_id
 
-        current_history = _normalize_chat_history(context.user_data.get("chat_history"))
+        history_ref = context.user_data.get("chat_history")
+        if not isinstance(history_ref, list):
+            history_ref = history
 
-        insert_index: Optional[int] = None
-
+        insert_index = None
         if isinstance(message_id, int):
-            for index, entry in enumerate(current_history):
-                if (
-                    entry.get("role") == "user"
-                    and entry.get("message_id") == message_id
-                ):
+            for index, entry in enumerate(history_ref):
+                if entry.get("role") == "user" and entry.get("message_id") == message_id:
                     insert_index = index + 1
                     break
 
         if insert_index is not None:
-            current_history.insert(insert_index, assistant_entry)
+            history_ref.insert(insert_index, assistant_entry)
         else:
-            current_history.append(assistant_entry)
+            history_ref.append(assistant_entry)
 
-        trimmed_after_response = _trim_chat_history(current_history)
-        context.user_data["chat_history"] = _normalize_chat_history(trimmed_after_response)
-        await update.message.reply_text(
-            response_text,
-            reply_markup=get_chatgpt_keyboard(),
-        )
+        if len(history_ref) > 11:
+            history_ref = [history_ref[0]] + history_ref[-10:]
+
+        context.user_data["chat_history"] = history_ref
+        await message.reply_text(response_text, reply_markup=get_chatgpt_keyboard())
     else:
+        # Handle empty/failed response from the service.
         logger.warning("Модель вернула пустой или некорректный ответ.")
-        await update.message.reply_text(
+        # Remove the user's last message from history to allow a retry.
+        history_ref = context.user_data.get("chat_history")
+        if isinstance(history_ref, list):
+            removed = False
+            if isinstance(message_id, int):
+                for index in range(len(history_ref) - 1, -1, -1):
+                    entry = history_ref[index]
+                    if entry.get("role") == "user" and entry.get("message_id") == message_id:
+                        history_ref.pop(index)
+                        removed = True
+                        break
+            if not removed and history_ref:
+                history_ref.pop()
+            context.user_data["chat_history"] = history_ref
+        await message.reply_text(
             "Мне не удалось сгенерировать ответ. Попробуйте переформулировать ваш запрос.",
-            reply_markup=get_chatgpt_keyboard(),
+            reply_markup=get_chatgpt_keyboard()
         )
 
 
