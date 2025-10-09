@@ -7,6 +7,7 @@ from telegram.error import TelegramError
 
 from config import logger, ADMIN_CHAT_ID, FULL_COURSE_URL
 from keyboards import get_verification_links_keyboard, get_support_keyboard
+from .error_handler import handle_errors
 from .admin_handlers import display_user_card
 from db_session import get_db
 from models.crud import (
@@ -14,6 +15,7 @@ from models.crud import (
     reject_user_in_db, revoke_user_in_db, ban_user_in_db
 )
 
+@handle_errors
 async def start_verification_process(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     with get_db() as db:
@@ -28,6 +30,7 @@ async def start_verification_process(update: Update, context: ContextTypes.DEFAU
 
     await update.message.reply_text(text, reply_markup=get_verification_links_keyboard())
 
+@handle_errors
 async def handle_id_submission(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     text = update.message.text or ""
@@ -59,6 +62,7 @@ async def handle_id_submission(update: Update, context: ContextTypes.DEFAULT_TYP
 
     await update.message.reply_text("Спасибо! Твоя заявка принята на ручную проверку. Обычно это занимает не более часа.")
 
+@handle_errors
 async def handle_support_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
 
@@ -103,6 +107,7 @@ async def handle_support_message(update: Update, context: ContextTypes.DEFAULT_T
         # чтобы он мог продолжать диалог без повторного подтверждения.
         context.user_data['state'] = 'awaiting_support_message'
 
+@handle_errors
 async def user_actions_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
@@ -168,6 +173,7 @@ async def user_actions_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     if action not in ["approve", "reject", "reply", "message", "block"]:
         await display_user_card(update, context, user_id)
 
+@handle_errors
 async def support_rejection_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
@@ -181,6 +187,7 @@ async def support_rejection_handler(update: Update, context: ContextTypes.DEFAUL
         reply_markup=get_support_keyboard()
     )
 
+@handle_errors
 async def support_dm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()

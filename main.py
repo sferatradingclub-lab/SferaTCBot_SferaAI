@@ -61,6 +61,7 @@ from handlers.verification_handlers import (
     support_rejection_handler,
     support_dm_handler,
 )
+from handlers.error_handler import global_error_handler
 
 def setup_database():
     """Создает все таблицы в базе данных на основе моделей SQLAlchemy."""
@@ -109,6 +110,8 @@ def main() -> Application:
 
 
     # --- РЕГИСТРАЦИЯ ОБРАБОТЧИКОВ ---
+
+    application.add_error_handler(global_error_handler)
 
     # Команды
     application.add_handler(CommandHandler("start", start))
