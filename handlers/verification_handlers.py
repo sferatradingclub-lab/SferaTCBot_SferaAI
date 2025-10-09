@@ -59,6 +59,7 @@ async def handle_id_submission(update: Update, context: ContextTypes.DEFAULT_TYP
         await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text=message_to_admin, parse_mode='MarkdownV2', reply_markup=InlineKeyboardMarkup(keyboard))
     except TelegramError as e:
         logger.error(f"КРИТИЧЕСКАЯ ОШИБКА: Не удалось отправить заявку админу ({ADMIN_CHAT_ID}). Причина: {e.message}.")
+        raise
 
     await update.message.reply_text("Спасибо! Твоя заявка принята на ручную проверку. Обычно это занимает не более часа.")
 
@@ -102,6 +103,7 @@ async def handle_support_message(update: Update, context: ContextTypes.DEFAULT_T
         )
     except TelegramError as e:
         logger.error(f"Не удалось отправить сообщение поддержки админу: {e.message}")
+        raise
     finally:
         # Оставляем пользователя в режиме ручной поддержки и сохраняем историю,
         # чтобы он мог продолжать диалог без повторного подтверждения.
