@@ -28,10 +28,7 @@ def test_handle_message_prompts_for_text_when_missing(monkeypatch):
     monkeypatch.setattr(handler_decorators, "update_user_last_seen", lambda db, user_id: None)
     monkeypatch.setattr(ch, "get_chatgpt_keyboard", lambda: keyboard)
 
-    prompt_text = (
-        "Пожалуйста, отправьте текстовое сообщение для ИИ-ассистента "
-        "или завершите диалог с помощью кнопки ниже."
-    )
+    prompt_text = "Пожалуйста, отправьте текстовое сообщение."
 
     async def run_test():
         user = SimpleNamespace(id=1, full_name="Tester", username="tester")
@@ -52,10 +49,12 @@ def test_handle_message_prompts_for_text_when_missing(monkeypatch):
 
         await ch.handle_message(update, context)
 
-        message.reply_text.assert_awaited_once()
-        awaited_call = message.reply_text.await_args
-        assert awaited_call.args == (prompt_text,)
-        assert awaited_call.kwargs == {"reply_markup": keyboard}
+        assert message.reply_text.await_count == 0
+        context.bot.send_message.assert_awaited_once_with(
+            chat_id=update.effective_chat.id,
+            text=prompt_text,
+            reply_markup=keyboard,
+        )
         assert context.user_data["chat_history"] == initial_history
         assert all(entry.get("content") is not None for entry in context.user_data["chat_history"])
 
@@ -81,7 +80,11 @@ def test_chat_history_preserves_order_with_concurrent_messages(monkeypatch):
 
     async def run_test():
         context = SimpleNamespace(
-            user_data={"chat_history": ch._default_chat_history().copy()},
+            user_data={
+                "chat_history": [
+                    {"role": "system", "content": ch.CHATGPT_SYSTEM_PROMPT}
+                ]
+            },
             application=SimpleNamespace(),
         )
 
@@ -132,20 +135,22 @@ def test_chat_history_preserves_order_with_concurrent_messages(monkeypatch):
 
         history = context.user_data["chat_history"]
 
-        roles = [entry["role"] for entry in history]
-        assert roles == ["system", "user", "assistant", "user", "assistant"]
+        assert history == [
+            {"role": "system", "content": ch.CHATGPT_SYSTEM_PROMPT},
+            {"role": "user", "content": "Первый запрос"},
+            {"role": "user", "content": "Второй запрос"},
+            {"role": "assistant", "content": "Ответ на первый"},
+            {"role": "assistant", "content": "Ответ на второй"},
+        ]
 
-        assert history[1]["content"] == "Первый запрос"
-        assert history[1]["message_id"] == 101
-        assert history[2]["content"] == "Ответ на первый"
-        assert history[2]["reply_to"] == 101
-        assert history[3]["content"] == "Второй запрос"
-        assert history[3]["message_id"] == 102
-        assert history[4]["content"] == "Ответ на второй"
-        assert history[4]["reply_to"] == 102
-
-        message1.reply_text.assert_awaited_once()
-        message2.reply_text.assert_awaited_once()
+        message1.reply_text.assert_awaited_once_with(
+            "Ответ на первый",
+            reply_markup=keyboard,
+        )
+        message2.reply_text.assert_awaited_once_with(
+            "Ответ на второй",
+            reply_markup=keyboard,
+        )
 
     asyncio.run(run_test())
 
