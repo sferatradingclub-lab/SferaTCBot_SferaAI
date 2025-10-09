@@ -1,6 +1,6 @@
 from datetime import time
-import traceback
 from pprint import pformat
+import traceback
 
 import httpx
 from telegram import Update
@@ -95,11 +95,22 @@ async def post_shutdown(application: Application) -> None:
             logger.error("Не удалось корректно закрыть AsyncClient OpenRouter: %s", exc)
 
 
+def _sanitize_code_block(text: str) -> str:
+    """Экранирует тройные кавычки внутри блока кода MarkdownV2."""
+
+    return text.replace("```", "\\`\\`\\`") if text else ""
+
+
 async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Глобальный обработчик ошибок PTB на случай неперехваченных исключений."""
 
     error = getattr(context, "error", None)
-    logger.error("Неперехваченное исключение в PTB: %s", error, exc_info=True)
+    if isinstance(error, Exception):
+        exc_info = (type(error), error, error.__traceback__)
+    else:
+        exc_info = True
+
+    logger.error("Неперехваченное исключение в PTB", exc_info=exc_info)
 
     if isinstance(update, Update):
         try:
@@ -109,7 +120,7 @@ async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYP
     else:
         update_repr = repr(update)
 
-    update_block = update_repr.replace("```", "\\`\\`\\`") if update_repr else "None"
+    update_block = _sanitize_code_block(update_repr or "None")
 
     if isinstance(error, Exception):
         traceback_text = "".join(
@@ -120,7 +131,7 @@ async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYP
     else:
         traceback_text = "Неизвестная ошибка"
 
-    traceback_block = traceback_text.replace("```", "\\`\\`\\`") if traceback_text else "Нет данных"
+    traceback_block = _sanitize_code_block(traceback_text or "Нет данных")
 
     admin_message = (
         "🔴 *Глобальная ошибка в боте* 🔴\n\n"
