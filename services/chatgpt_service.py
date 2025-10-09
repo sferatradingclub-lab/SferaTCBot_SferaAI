@@ -126,15 +126,29 @@ async def get_chatgpt_response(
                 continue
 
             if 400 <= response.status_code < 500:
-                logger.error(
-                    "Невосстановимая ошибка клиента от API OpenRouter для модели %s: Статус %s, Ответ: %s",
+                if response.status_code in (401, 402):
+                    logger.critical(
+                        (
+                            "Критическая ошибка авторизации при обращении к API OpenRouter для модели %s: "
+                            "Статус %s, Ответ: %s. Проверьте валидность API-ключа и наличие средств."
+                        ),
+                        model,
+                        response.status_code,
+                        response.text,
+                    )
+                    unrecoverable_error_detected = True
+                    break
+
+                logger.warning(
+                    (
+                        "Ошибка клиента от API OpenRouter для модели %s: Статус %s, Ответ: %s. "
+                        "Пробую следующую модель."
+                    ),
                     model,
                     response.status_code,
                     response.text,
                 )
-                logger.critical("Unrecoverable client error for model %s. Прерываю попытки.", model)
-                unrecoverable_error_detected = True
-                break
+                continue
 
             if 500 <= response.status_code < 600:
                 logger.warning(
