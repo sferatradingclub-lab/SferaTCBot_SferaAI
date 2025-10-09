@@ -1,10 +1,14 @@
 from datetime import time
+import traceback
+from pprint import pformat
+
 import httpx
 from telegram import Update
 from telegram.ext import (
     Application,
     ApplicationBuilder,
     CommandHandler,
+    ContextTypes,
     MessageHandler,
     filters,
     CallbackQueryHandler,
@@ -23,7 +27,8 @@ from config import (
     BOT_USERNAME,
     logger,
     ensure_required_settings,
-    SUPPORT_ESCALATION_CALLBACK
+    SUPPORT_ESCALATION_CALLBACK,
+    ADMIN_CHAT_ID,
 )
 
 # Импорты для настройки базы данных
@@ -89,6 +94,71 @@ async def post_shutdown(application: Application) -> None:
             logger.error("Не удалось корректно закрыть AsyncClient OpenRouter: %s", exc)
 
 
+def _sanitize_code_block(text: str) -> str:
+    """Экранирует тройные кавычки внутри блока кода MarkdownV2."""
+
+    return text.replace("```", "\\`\\`\\`") if text else ""
+
+
+async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Глобальный обработчик ошибок PTB на случай неперехваченных исключений."""
+
+    error = getattr(context, "error", None)
+
+    if isinstance(error, Exception):
+        logger.error("Неперехваченное исключение в PTB: %s", error, exc_info=True)
+        captured_error = error
+    elif error is not None:
+        logger.error("Неперехваченное исключение в PTB (неизвестный тип): %r", error)
+        captured_error = Exception(str(error))
+    else:
+        logger.error("Неперехваченное исключение в PTB без объекта ошибки")
+        captured_error = Exception("Неизвестная ошибка")
+
+    if isinstance(update, Update):
+        try:
+            update_repr = pformat(update.to_dict())
+        except Exception:  # noqa: BLE001
+            update_repr = repr(update)
+    else:
+        update_repr = repr(update)
+
+    update_block = _sanitize_code_block(update_repr or "None")
+
+    traceback_lines = traceback.format_exception(
+        type(captured_error),
+        captured_error,
+        captured_error.__traceback__,
+    )
+    traceback_text = "".join(traceback_lines)
+    traceback_block = _sanitize_code_block(traceback_text or "Нет данных")
+
+    admin_message = (
+        "🔴 *Глобальная ошибка в боте* 🔴\n\n"
+        "*Update:*\n"
+        f"```\n{update_block}\n```\n\n"
+        "*Traceback:*\n"
+        f"```traceback\n{traceback_block}\n```"
+    )
+
+    bot = getattr(context, "bot", None)
+    if not bot:
+        return
+
+    try:
+        await bot.send_message(
+            chat_id=ADMIN_CHAT_ID,
+            text=admin_message,
+            parse_mode="MarkdownV2",
+            disable_web_page_preview=True,
+        )
+    except Exception as send_error:  # noqa: BLE001
+        logger.error(
+            "Не удалось отправить сообщение админу о глобальной ошибке: %s",
+            send_error,
+        )
+
+
 def main() -> Application:
     """Главная функция, которая собирает и запускает бота."""
 
@@ -109,6 +179,8 @@ def main() -> Application:
 
 
     # --- РЕГИСТРАЦИЯ ОБРАБОТЧИКОВ ---
+
+    application.add_error_handler(global_error_handler)
 
     # Команды
     application.add_handler(CommandHandler("start", start))
