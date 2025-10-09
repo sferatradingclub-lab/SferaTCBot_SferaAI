@@ -114,6 +114,38 @@ def _prepare_chat_history_for_api(history: Sequence[Dict[str, Any]]) -> List[Dic
     return [{"role": entry["role"], "content": entry["content"]} for entry in normalized_history]
 
 
+def _build_api_ready_history(
+    history: Sequence[Dict[str, Any]],
+    user_entry: Dict[str, Any],
+) -> List[Dict[str, str]]:
+    """Подготавливает историю диалога для отправки в модель с учётом последнего запроса."""
+
+    sanitized_history = _prepare_chat_history_for_api(history)
+
+    if not sanitized_history:
+        sanitized_history = [{"role": "system", "content": CHATGPT_SYSTEM_PROMPT}]
+
+    first_entry = sanitized_history[0]
+    if first_entry.get("role") != "system":
+        sanitized_history = [
+            {"role": "system", "content": CHATGPT_SYSTEM_PROMPT},
+            *sanitized_history,
+        ]
+
+    user_content = user_entry.get("content", "")
+    if not isinstance(user_content, str):
+        user_content = str(user_content)
+
+    sanitized_user_entry = {"role": "user", "content": user_content}
+
+    if sanitized_history[-1].get("role") != "user":
+        sanitized_history.append(sanitized_user_entry)
+    else:
+        sanitized_history[-1] = sanitized_user_entry
+
+    return sanitized_history
+
+
 def _get_user_state(context: ContextTypes.DEFAULT_TYPE) -> UserState:
     raw_state = context.user_data.get("state", UserState.DEFAULT)
     if isinstance(raw_state, UserState):
@@ -461,9 +493,14 @@ async def _handle_chatgpt_message(update: Update, context: ContextTypes.DEFAULT_
 
     updated_history = [*history, user_message_entry]
     trimmed_history = _trim_chat_history(updated_history)
-    context.user_data["chat_history"] = trimmed_history
+    normalized_trimmed_history = _normalize_chat_history(trimmed_history)
 
-    api_history = _prepare_chat_history_for_api(trimmed_history)
+    if not normalized_trimmed_history or normalized_trimmed_history[-1].get("role") != "user":
+        normalized_trimmed_history.append(dict(user_message_entry))
+
+    context.user_data["chat_history"] = normalized_trimmed_history
+
+    api_history = _build_api_ready_history(normalized_trimmed_history, user_message_entry)
 
     response_text = await get_chatgpt_response(
         api_history,
@@ -494,7 +531,8 @@ async def _handle_chatgpt_message(update: Update, context: ContextTypes.DEFAULT_
         else:
             current_history.append(assistant_entry)
 
-        context.user_data["chat_history"] = _trim_chat_history(current_history)
+        trimmed_after_response = _trim_chat_history(current_history)
+        context.user_data["chat_history"] = _normalize_chat_history(trimmed_after_response)
         await update.message.reply_text(
             response_text,
             reply_markup=get_chatgpt_keyboard(),
