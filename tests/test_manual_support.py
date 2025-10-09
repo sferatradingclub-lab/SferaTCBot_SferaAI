@@ -3,15 +3,31 @@ from contextlib import contextmanager
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
+from handlers import decorators as handler_decorators
+from handlers.states import UserState
+
+
+class DummyDBContext:
+    def __enter__(self):
+        return SimpleNamespace()
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
 
 def test_ensure_manual_support_state_detects_first_transition():
     from handlers.common_handlers import _ensure_manual_support_state
 
-    context = SimpleNamespace(user_data={'state': 'support_llm_active', 'support_llm_history': ['history']})
+    context = SimpleNamespace(
+        user_data={
+            'state': UserState.SUPPORT_LLM_ACTIVE,
+            'support_llm_history': ['history'],
+        }
+    )
 
     first_transition = _ensure_manual_support_state(context)
     assert first_transition is True
-    assert context.user_data['state'] == 'awaiting_support_message'
+    assert context.user_data['state'] == UserState.AWAITING_SUPPORT_MESSAGE
 
     context.user_data['support_llm_history'] = ['keep']
     second_transition = _ensure_manual_support_state(context)
@@ -35,7 +51,14 @@ def test_support_messages_forwarded_while_state_active(monkeypatch):
             send_message=AsyncMock(),
         )
 
-        context = SimpleNamespace(user_data={'state': 'awaiting_support_message', 'support_llm_history': ['keep']}, bot=bot, bot_data={})
+        context = SimpleNamespace(
+            user_data={
+                'state': UserState.AWAITING_SUPPORT_MESSAGE,
+                'support_llm_history': ['keep'],
+            },
+            bot=bot,
+            bot_data={},
+        )
 
         user = SimpleNamespace(id=42, full_name="Test User", username="tester")
 
@@ -52,20 +75,29 @@ def test_support_messages_forwarded_while_state_active(monkeypatch):
         assert second_reply.await_count == 0
         assert bot.copy_message.await_count == 2
         assert bot.send_message.await_count == 2
-        assert context.user_data['state'] == 'awaiting_support_message'
+        assert context.user_data['state'] == UserState.AWAITING_SUPPORT_MESSAGE
         assert context.user_data['support_llm_history'] == ['keep']
         assert context.user_data['support_thank_you_sent'] is True
 
     asyncio.run(run_test())
 
 
-def test_escalation_prompt_sent_once_on_manual_support_transition():
+def test_escalation_prompt_sent_once_on_manual_support_transition(monkeypatch):
     from handlers import common_handlers as ch
 
     async def run_test():
+        monkeypatch.setattr(handler_decorators, "get_db", lambda: DummyDBContext())
+        monkeypatch.setattr(
+            handler_decorators,
+            "get_user",
+            lambda db, user_id: SimpleNamespace(is_banned=False, awaiting_verification=False),
+        )
+        monkeypatch.setattr(handler_decorators, "create_user", lambda db, data: data)
+        monkeypatch.setattr(handler_decorators, "update_user_last_seen", lambda db, user_id: None)
+
         context = SimpleNamespace(
             user_data={
-                'state': 'support_llm_active',
+                'state': UserState.SUPPORT_LLM_ACTIVE,
                 'support_llm_history': ['history'],
                 'support_thank_you_sent': True,
             }
@@ -80,14 +112,17 @@ def test_escalation_prompt_sent_once_on_manual_support_transition():
         )
 
         query = SimpleNamespace(answer=AsyncMock(), message=message)
-        update = SimpleNamespace(callback_query=query)
+        update = SimpleNamespace(
+            callback_query=query,
+            effective_user=SimpleNamespace(id=1, full_name="Tester", username="tester"),
+        )
 
         await ch.escalate_support_to_admin(update, context)
 
         query.answer.assert_awaited_once()
         message.edit_reply_markup.assert_awaited_once_with(reply_markup=None)
         message.reply_text.assert_awaited_once_with(ch.SUPPORT_ESCALATION_PROMPT)
-        assert context.user_data['state'] == 'awaiting_support_message'
+        assert context.user_data['state'] == UserState.AWAITING_SUPPORT_MESSAGE
         assert 'support_llm_history' not in context.user_data
         assert context.user_data['support_thank_you_sent'] is False
 

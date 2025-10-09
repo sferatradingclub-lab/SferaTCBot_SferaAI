@@ -3,6 +3,9 @@ from contextlib import contextmanager
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
+from handlers import decorators as handler_decorators
+from handlers.states import UserState
+
 import pytest
 
 
@@ -15,14 +18,14 @@ def test_handle_message_prompts_for_text_when_missing(monkeypatch):
     def fake_get_db():
         yield SimpleNamespace()
 
-    monkeypatch.setattr(ch, "get_db", fake_get_db)
+    monkeypatch.setattr(handler_decorators, "get_db", fake_get_db)
     monkeypatch.setattr(
-        ch,
+        handler_decorators,
         "get_user",
         lambda db, user_id: SimpleNamespace(is_banned=False, awaiting_verification=False),
     )
-    monkeypatch.setattr(ch, "create_user", lambda db, data: data)
-    monkeypatch.setattr(ch, "update_user_last_seen", lambda db, user_id: None)
+    monkeypatch.setattr(handler_decorators, "create_user", lambda db, data: data)
+    monkeypatch.setattr(handler_decorators, "update_user_last_seen", lambda db, user_id: None)
     monkeypatch.setattr(ch, "get_chatgpt_keyboard", lambda: keyboard)
 
     prompt_text = (
@@ -35,7 +38,10 @@ def test_handle_message_prompts_for_text_when_missing(monkeypatch):
         message = SimpleNamespace(text=None, reply_text=AsyncMock())
         initial_history = [{"role": "system", "content": "context"}]
         context = SimpleNamespace(
-            user_data={"state": "chatgpt_active", "chat_history": initial_history.copy()},
+            user_data={
+                "state": UserState.CHATGPT_ACTIVE,
+                "chat_history": initial_history.copy(),
+            },
             bot=SimpleNamespace(send_message=AsyncMock()),
         )
         update = SimpleNamespace(
@@ -72,14 +78,14 @@ def test_handle_message_sends_main_menu_reminder_when_inactive(monkeypatch, has_
         return reminder_keyboard
 
     async def run_test():
-        monkeypatch.setattr(ch, "get_db", fake_get_db)
+        monkeypatch.setattr(handler_decorators, "get_db", fake_get_db)
         monkeypatch.setattr(
-            ch,
+            handler_decorators,
             "get_user",
             lambda db, user_id: SimpleNamespace(is_banned=False, awaiting_verification=False),
         )
-        monkeypatch.setattr(ch, "create_user", lambda db, data: data)
-        monkeypatch.setattr(ch, "update_user_last_seen", lambda db, user_id: None)
+        monkeypatch.setattr(handler_decorators, "create_user", lambda db, data: data)
+        monkeypatch.setattr(handler_decorators, "update_user_last_seen", lambda db, user_id: None)
         monkeypatch.setattr(ch, "get_main_menu_keyboard", fake_get_main_menu_keyboard)
 
         user = SimpleNamespace(id=42, full_name="Inactive User", username="inactive")
@@ -94,7 +100,10 @@ def test_handle_message_sends_main_menu_reminder_when_inactive(monkeypatch, has_
             effective_chat=effective_chat,
         )
         context = SimpleNamespace(
-            user_data={"chat_history": [{"role": "system", "content": "context"}]},
+            user_data={
+                "state": UserState.DEFAULT,
+                "chat_history": [{"role": "system", "content": "context"}],
+            },
             bot=SimpleNamespace(send_message=AsyncMock()),
         )
 
