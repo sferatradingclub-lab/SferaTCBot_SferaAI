@@ -62,6 +62,94 @@ def test_handle_message_prompts_for_text_when_missing(monkeypatch):
     asyncio.run(run_test())
 
 
+def test_chat_history_preserves_order_with_concurrent_messages(monkeypatch):
+    from handlers import common_handlers as ch
+
+    keyboard = object()
+    monkeypatch.setattr(ch, "get_chatgpt_keyboard", lambda: keyboard)
+
+    call_histories = []
+    pending_futures = []
+
+    async def fake_get_chatgpt_response(history, application):
+        call_histories.append(list(history))
+        future = asyncio.get_running_loop().create_future()
+        pending_futures.append(future)
+        return await future
+
+    monkeypatch.setattr(ch, "get_chatgpt_response", fake_get_chatgpt_response)
+
+    async def run_test():
+        context = SimpleNamespace(
+            user_data={"chat_history": ch._default_chat_history().copy()},
+            application=SimpleNamespace(),
+        )
+
+        message1 = SimpleNamespace(
+            text="Первый запрос",
+            message_id=101,
+            reply_text=AsyncMock(),
+        )
+        update1 = SimpleNamespace(
+            message=message1,
+            effective_chat=SimpleNamespace(id=1),
+        )
+
+        message2 = SimpleNamespace(
+            text="Второй запрос",
+            message_id=102,
+            reply_text=AsyncMock(),
+        )
+        update2 = SimpleNamespace(
+            message=message2,
+            effective_chat=SimpleNamespace(id=1),
+        )
+
+        task1 = asyncio.create_task(ch._handle_chatgpt_message(update1, context))
+        await asyncio.sleep(0)
+
+        assert len(pending_futures) == 1
+        assert call_histories[0] == [
+            {"role": "system", "content": ch.CHATGPT_SYSTEM_PROMPT},
+            {"role": "user", "content": "Первый запрос"},
+        ]
+
+        task2 = asyncio.create_task(ch._handle_chatgpt_message(update2, context))
+        await asyncio.sleep(0)
+
+        assert len(pending_futures) == 2
+        assert call_histories[1] == [
+            {"role": "system", "content": ch.CHATGPT_SYSTEM_PROMPT},
+            {"role": "user", "content": "Первый запрос"},
+            {"role": "user", "content": "Второй запрос"},
+        ]
+
+        pending_futures[0].set_result("Ответ на первый")
+        await asyncio.sleep(0)
+
+        pending_futures[1].set_result("Ответ на второй")
+        await asyncio.gather(task1, task2)
+
+        history = context.user_data["chat_history"]
+
+        roles = [entry["role"] for entry in history]
+        assert roles == ["system", "user", "assistant", "user", "assistant"]
+
+        assert history[1]["content"] == "Первый запрос"
+        assert history[1]["message_id"] == 101
+        assert history[2]["content"] == "Ответ на первый"
+        assert history[2]["reply_to"] == 101
+        assert history[3]["content"] == "Второй запрос"
+        assert history[3]["message_id"] == 102
+        assert history[4]["content"] == "Ответ на второй"
+        assert history[4]["reply_to"] == 102
+
+        message1.reply_text.assert_awaited_once()
+        message2.reply_text.assert_awaited_once()
+
+    asyncio.run(run_test())
+
+
 @pytest.mark.parametrize("has_message", [True, False])
 def test_handle_message_sends_main_menu_reminder_when_inactive(monkeypatch, has_message):
     from handlers import common_handlers as ch

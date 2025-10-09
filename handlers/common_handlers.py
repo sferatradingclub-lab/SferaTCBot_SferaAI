@@ -1,4 +1,4 @@
-from typing import Any, Awaitable, Callable, Dict, List, Optional
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Sequence
 
 from telegram import Update
 from telegram.error import TelegramError
@@ -47,7 +47,7 @@ def _default_chat_history() -> List[Dict[str, str]]:
     return [{"role": "system", "content": CHATGPT_SYSTEM_PROMPT}]
 
 
-def _normalize_chat_history(raw_history: Any) -> List[Dict[str, str]]:
+def _normalize_chat_history(raw_history: Any) -> List[Dict[str, Any]]:
     if not isinstance(raw_history, list):
         if raw_history is not None:
             logger.warning(
@@ -56,7 +56,7 @@ def _normalize_chat_history(raw_history: Any) -> List[Dict[str, str]]:
             )
         return _default_chat_history()
 
-    normalized_history: List[Dict[str, str]] = []
+    normalized_history: List[Dict[str, Any]] = []
 
     for entry in raw_history:
         if not isinstance(entry, dict):
@@ -67,7 +67,17 @@ def _normalize_chat_history(raw_history: Any) -> List[Dict[str, str]]:
         content = entry.get("content")
 
         if isinstance(role, str) and isinstance(content, str):
-            normalized_history.append({"role": role, "content": content})
+            normalized_entry: Dict[str, Any] = {"role": role, "content": content}
+
+            message_id = entry.get("message_id")
+            if isinstance(message_id, int):
+                normalized_entry["message_id"] = message_id
+
+            reply_to = entry.get("reply_to")
+            if isinstance(reply_to, int):
+                normalized_entry["reply_to"] = reply_to
+
+            normalized_history.append(normalized_entry)
         else:
             logger.warning("Пропускаю запись истории без корректных полей role/content: %s", entry)
 
@@ -79,6 +89,29 @@ def _normalize_chat_history(raw_history: Any) -> List[Dict[str, str]]:
         return _default_chat_history()
 
     return normalized_history
+
+
+def _trim_chat_history(history: List[Dict[str, Any]], max_length: int = 11) -> List[Dict[str, Any]]:
+    if len(history) <= max_length:
+        return history
+
+    if not history:
+        return _default_chat_history()
+
+    system_entry = history[0]
+
+    if system_entry.get("role") != "system":
+        return _default_chat_history()
+
+    tail_length = max_length - 1
+    trimmed_tail = history[-tail_length:] if tail_length > 0 else []
+
+    return [system_entry, *trimmed_tail]
+
+
+def _prepare_chat_history_for_api(history: Sequence[Dict[str, Any]]) -> List[Dict[str, str]]:
+    normalized_history = _normalize_chat_history(list(history))
+    return [{"role": entry["role"], "content": entry["content"]} for entry in normalized_history]
 
 
 def _get_user_state(context: ContextTypes.DEFAULT_TYPE) -> UserState:
@@ -420,23 +453,48 @@ async def _handle_chatgpt_message(update: Update, context: ContextTypes.DEFAULT_
         return
 
     history = _normalize_chat_history(context.user_data.get("chat_history"))
-    user_message_entry = {"role": "user", "content": str(message.text)}
+
+    user_message_entry: Dict[str, Any] = {"role": "user", "content": str(message.text)}
+    message_id = getattr(message, "message_id", None)
+    if isinstance(message_id, int):
+        user_message_entry["message_id"] = message_id
+
     updated_history = [*history, user_message_entry]
-
-    if len(updated_history) > 11:
-        trimmed_history = [updated_history[0], *updated_history[-10:]]
-    else:
-        trimmed_history = updated_history
-
+    trimmed_history = _trim_chat_history(updated_history)
     context.user_data["chat_history"] = trimmed_history
 
+    api_history = _prepare_chat_history_for_api(trimmed_history)
+
     response_text = await get_chatgpt_response(
-        trimmed_history,
+        api_history,
         context.application,
     )
 
-    if response_text and response_text.strip():
-        context.user_data["chat_history"].append({"role": "assistant", "content": response_text})
+    if isinstance(response_text, str) and response_text.strip():
+        assistant_entry: Dict[str, Any] = {"role": "assistant", "content": response_text}
+
+        if isinstance(message_id, int):
+            assistant_entry["reply_to"] = message_id
+
+        current_history = _normalize_chat_history(context.user_data.get("chat_history"))
+
+        insert_index: Optional[int] = None
+
+        if isinstance(message_id, int):
+            for index, entry in enumerate(current_history):
+                if (
+                    entry.get("role") == "user"
+                    and entry.get("message_id") == message_id
+                ):
+                    insert_index = index + 1
+                    break
+
+        if insert_index is not None:
+            current_history.insert(insert_index, assistant_entry)
+        else:
+            current_history.append(assistant_entry)
+
+        context.user_data["chat_history"] = _trim_chat_history(current_history)
         await update.message.reply_text(
             response_text,
             reply_markup=get_chatgpt_keyboard(),
