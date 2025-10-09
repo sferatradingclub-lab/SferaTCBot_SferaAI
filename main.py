@@ -3,6 +3,7 @@ import traceback
 from pprint import pformat
 
 import httpx
+from httpx import Timeout
 from telegram import Update
 from telegram.ext import (
     Application,
@@ -80,7 +81,7 @@ async def post_init(application: Application) -> None:
         if isinstance(client, httpx.AsyncClient) and not getattr(client, "is_closed", False):
             return
 
-    application.bot_data["httpx_client"] = httpx.AsyncClient(timeout=60.0)
+    application.bot_data["httpx_client"] = httpx.AsyncClient(timeout=Timeout(10.0, read=30.0))
 
 
 async def post_shutdown(application: Application) -> None:
