@@ -1,6 +1,6 @@
 from datetime import time
-from pprint import pformat
 import traceback
+from pprint import pformat
 
 import httpx
 from telegram import Update
@@ -13,7 +13,6 @@ from telegram.ext import (
     filters,
     CallbackQueryHandler,
 )
-from telegram.helpers import escape_markdown
 from fastapi import FastAPI, Request, Response
 import uvicorn
 
@@ -105,12 +104,16 @@ async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYP
     """Глобальный обработчик ошибок PTB на случай неперехваченных исключений."""
 
     error = getattr(context, "error", None)
-    if isinstance(error, Exception):
-        exc_info = (type(error), error, error.__traceback__)
-    else:
-        exc_info = True
 
-    logger.error("Неперехваченное исключение в PTB", exc_info=exc_info)
+    if isinstance(error, Exception):
+        logger.error("Неперехваченное исключение в PTB: %s", error, exc_info=True)
+        captured_error = error
+    elif error is not None:
+        logger.error("Неперехваченное исключение в PTB (неизвестный тип): %r", error)
+        captured_error = Exception(str(error))
+    else:
+        logger.error("Неперехваченное исключение в PTB без объекта ошибки")
+        captured_error = Exception("Неизвестная ошибка")
 
     if isinstance(update, Update):
         try:
@@ -122,15 +125,12 @@ async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYP
 
     update_block = _sanitize_code_block(update_repr or "None")
 
-    if isinstance(error, Exception):
-        traceback_text = "".join(
-            traceback.format_exception(type(error), error, error.__traceback__)
-        )
-    elif error is not None:
-        traceback_text = f"Неизвестный тип ошибки: {escape_markdown(str(error), version=2)}"
-    else:
-        traceback_text = "Неизвестная ошибка"
-
+    traceback_lines = traceback.format_exception(
+        type(captured_error),
+        captured_error,
+        captured_error.__traceback__,
+    )
+    traceback_text = "".join(traceback_lines)
     traceback_block = _sanitize_code_block(traceback_text or "Нет данных")
 
     admin_message = (
