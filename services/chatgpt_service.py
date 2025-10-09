@@ -92,5 +92,8 @@ async def get_chatgpt_response(
         except Exception as error:  # noqa: BLE001
             logger.error("Непредвиденная ошибка в chatgpt_service с моделью %s: %s", model, error)
 
-    logger.error("Все модели из списка не ответили. Не удалось получить ответ.")
-    return _DEFAULT_ERROR_MESSAGE
+    final_error = RuntimeError(
+        "Все модели API из списка не ответили. Не удалось получить ответ от OpenRouter."
+    )
+    logger.error(str(final_error))
+    raise final_error
