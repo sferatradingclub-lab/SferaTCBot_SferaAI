@@ -420,15 +420,18 @@ async def _handle_chatgpt_message(update: Update, context: ContextTypes.DEFAULT_
         return
 
     history = _normalize_chat_history(context.user_data.get("chat_history"))
-    history.append({"role": "user", "content": message.text})
+    user_message_entry = {"role": "user", "content": str(message.text)}
+    updated_history = [*history, user_message_entry]
 
-    if len(history) > 11:
-        history = [history[0]] + history[-10:]
+    if len(updated_history) > 11:
+        trimmed_history = [updated_history[0], *updated_history[-10:]]
+    else:
+        trimmed_history = updated_history
 
-    context.user_data["chat_history"] = history
+    context.user_data["chat_history"] = trimmed_history
 
     response_text = await get_chatgpt_response(
-        history,
+        trimmed_history,
         context.application,
     )
 
