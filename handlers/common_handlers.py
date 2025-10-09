@@ -1,4 +1,4 @@
-from typing import Awaitable, Callable, Dict, Optional
+from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 from telegram import Update
 from telegram.error import TelegramError
@@ -42,6 +42,52 @@ from .verification_handlers import (
 SupportPromptSender = Callable[[str], Awaitable[object]]
 SUPPORT_ESCALATION_PROMPT = "Опишите вашу проблему одним сообщением, и мы передадим его администратору."
 FRIENDLY_MAIN_MENU_REMINDER = "Выберите действие в меню ниже:"
+CHATGPT_SYSTEM_PROMPT = (
+    "Ты — универсальный ИИ-ассистент, созданный для помощи пользователю в самых разных задачах. "
+    "Твои главные принципы: полезность, точность и безопасность. Всегда стремись дать наиболее "
+    "полный и структурированный ответ. Если задача творческая — предлагай оригинальные идеи. "
+    "Если техническая — будь точным и приводи примеры. Общайся вежливо и нейтрально. "
+    "Категорически избегай генерации вредоносного, неэтичного или оскорбительного контента. "
+    "Не давай финансовых или медицинских советов. Твоя цель — быть лучшим инструментом для решения задач пользователя."
+)
+
+
+def _default_chat_history() -> List[Dict[str, str]]:
+    return [{"role": "system", "content": CHATGPT_SYSTEM_PROMPT}]
+
+
+def _normalize_chat_history(raw_history: Any) -> List[Dict[str, str]]:
+    if not isinstance(raw_history, list):
+        if raw_history is not None:
+            logger.warning(
+                "История чата имела некорректный тип %s. Переинициализация истории.",
+                type(raw_history),
+            )
+        return _default_chat_history()
+
+    normalized_history: List[Dict[str, str]] = []
+
+    for entry in raw_history:
+        if not isinstance(entry, dict):
+            logger.warning("Пропускаю некорректную запись истории типа %s", type(entry))
+            continue
+
+        role = entry.get("role")
+        content = entry.get("content")
+
+        if isinstance(role, str) and isinstance(content, str):
+            normalized_history.append({"role": role, "content": content})
+        else:
+            logger.warning("Пропускаю запись истории без корректных полей role/content: %s", entry)
+
+    if not normalized_history:
+        return _default_chat_history()
+
+    if normalized_history[0].get("role") != "system":
+        logger.warning("В истории отсутствует системное сообщение. Переинициализация истории.")
+        return _default_chat_history()
+
+    return normalized_history
 
 
 def _get_user_state(context: ContextTypes.DEFAULT_TYPE) -> UserState:
@@ -243,19 +289,7 @@ async def show_chatgpt_menu(
     is_new_user: bool,
 ) -> None:
     _set_user_state(context, UserState.CHATGPT_ACTIVE)
-    context.user_data["chat_history"] = [
-        {
-            "role": "system",
-            "content": (
-                "Ты — универсальный ИИ-ассистент, созданный для помощи пользователю в самых разных задачах. "
-                "Твои главные принципы: полезность, точность и безопасность. Всегда стремись дать наиболее "
-                "полный и структурированный ответ. Если задача творческая — предлагай оригинальные идеи. "
-                "Если техническая — будь точным и приводи примеры. Общайся вежливо и нейтрально. "
-                "Категорически избегай генерации вредоносного, неэтичного или оскорбительного контента. "
-                "Не давай финансовых или медицинских советов. Твоя цель — быть лучшим инструментом для решения задач пользователя."
-            ),
-        }
-    ]
+    context.user_data["chat_history"] = _default_chat_history()
 
     if update.message is None:
         return
@@ -394,23 +428,21 @@ async def _handle_chatgpt_message(update: Update, context: ContextTypes.DEFAULT_
         await stop_chatgpt_session(update, context)
         return
 
-    history = context.user_data.get("chat_history", [])
+    history = _normalize_chat_history(context.user_data.get("chat_history"))
     history.append({"role": "user", "content": message.text})
 
     if len(history) > 11:
-        context.user_data["chat_history"] = [history[0]] + history[-10:]
-    else:
-        context.user_data["chat_history"] = history
+        history = [history[0]] + history[-10:]
+
+    context.user_data["chat_history"] = history
 
     response_text = await get_chatgpt_response(
-        context.user_data["chat_history"],
+        history,
         context.application,
     )
 
     if response_text and response_text.strip():
-        context.user_data["chat_history"].append(
-            {"role": "assistant", "content": response_text}
-        )
+        context.user_data["chat_history"].append({"role": "assistant", "content": response_text})
         await update.message.reply_text(
             response_text,
             reply_markup=get_chatgpt_keyboard(),
