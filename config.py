@@ -164,6 +164,9 @@ CHATGPT_IMAGE_URL = os.getenv("CHATGPT_IMAGE_URL")
 SUPPORT_IMAGE_URL = os.getenv("SUPPORT_IMAGE_URL")
 TOOLS_IMAGE_URL = os.getenv("TOOLS_IMAGE_URL")
 
+# 1. СНАЧАЛА определяем базу знаний
+BOT_KNOWLEDGE_BASE = os.getenv("BOT_KNOWLEDGE_BASE", "Информация о функциях бота не загружена.")
+
 # --- НОВЫЕ НАСТРОЙКИ ДЛЯ ДВУХУРОВНЕВОЙ ПОДДЕРЖКИ ---
 SUPPORT_LLM_SYSTEM_PROMPT = (
     "Ты — ИИ-агент поддержки Telegram-бота SferaTC Bot. Твоя главная задача — точно и по делу помогать пользователям, основываясь на реальных функциях бота, описанных ниже. "
