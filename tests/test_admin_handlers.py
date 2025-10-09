@@ -9,9 +9,11 @@ from unittest.mock import AsyncMock, MagicMock
 os.environ.setdefault("TELEGRAM_TOKEN", "test-token")
 os.environ.setdefault("ADMIN_CHAT_ID", "123456")
 
+from handlers import admin_handlers as ah
+from handlers.states import AdminState
+
 
 def test_username_lookup_avoids_full_list(monkeypatch):
-    from handlers import admin_handlers as ah
 
     db = SimpleNamespace()
 
@@ -21,17 +23,17 @@ def test_username_lookup_avoids_full_list(monkeypatch):
 
     display_user_card = AsyncMock()
     get_user_by_username = MagicMock(return_value=SimpleNamespace(user_id=123, username="testuser"))
-    get_all_users = MagicMock(side_effect=AssertionError("get_all_users should not be called"))
+    iter_broadcast_targets = MagicMock(side_effect=AssertionError("iter_broadcast_targets should not be called"))
 
     monkeypatch.setattr(ah, "get_db", fake_get_db)
     monkeypatch.setattr(ah, "display_user_card", display_user_card)
     monkeypatch.setattr(ah, "get_user_by_username", get_user_by_username)
-    monkeypatch.setattr(ah, "get_all_users", get_all_users)
+    monkeypatch.setattr(ah, "iter_broadcast_targets", iter_broadcast_targets)
 
     update = SimpleNamespace(
         message=SimpleNamespace(text="@TestUser", reply_text=AsyncMock()),
     )
-    context = SimpleNamespace(user_data={'admin_state': 'users_awaiting_id'})
+    context = SimpleNamespace(user_data={'admin_state': AdminState.USERS_AWAITING_ID})
 
     async def run_test():
         await ah.handle_admin_message(update, context)
@@ -40,7 +42,7 @@ def test_username_lookup_avoids_full_list(monkeypatch):
 
     get_user_by_username.assert_called_once_with(db, "testuser")
     display_user_card.assert_awaited_once_with(update, context, 123)
-    assert context.user_data['admin_state'] is None
+    assert context.user_data['admin_state'] == AdminState.DEFAULT
 
 
 class _FixedDatetime(datetime):
@@ -58,7 +60,6 @@ def _make_admin_update():
 
 
 def test_show_stats_today_uses_aggregators(monkeypatch):
-    from handlers import admin_handlers as ah
 
     db = SimpleNamespace()
 
@@ -75,7 +76,6 @@ def test_show_stats_today_uses_aggregators(monkeypatch):
         "count_approved_users_on_date": MagicMock(return_value=3),
         "count_active_users_on_date": MagicMock(return_value=7),
         "count_awaiting_verification_users": MagicMock(return_value=2),
-        "get_all_users": MagicMock(side_effect=AssertionError("get_all_users should not be used")),
     }
 
     monkeypatch.setattr(ah, "get_db", fake_get_db)
@@ -101,7 +101,6 @@ def test_show_stats_today_uses_aggregators(monkeypatch):
 
 
 def test_show_stats_all_time_uses_aggregators(monkeypatch):
-    from handlers import admin_handlers as ah
 
     db = SimpleNamespace()
 
@@ -117,7 +116,6 @@ def test_show_stats_all_time_uses_aggregators(monkeypatch):
         "count_total_users": MagicMock(return_value=10),
         "count_approved_users": MagicMock(return_value=6),
         "count_awaiting_verification_users": MagicMock(return_value=1),
-        "get_all_users": MagicMock(side_effect=AssertionError("get_all_users should not be used")),
     }
 
     monkeypatch.setattr(ah, "get_db", fake_get_db)
@@ -141,7 +139,6 @@ def test_show_stats_all_time_uses_aggregators(monkeypatch):
 
 
 def test_daily_stats_job_uses_aggregators(monkeypatch):
-    from handlers import admin_handlers as ah
 
     db = SimpleNamespace()
 
@@ -154,7 +151,6 @@ def test_daily_stats_job_uses_aggregators(monkeypatch):
     mocks = {
         "count_new_users_on_date": MagicMock(return_value=4),
         "count_approved_users_on_date": MagicMock(return_value=2),
-        "get_all_users": MagicMock(side_effect=AssertionError("get_all_users should not be used")),
     }
 
     monkeypatch.setattr(ah, "get_db", fake_get_db)

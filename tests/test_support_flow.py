@@ -13,9 +13,11 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
+from handlers import admin_handlers
 from handlers import common_handlers
 from handlers import verification_handlers
-from handlers import admin_handlers
+from handlers import decorators as handler_decorators
+from handlers.states import AdminState, UserState
 
 
 class DummyDBContext:
@@ -35,12 +37,36 @@ def anyio_backend():
 async def test_support_messages_override_verification(monkeypatch):
     db_user = SimpleNamespace(awaiting_verification=True, is_banned=False, username="tester")
 
-    monkeypatch.setattr(common_handlers, "get_db", lambda: DummyDBContext())
-    monkeypatch.setattr(verification_handlers, "get_db", lambda: DummyDBContext())
-    monkeypatch.setattr(common_handlers, "get_user", lambda db, user_id: db_user)
-    monkeypatch.setattr(common_handlers, "create_user", lambda db, data: db_user)
-    monkeypatch.setattr(common_handlers, "update_user_last_seen", lambda db, user_id: None)
-    monkeypatch.setattr(verification_handlers, "get_user", lambda db, user_id: db_user)
+    monkeypatch.setattr(
+        verification_handlers,
+        "get_db",
+        lambda: DummyDBContext(),
+    )
+    monkeypatch.setattr(
+        verification_handlers,
+        "get_user",
+        lambda db, user_id: db_user,
+    )
+    monkeypatch.setattr(
+        handler_decorators,
+        "get_db",
+        lambda: DummyDBContext(),
+    )
+    monkeypatch.setattr(
+        handler_decorators,
+        "get_user",
+        lambda db, user_id: db_user,
+    )
+    monkeypatch.setattr(
+        handler_decorators,
+        "create_user",
+        lambda db, data: db_user,
+    )
+    monkeypatch.setattr(
+        handler_decorators,
+        "update_user_last_seen",
+        lambda db, user_id: None,
+    )
 
     handle_id_mock = AsyncMock()
     monkeypatch.setattr(common_handlers, "handle_id_submission", handle_id_mock)
@@ -55,7 +81,7 @@ async def test_support_messages_override_verification(monkeypatch):
 
     user = SimpleNamespace(id=111, full_name="Test User", username="tester")
     context = SimpleNamespace(
-        user_data={"state": "awaiting_support_message"},
+        user_data={"state": UserState.AWAITING_SUPPORT_MESSAGE},
         bot_data={},
         bot=SimpleNamespace(
             copy_message=AsyncMock(return_value=SimpleNamespace(message_id=555)),
@@ -72,7 +98,7 @@ async def test_support_messages_override_verification(monkeypatch):
     update = SimpleNamespace(message=first_message, effective_user=user)
     await common_handlers.handle_message(update, context)
 
-    assert context.user_data.get("state") == "awaiting_support_message"
+    assert context.user_data.get("state") == UserState.AWAITING_SUPPORT_MESSAGE
 
     second_message = SimpleNamespace(
         text="Еще вопрос",
@@ -82,7 +108,7 @@ async def test_support_messages_override_verification(monkeypatch):
     update = SimpleNamespace(message=second_message, effective_user=user)
     await common_handlers.handle_message(update, context)
 
-    assert context.user_data.get("state") == "awaiting_support_message"
+    assert context.user_data.get("state") == UserState.AWAITING_SUPPORT_MESSAGE
     assert support_calls == ["Первый вопрос", "Еще вопрос"]
     handle_id_mock.assert_not_called()
     assert context.bot.copy_message.await_count == 2
@@ -94,7 +120,7 @@ async def test_support_from_dm_button_triggers_handler(monkeypatch):
 
     context = SimpleNamespace(
         user_data={
-            "admin_state": "users_awaiting_dm",
+            "admin_state": AdminState.USERS_AWAITING_DM,
             "dm_target_user_id": 999,
         },
         bot=SimpleNamespace(send_message=AsyncMock()),
@@ -105,7 +131,7 @@ async def test_support_from_dm_button_triggers_handler(monkeypatch):
 
     await admin_handlers.handle_admin_message(update, context)
 
-    assert context.user_data.get("admin_state") is None
+    assert context.user_data.get("admin_state") == AdminState.DEFAULT
     context.bot.send_message.assert_awaited_once()
     _, kwargs = context.bot.send_message.await_args
     markup = kwargs.get("reply_markup")
@@ -125,7 +151,7 @@ async def test_support_from_dm_button_triggers_handler(monkeypatch):
 
     await verification_handlers.support_dm_handler(callback_update, support_context)
 
-    assert support_context.user_data.get("state") == "awaiting_support_message"
+    assert support_context.user_data.get("state") == UserState.AWAITING_SUPPORT_MESSAGE
     callback_query.answer.assert_awaited_once()
     callback_query.edit_message_text.assert_awaited_once()
 
@@ -136,7 +162,7 @@ async def test_admin_reply_sent_with_original_message_reference(monkeypatch):
 
     context = SimpleNamespace(
         user_data={
-            "admin_state": "users_awaiting_dm",
+            "admin_state": AdminState.USERS_AWAITING_DM,
             "dm_target_user_id": 555,
             "reply_to_message_id": 777,
         },
@@ -148,7 +174,7 @@ async def test_admin_reply_sent_with_original_message_reference(monkeypatch):
 
     await admin_handlers.handle_admin_message(update, context)
 
-    assert context.user_data.get("admin_state") is None
+    assert context.user_data.get("admin_state") == AdminState.DEFAULT
     assert "reply_to_message_id" not in context.user_data
 
     context.bot.send_message.assert_awaited_once()

@@ -1,12 +1,18 @@
+from __future__ import annotations
+
+from datetime import datetime, timedelta
 from typing import Any, Dict, Optional, Sequence, Union
 
 import httpx
 from telegram.ext import Application
 
-from config import logger, CHATGPT_BASE_URL, CHATGPT_MODELS, OPENROUTER_API_KEY
+from config import get_settings
 
+settings = get_settings()
+logger = settings.logger
 
 _DEFAULT_ERROR_MESSAGE = "Извините, сервис временно перегружен. Пожалуйста, попробуйте позже."
+HTTPX_CLIENT_KEY = "httpx_client"
 
 
 def _extract_message_content(response_data: Dict[str, Any], model: str) -> Optional[str]:
@@ -35,18 +41,16 @@ async def get_chatgpt_response(
     history: Sequence[Dict[str, Any]],
     application: Optional[Application],
 ) -> Union[str, None]:
-    """
-    Отправляет историю диалога в OpenRouter, используя список моделей с автоматическим переключением при ошибках.
-    HTTP-клиент берётся из bot_data приложения, чтобы избежать конфликтов event loop при работе через вебхуки.
-    """
-    if not OPENROUTER_API_KEY:
+    """Отправляет историю диалога в OpenRouter, переключаясь между моделями при ошибках."""
+
+    if not settings.OPENROUTER_API_KEY:
         return "Функция ИИ-чата не настроена. Обратитесь к администратору."
 
     if application is None:
         logger.error("Application контекст отсутствует при попытке обращения к OpenRouter.")
         return _DEFAULT_ERROR_MESSAGE
 
-    client: Optional[httpx.AsyncClient] = application.bot_data.get("httpx_client")
+    client: Optional[httpx.AsyncClient] = application.bot_data.get(HTTPX_CLIENT_KEY)
 
     if client is None:
         logger.error(
@@ -54,14 +58,53 @@ async def get_chatgpt_response(
         )
         return _DEFAULT_ERROR_MESSAGE
 
-    url = f"{CHATGPT_BASE_URL}/chat/completions"
+    if "circuit_breaker_state" not in application.bot_data:
+        application.bot_data["circuit_breaker_state"] = {}
+
+    breaker_state: Dict[str, Dict[str, Any]] = application.bot_data["circuit_breaker_state"]
+    available_models: list[str] = []
+
+    for configured_model in settings.CHATGPT_MODELS:
+        state = breaker_state.get(configured_model)
+        disabled_until = state.get("disabled_until") if isinstance(state, dict) else None
+
+        if disabled_until and disabled_until > datetime.now():
+            logger.warning(
+                "Модель %s временно отключена circuit breaker'ом до %s. Пропускаю.",
+                configured_model,
+                disabled_until.isoformat(),
+            )
+            continue
+
+        available_models.append(configured_model)
+
+    if not available_models:
+        logger.error("Все модели отключены circuit breaker'ом. Нет доступных моделей для запроса.")
+        raise RuntimeError("Нет доступных моделей OpenRouter из-за срабатывания circuit breaker.")
+
+    url = f"{settings.CHATGPT_BASE_URL}/chat/completions"
     headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
         "HTTP-Referer": "https://sferatc.com",
-        "X-Title": "SferaTC Bot",
+        # "X-Title" должен быть строго ASCII-строкой, иначе httpx поднимет LocalProtocolError.
+        # Используем статическое значение, чтобы исключить любые нелатинские символы
+        # (например, из названий чатов), попадающие в заголовок.
+        "X-Title": "SferaTCBot",
     }
 
-    for model in CHATGPT_MODELS:
+    unrecoverable_error_detected = False
+
+    for model in available_models:
+        if model not in breaker_state:
+            breaker_state[model] = {"failures": 0, "disabled_until": None}
+
+        model_state = breaker_state[model]
+
+        current_time = datetime.now()
+
+        if model_state.get("disabled_until") and model_state["disabled_until"] <= current_time:
+            model_state["disabled_until"] = None
+
         payload: Dict[str, Any] = {
             "model": model,
             "messages": list(history),
@@ -74,6 +117,7 @@ async def get_chatgpt_response(
             if response.status_code == 200:
                 content = _extract_message_content(response.json(), model)
                 if content:
+                    breaker_state[model] = {"failures": 0, "disabled_until": None}
                     return content
                 continue
 
@@ -81,19 +125,73 @@ async def get_chatgpt_response(
                 logger.warning("Достигнут лимит для модели %s. Переключаюсь на следующую.", model)
                 continue
 
-            logger.error(
-                "Ошибка от API OpenRouter для модели %s: Статус %s, Ответ: %s",
-                model,
-                response.status_code,
-                response.text,
-            )
-        except httpx.RequestError as error:
-            logger.error("Ошибка подключения к OpenRouter с моделью %s: %s", model, error)
+            if 400 <= response.status_code < 500:
+                if response.status_code in (401, 402):
+                    logger.critical(
+                        (
+                            "Критическая ошибка авторизации при обращении к API OpenRouter для модели %s: "
+                            "Статус %s, Ответ: %s. Проверьте валидность API-ключа и наличие средств."
+                        ),
+                        model,
+                        response.status_code,
+                        response.text,
+                    )
+                    unrecoverable_error_detected = True
+                    break
+
+                logger.warning(
+                    (
+                        "Ошибка клиента от API OpenRouter для модели %s: Статус %s, Ответ: %s. "
+                        "Пробую следующую модель."
+                    ),
+                    model,
+                    response.status_code,
+                    response.text,
+                )
+                continue
+
+            if 500 <= response.status_code < 600:
+                logger.warning(
+                    "Восстановимая ошибка сервера от API OpenRouter для модели %s: Статус %s, Ответ: %s",
+                    model,
+                    response.status_code,
+                    response.text,
+                )
+                model_state["failures"] = model_state.get("failures", 0) + 1
+            else:
+                logger.error(
+                    "Неожиданный ответ от API OpenRouter для модели %s: Статус %s, Ответ: %s",
+                    model,
+                    response.status_code,
+                    response.text,
+                )
+                model_state["failures"] = model_state.get("failures", 0) + 1
+        except (httpx.RequestError, httpx.TimeoutException) as error:
+            logger.error("Ошибка сети при обращении к OpenRouter с моделью %s: %s", model, error)
+            model_state["failures"] = model_state.get("failures", 0) + 1
         except Exception as error:  # noqa: BLE001
             logger.error("Непредвиденная ошибка в chatgpt_service с моделью %s: %s", model, error)
+            model_state["failures"] = model_state.get("failures", 0) + 1
 
-    final_error = RuntimeError(
-        "Все модели API из списка не ответили. Не удалось получить ответ от OpenRouter."
-    )
+        if model_state.get("failures", 0) >= 3:
+            disable_duration = timedelta(minutes=5)
+            model_state["disabled_until"] = datetime.now() + disable_duration
+            model_state["failures"] = 0
+            logger.warning(
+                "Circuit breaker сработал для модели %s. Модель отключена на %s минут.",
+                model,
+                disable_duration.total_seconds() / 60,
+            )
+
+    if unrecoverable_error_detected:
+        final_error_message = (
+            "Запрос к OpenRouter отклонён как некорректный. Проверьте формирование сообщений для модели."
+        )
+    else:
+        final_error_message = (
+            "Все модели API из списка не ответили. Не удалось получить ответ от OpenRouter."
+        )
+
+    final_error = RuntimeError(final_error_message)
     logger.error(str(final_error))
     raise final_error

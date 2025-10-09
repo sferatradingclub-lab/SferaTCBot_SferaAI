@@ -3,6 +3,7 @@ import traceback
 from pprint import pformat
 
 import httpx
+from httpx import Timeout
 from telegram import Update
 from telegram.ext import (
     Application,
@@ -16,24 +17,11 @@ from telegram.ext import (
 from fastapi import FastAPI, Request, Response
 import uvicorn
 
-from config import (
-    TELEGRAM_TOKEN,
-    WEBHOOK_URL,
-    WEBHOOK_PORT,
-    WEBHOOK_PATH,
-    WEBHOOK_LISTEN,
-    WEBHOOK_SECRET_TOKEN,
-    WEBHOOK_DROP_PENDING_UPDATES,
-    BOT_USERNAME,
-    logger,
-    ensure_required_settings,
-    SUPPORT_ESCALATION_CALLBACK,
-    ADMIN_CHAT_ID,
-)
+from config import get_settings
 
 # Импорты для настройки базы данных
 from models.base import Base, engine
-from models.user import User # Убедитесь, что импортируете все ваши модели
+from models.user import User  # Убедитесь, что импортируете все ваши модели
 
 # Импортируем наши обработчики
 from handlers.common_handlers import (
@@ -67,25 +55,33 @@ from handlers.verification_handlers import (
     support_dm_handler,
 )
 
-def setup_database():
+settings = get_settings()
+logger = settings.logger
+
+
+def setup_database() -> None:
     """Создает все таблицы в базе данных на основе моделей SQLAlchemy."""
     logger.info("Настройка базы данных...")
     Base.metadata.create_all(bind=engine)
     logger.info("База данных успешно настроена.")
 
+
+ASYNC_HTTPX_KEY = "httpx_client"
+
+
 async def post_init(application: Application) -> None:
     """Инициализирует HTTP-клиент OpenRouter после запуска приложения."""
-    if "httpx_client" in application.bot_data:
-        client = application.bot_data["httpx_client"]
+    if ASYNC_HTTPX_KEY in application.bot_data:
+        client = application.bot_data[ASYNC_HTTPX_KEY]
         if isinstance(client, httpx.AsyncClient) and not getattr(client, "is_closed", False):
             return
 
-    application.bot_data["httpx_client"] = httpx.AsyncClient(timeout=60.0)
+    application.bot_data[ASYNC_HTTPX_KEY] = httpx.AsyncClient(timeout=Timeout(10.0, read=30.0))
 
 
 async def post_shutdown(application: Application) -> None:
     """Корректно закрывает HTTP-клиент перед остановкой приложения."""
-    client = application.bot_data.pop("httpx_client", None)
+    client = application.bot_data.pop(ASYNC_HTTPX_KEY, None)
 
     if isinstance(client, httpx.AsyncClient) and not getattr(client, "is_closed", False):
         try:
@@ -147,7 +143,7 @@ async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYP
 
     try:
         await bot.send_message(
-            chat_id=ADMIN_CHAT_ID,
+            chat_id=settings.ADMIN_CHAT_ID,
             text=admin_message,
             parse_mode="MarkdownV2",
             disable_web_page_preview=True,
@@ -162,23 +158,15 @@ async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYP
 def main() -> Application:
     """Главная функция, которая собирает и запускает бота."""
 
-    # Сначала настраиваем базу данных
     setup_database()
 
-    # Проверяем наличие обязательных настроек перед запуском бота
-    ensure_required_settings()
-
-    # Собираем приложение и добавляем post_shutdown callback
     application = (
         ApplicationBuilder()
-        .token(TELEGRAM_TOKEN)
+        .token(settings.TELEGRAM_TOKEN)
         .post_init(post_init)
         .post_shutdown(post_shutdown)
         .build()
     )
-
-
-    # --- РЕГИСТРАЦИЯ ОБРАБОТЧИКОВ ---
 
     application.add_error_handler(global_error_handler)
 
@@ -206,7 +194,7 @@ def main() -> Application:
     application.add_handler(CallbackQueryHandler(user_actions_handler, pattern='^user_'))
     application.add_handler(CallbackQueryHandler(support_rejection_handler, pattern='^support_from_rejection$'))
     application.add_handler(CallbackQueryHandler(support_dm_handler, pattern='^support_from_dm$'))
-    application.add_handler(CallbackQueryHandler(escalate_support_to_admin, pattern=rf'^{SUPPORT_ESCALATION_CALLBACK}$'))
+    application.add_handler(CallbackQueryHandler(escalate_support_to_admin, pattern=rf'^{settings.SUPPORT_ESCALATION_CALLBACK}$'))
 
     # Кнопки главного меню (MessageHandler)
     application.add_handler(MessageHandler(filters.TEXT & filters.Regex('^Пройти бесплатное обучение$'), show_training_menu))
@@ -221,12 +209,11 @@ def main() -> Application:
 
     # Задачи
     application.job_queue.run_daily(daily_stats_job, time=time(0, 0), name="daily_stats_report")
-    
+
     return application
 
-# --- ЗАПУСК БОТА ---
-if WEBHOOK_URL:
-    # --- ЗАПУСК БОТА ЧЕРЕЗ ASGI ---
+
+if settings.WEBHOOK_URL:
     asgi_app = FastAPI()
     application = main()
 
@@ -254,10 +241,13 @@ if WEBHOOK_URL:
     async def on_startup() -> None:
         """Выполняется при старте сервера."""
         await _ensure_started()
+        webhook_base = settings.WEBHOOK_URL.rstrip("/")
+        webhook_path = settings.WEBHOOK_PATH
+        webhook_url = f"{webhook_base}/{webhook_path}" if webhook_path else f"{webhook_base}/"
         await application.bot.set_webhook(
-            url=f"{WEBHOOK_URL.rstrip('/')}/{WEBHOOK_PATH}",
-            secret_token=WEBHOOK_SECRET_TOKEN,
-            drop_pending_updates=WEBHOOK_DROP_PENDING_UPDATES,
+            url=webhook_url,
+            secret_token=settings.WEBHOOK_SECRET_TOKEN,
+            drop_pending_updates=settings.WEBHOOK_DROP_PENDING_UPDATES,
         )
 
     @asgi_app.on_event("shutdown")
@@ -265,12 +255,12 @@ if WEBHOOK_URL:
         """Выполняется при остановке сервера."""
         await _ensure_shutdown()
 
-    @asgi_app.post(f"/{WEBHOOK_PATH}")
+    @asgi_app.post(f"/{settings.WEBHOOK_PATH}")
     async def telegram(request: Request) -> Response:
         """Принимает обновления от Telegram."""
-        if WEBHOOK_SECRET_TOKEN:
+        if settings.WEBHOOK_SECRET_TOKEN:
             secret_header = request.headers.get("X-Telegram-Bot-Api-Secret-Token")
-            if secret_header != WEBHOOK_SECRET_TOKEN:
+            if secret_header != settings.WEBHOOK_SECRET_TOKEN:
                 return Response(status_code=403)
 
         try:
@@ -284,15 +274,13 @@ if WEBHOOK_URL:
             logger.error("Ошибка обработки обновления: %s", error)
             return Response(status_code=500)
 
-    # Запуск Uvicorn, если файл запущен напрямую (для локальной отладки)
     if __name__ == "__main__":
         uvicorn.run(
             asgi_app,
-            host=WEBHOOK_LISTEN,
-            port=WEBHOOK_PORT,
+            host=settings.WEBHOOK_LISTEN,
+            port=settings.WEBHOOK_PORT,
         )
 else:
-    # --- ЗАПУСК В РЕЖИМЕ POLLING ---
-    logger.info(f"Бот @{BOT_USERNAME} запускается в режиме Polling.")
+    logger.info(f"Бот @{settings.BOT_USERNAME} запускается в режиме Polling.")
     application = main()
     application.run_polling()
