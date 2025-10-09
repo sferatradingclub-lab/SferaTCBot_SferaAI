@@ -42,6 +42,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text=admin_message, parse_mode='MarkdownV2')
             except Exception as e:
                 logger.error(f"Не удалось отправить уведомление о новом пользователе админу: {e}")
+                raise
 
         if db_user and db_user.is_banned:
             return
