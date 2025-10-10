@@ -390,13 +390,14 @@ async def run_broadcast(context: ContextTypes.DEFAULT_TYPE) -> None:
 @handle_errors
 async def daily_stats_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     yesterday = (datetime.now() - timedelta(days=1)).date()
+    safe_date = escape_markdown(yesterday.strftime("%d.%m.%Y"), version=2)
     with get_db() as db:
         new_yesterday = count_new_users_on_date(db, yesterday)
         approved_yesterday = count_approved_users_on_date(db, yesterday)
     report_text = (
         "🗓️ *Отчет за {date}*\n\n➕ Новых: *{new}*\n✅ Одобрено: *{approved}*"
     ).format(
-        date=yesterday.strftime("%d.%m.%Y"),
+        date=safe_date,
         new=new_yesterday,
         approved=approved_yesterday,
     )
