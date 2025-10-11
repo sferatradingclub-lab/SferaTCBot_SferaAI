@@ -391,7 +391,17 @@ async def _handle_chatgpt_message(update: Update, context: ContextTypes.DEFAULT_
     if response_text and response_text.strip():
         # Append the assistant's response.
         context.user_data["chat_history"].append({"role": "assistant", "content": response_text})
-        await message.reply_text(response_text, reply_markup=get_chatgpt_keyboard())
+
+        max_length = 4096
+        chunks = [
+            response_text[i : i + max_length]
+            for i in range(0, len(response_text), max_length)
+        ] or [response_text]
+
+        for chunk in chunks[:-1]:
+            await message.reply_text(chunk)
+
+        await message.reply_text(chunks[-1], reply_markup=get_chatgpt_keyboard())
     else:
         # If the API fails, remove the user's last message to allow a clean retry.
         context.user_data["chat_history"].pop()
