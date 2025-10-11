@@ -16,8 +16,8 @@ class Settings:
     """Application configuration loaded from environment variables."""
 
     DEFAULT_CHATGPT_FREE_MODELS: ClassVar[List[str]] = [
-        "deepseek/deepseek-chat-v3.1:free",
-        "qwen/qwen3-8b:free",
+        "deepseek/deepseek-r1-0528-qwen3-8b:free",
+        "z-ai/glm-4.5-air:free",
     ]
 
     CHATGPT_BASE_URL: str = field(default="https://openrouter.ai/api/v1", init=False)
