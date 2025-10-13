@@ -1,4 +1,5 @@
 from datetime import time
+from zoneinfo import ZoneInfo
 import traceback
 from pprint import pformat
 
@@ -208,7 +209,11 @@ def main() -> Application:
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     # Задачи
-    application.job_queue.run_daily(daily_stats_job, time=time(0, 0), name="daily_stats_report")
+    application.job_queue.run_daily(
+        daily_stats_job,
+        time=time(0, 0, tzinfo=ZoneInfo("Europe/Moscow")),
+        name="daily_stats_report",
+    )
 
     return application
 
