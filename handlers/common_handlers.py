@@ -123,7 +123,7 @@ async def start(
             f"@{escape_markdown(user.username, version=2)}" if user.username else "Нет"
         )
         admin_message = (
-            "👋 Новый пользователь!\n\n"
+            "👋 Новый пользователь\!\n\n"
             f"Имя: {user_fullname}\nUsername: {user_username}\nID: `{user.id}`"
         )
         try:
