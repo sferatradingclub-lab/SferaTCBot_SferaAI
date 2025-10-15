@@ -266,8 +266,10 @@ async def stop_chatgpt_session(
     db_user: Optional[User],
     is_new_user: bool,
 ) -> None:
-    context.user_data.pop("chat_history", None)
+    # Просто меняем состояние. Это сигнал для цикла генерации, чтобы он остановился.
     _set_default_state(context)
+
+    context.user_data.pop("chat_history", None)
 
     if update.message is None:
         return
@@ -411,7 +413,7 @@ async def _handle_chatgpt_message(update: Update, context: ContextTypes.DEFAULT_
 
     try:
         response_stream = get_chatgpt_response(history, context.application)
-        
+
         async for chunk in response_stream:
             if _get_user_state(context) != UserState.CHATGPT_STREAMING:
                 logger.info("Стриминг был прерван пользователем.")
@@ -423,10 +425,8 @@ async def _handle_chatgpt_message(update: Update, context: ContextTypes.DEFAULT_
                 continue
 
             buffer += chunk
-            current_time = time.time()
             
-            # Проверка на переполнение ДО попытки отправки
-            if len(full_response_text + buffer) + 2 > TELEGRAM_MAX_MESSAGE_LENGTH:
+            if len(full_response_text + buffer) + 2 >= TELEGRAM_MAX_MESSAGE_LENGTH:
                 logger.warning("Сообщение достигло максимальной длины. Отправляю остаток в новом сообщении.")
                 await _edit_placeholder(full_response_text)
                 
@@ -438,8 +438,10 @@ async def _handle_chatgpt_message(update: Update, context: ContextTypes.DEFAULT_
                 
                 for i in range(0, len(remaining_text), TELEGRAM_MAX_MESSAGE_LENGTH):
                     await message.reply_text(text=remaining_text[i:i + TELEGRAM_MAX_MESSAGE_LENGTH])
+                buffer = ""  # Очищаем буфер, так как всё отправлено
                 break
             
+            current_time = time.time()
             should_update = bool(buffer) and (
                 (current_time - last_edit_time) > settings.STREAM_EDIT_INTERVAL_SECONDS
                 or len(buffer.split()) > settings.STREAM_BUFFER_SIZE_WORDS
@@ -471,8 +473,7 @@ async def _handle_chatgpt_message(update: Update, context: ContextTypes.DEFAULT_
             context.user_data["_chatgpt_streaming_sessions"] = streaming_sessions
         else:
             context.user_data.pop("_chatgpt_streaming_sessions", None)
-            if streaming_sessions < 0:
-                streaming_sessions = 0
+            streaming_sessions = 0
 
         if streaming_sessions == 0 and _get_user_state(context) == UserState.CHATGPT_STREAMING:
             _set_user_state(context, UserState.CHATGPT_ACTIVE)
@@ -594,6 +595,17 @@ async def handle_message(
         return
 
     state = _get_user_state(context)
+
+    if state is UserState.CHATGPT_STREAMING:
+        if update.message and update.message.text == "Закончить диалог":
+            await stop_chatgpt_session(update, context)
+        else:
+            wait_text = "Пожалуйста, подождите, пока я закончу отвечать на предыдущий запрос."
+            if update.message and hasattr(update.message, "reply_text"):
+                await update.message.reply_text(wait_text)
+            elif update.effective_chat:
+                await context.bot.send_message(chat_id=update.effective_chat.id, text=wait_text)
+        return
 
     if state is UserState.CHATGPT_ACTIVE:
         await _handle_chatgpt_message(update, context)
