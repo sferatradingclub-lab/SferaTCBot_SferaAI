@@ -380,6 +380,7 @@ async def _handle_chatgpt_message(update: Update, context: ContextTypes.DEFAULT_
 
     async def _edit_placeholder(text: str) -> None:
         if bot and chat_id is not None and message_id is not None:
+            # Отправляем только текст, клавиатура управляется отдельно
             await context.bot.edit_message_text(
                 text=text,
                 chat_id=chat_id,
@@ -425,28 +426,29 @@ async def _handle_chatgpt_message(update: Update, context: ContextTypes.DEFAULT_
                 continue
 
             buffer += chunk
-            
+
+            # Проактивная проверка на переполнение
             if len(full_response_text + buffer) + 2 >= TELEGRAM_MAX_MESSAGE_LENGTH:
                 logger.warning("Сообщение достигло максимальной длины. Отправляю остаток в новом сообщении.")
                 await _edit_placeholder(full_response_text)
-                
+
                 remaining_text = buffer
                 async for remaining_chunk in response_stream:
                     remaining_text += remaining_chunk
-                
+
                 full_response_text += remaining_text
-                
+
                 for i in range(0, len(remaining_text), TELEGRAM_MAX_MESSAGE_LENGTH):
                     await message.reply_text(text=remaining_text[i:i + TELEGRAM_MAX_MESSAGE_LENGTH])
-                buffer = ""  # Очищаем буфер, так как всё отправлено
+                buffer = "" # Буфер полностью обработан
                 break
-            
+
             current_time = time.time()
             should_update = bool(buffer) and (
                 (current_time - last_edit_time) > settings.STREAM_EDIT_INTERVAL_SECONDS
                 or len(buffer.split()) > settings.STREAM_BUFFER_SIZE_WORDS
             )
-            
+
             if should_update:
                 try:
                     await _edit_placeholder(f"{full_response_text}{buffer} ✍️")
@@ -459,8 +461,18 @@ async def _handle_chatgpt_message(update: Update, context: ContextTypes.DEFAULT_
         else:
             final_text = full_response_text + buffer
             if final_text:
+                if len(final_text) > TELEGRAM_MAX_MESSAGE_LENGTH:
+                    safe_text = final_text[:TELEGRAM_MAX_MESSAGE_LENGTH]
+                    await _edit_placeholder(safe_text)
+
+                    remaining_text = final_text[TELEGRAM_MAX_MESSAGE_LENGTH:]
+                    for i in range(0, len(remaining_text), TELEGRAM_MAX_MESSAGE_LENGTH):
+                        await message.reply_text(
+                            text=remaining_text[i : i + TELEGRAM_MAX_MESSAGE_LENGTH]
+                        )
+                else:
+                    await _edit_placeholder(final_text)
                 full_response_text = final_text
-                await _edit_placeholder(final_text)
 
     except Exception as error:
         stream_failed = True
@@ -473,10 +485,8 @@ async def _handle_chatgpt_message(update: Update, context: ContextTypes.DEFAULT_
             context.user_data["_chatgpt_streaming_sessions"] = streaming_sessions
         else:
             context.user_data.pop("_chatgpt_streaming_sessions", None)
-            streaming_sessions = 0
-
-        if streaming_sessions == 0 and _get_user_state(context) == UserState.CHATGPT_STREAMING:
-            _set_user_state(context, UserState.CHATGPT_ACTIVE)
+            if _get_user_state(context) == UserState.CHATGPT_STREAMING:
+                _set_user_state(context, UserState.CHATGPT_ACTIVE)
 
     if not stream_failed and full_response_text and full_response_text.strip():
         context.user_data["chat_history"].append({"role": "assistant", "content": full_response_text})
