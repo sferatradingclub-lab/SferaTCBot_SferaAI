@@ -369,24 +369,25 @@ async def _handle_chatgpt_message(update: Update, context: ContextTypes.DEFAULT_
         return
 
     placeholder_message = await message.reply_text("✍️")
-    previous_state = _get_user_state(context)
+    streaming_sessions = context.user_data.get("_chatgpt_streaming_sessions", 0) + 1
+    context.user_data["_chatgpt_streaming_sessions"] = streaming_sessions
     _set_user_state(context, UserState.CHATGPT_STREAMING)
     chat_id = getattr(placeholder_message, "chat_id", update.effective_chat.id if update.effective_chat else None)
     message_id = getattr(placeholder_message, "message_id", None)
     bot = getattr(context, "bot", None)
 
-    async def _edit_placeholder(text: str, *, reply_markup=None) -> None:
+    async def _edit_placeholder(text: str) -> None:
         if bot and chat_id is not None and message_id is not None:
             await context.bot.edit_message_text(
                 text=text,
                 chat_id=chat_id,
                 message_id=message_id,
-                reply_markup=reply_markup,
+                reply_markup=None,
             )
         elif hasattr(placeholder_message, "edit_text"):
-            await placeholder_message.edit_text(text=text, reply_markup=reply_markup)
+            await placeholder_message.edit_text(text=text, reply_markup=None)
         else:
-            await message.reply_text(text, reply_markup=reply_markup)
+            await message.reply_text(text, reply_markup=None)
 
     history = context.user_data.get("chat_history") or [
         {"role": "system", "content": CHATGPT_SYSTEM_PROMPT}
@@ -412,17 +413,38 @@ async def _handle_chatgpt_message(update: Update, context: ContextTypes.DEFAULT_
         response_stream = get_chatgpt_response(history, context.application)
         
         async for chunk in response_stream:
+            if _get_user_state(context) != UserState.CHATGPT_STREAMING:
+                logger.info("Стриминг был прерван пользователем.")
+                if full_response_text:
+                    await _edit_placeholder(full_response_text)
+                break
+
             if not chunk:
                 continue
 
             buffer += chunk
-
             current_time = time.time()
+            
+            # Проверка на переполнение ДО попытки отправки
+            if len(full_response_text + buffer) + 2 > TELEGRAM_MAX_MESSAGE_LENGTH:
+                logger.warning("Сообщение достигло максимальной длины. Отправляю остаток в новом сообщении.")
+                await _edit_placeholder(full_response_text)
+                
+                remaining_text = buffer
+                async for remaining_chunk in response_stream:
+                    remaining_text += remaining_chunk
+                
+                full_response_text += remaining_text
+                
+                for i in range(0, len(remaining_text), TELEGRAM_MAX_MESSAGE_LENGTH):
+                    await message.reply_text(text=remaining_text[i:i + TELEGRAM_MAX_MESSAGE_LENGTH])
+                break
+            
             should_update = bool(buffer) and (
                 (current_time - last_edit_time) > settings.STREAM_EDIT_INTERVAL_SECONDS
                 or len(buffer.split()) > settings.STREAM_BUFFER_SIZE_WORDS
             )
-
+            
             if should_update:
                 try:
                     await _edit_placeholder(f"{full_response_text}{buffer} ✍️")
@@ -430,34 +452,30 @@ async def _handle_chatgpt_message(update: Update, context: ContextTypes.DEFAULT_
                     buffer = ""
                     last_edit_time = current_time
                 except TelegramError as e:
-                    if "Message is too long" in str(e):
-                        logger.warning("Сообщение достигло максимальной длины. Отправляю остаток в новом сообщении.")
-                        await _edit_placeholder(full_response_text)
-                        
-                        remaining_text = buffer
-                        async for remaining_chunk in response_stream:
-                            remaining_text += remaining_chunk
-                        
-                        full_response_text += remaining_text
-                        
-                        for i in range(0, len(remaining_text), TELEGRAM_MAX_MESSAGE_LENGTH):
-                            await message.reply_text(text=remaining_text[i:i + TELEGRAM_MAX_MESSAGE_LENGTH])
-                        
-                        break
-                    
-                    elif "Message is not modified" not in str(e):
+                    if "Message is not modified" not in str(e):
                         logger.warning("Не удалось обновить потоковое сообщение ChatGPT: %s", e)
         else:
             final_text = full_response_text + buffer
-            full_response_text = final_text
-            await _edit_placeholder(final_text)
+            if final_text:
+                full_response_text = final_text
+                await _edit_placeholder(final_text)
 
     except Exception as error:
         stream_failed = True
         logger.error("Ошибка при получении ответа от ChatGPT: %s", error, exc_info=True)
-        await _edit_placeholder(failure_message)
+        if _get_user_state(context) == UserState.CHATGPT_STREAMING:
+            await _edit_placeholder(failure_message)
     finally:
-        _set_user_state(context, previous_state)
+        streaming_sessions = context.user_data.get("_chatgpt_streaming_sessions", 0) - 1
+        if streaming_sessions > 0:
+            context.user_data["_chatgpt_streaming_sessions"] = streaming_sessions
+        else:
+            context.user_data.pop("_chatgpt_streaming_sessions", None)
+            if streaming_sessions < 0:
+                streaming_sessions = 0
+
+        if streaming_sessions == 0 and _get_user_state(context) == UserState.CHATGPT_STREAMING:
+            _set_user_state(context, UserState.CHATGPT_ACTIVE)
 
     if not stream_failed and full_response_text and full_response_text.strip():
         context.user_data["chat_history"].append({"role": "assistant", "content": full_response_text})
@@ -471,7 +489,7 @@ async def _handle_support_llm_message(
     text = (message.text or "").strip() if message else ""
 
     if text.lower() == settings.SUPPORT_ESCALATION_BUTTON_TEXT.lower():
-        await _activate_manual_support(context, message.reply_text)  # type: ignore[arg-type]
+        await _activate_manual_support(context, message.reply_text)
         return
 
     if not text:
