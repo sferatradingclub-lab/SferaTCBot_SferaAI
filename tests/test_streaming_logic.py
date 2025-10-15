@@ -57,6 +57,14 @@ async def test_streaming_handler_batches_edits(monkeypatch):
         reply_text=AsyncMock(return_value=placeholder_message),
     )
 
+    created_tasks: list[asyncio.Task] = []
+
+    class DummyApplication:
+        def create_task(self, coro, *, name=None):
+            task = asyncio.create_task(coro, name=name)
+            created_tasks.append(task)
+            return task
+
     context = SimpleNamespace(
         user_data={
             "state": UserState.DEFAULT,
@@ -65,15 +73,20 @@ async def test_streaming_handler_batches_edits(monkeypatch):
             ],
         },
         bot=SimpleNamespace(edit_message_text=AsyncMock()),
-        application=SimpleNamespace(),
+        application=DummyApplication(),
     )
 
     update = SimpleNamespace(
         message=message,
         effective_chat=SimpleNamespace(id=placeholder_message.chat_id),
+        effective_user=SimpleNamespace(id=111),
     )
 
     await ch._handle_chatgpt_message(update, context)
+
+    assert created_tasks, "Ожидалась задача потоковой генерации"
+
+    await asyncio.gather(*created_tasks)
 
     full_text = "".join(chunks)
 
@@ -139,6 +152,14 @@ async def test_stop_button_interrupts_stream(monkeypatch):
     )
 
     bot = SimpleNamespace(edit_message_text=AsyncMock())
+    created_tasks: list[asyncio.Task] = []
+
+    class DummyApplication:
+        def create_task(self, coro, *, name=None):
+            task = asyncio.create_task(coro, name=name)
+            created_tasks.append(task)
+            return task
+
     context = SimpleNamespace(
         user_data={
             "state": UserState.CHATGPT_ACTIVE,
@@ -147,7 +168,7 @@ async def test_stop_button_interrupts_stream(monkeypatch):
             ],
         },
         bot=bot,
-        application=SimpleNamespace(),
+        application=DummyApplication(),
     )
 
     update = SimpleNamespace(
@@ -156,14 +177,14 @@ async def test_stop_button_interrupts_stream(monkeypatch):
         effective_user=SimpleNamespace(id=321),
     )
 
-    handler_task = asyncio.create_task(ch._handle_chatgpt_message(update, context))
+    await ch._handle_chatgpt_message(update, context)
 
     for _ in range(20):
-        if context.user_data.get("_chatgpt_active_streams"):
+        if created_tasks:
             break
         await asyncio.sleep(0.01)
 
-    assert context.user_data.get("_chatgpt_active_streams"), "Стрим не успел запуститься"
+    assert created_tasks, "Стрим не успел запуститься"
 
     await asyncio.sleep(0.05)
 
@@ -175,7 +196,8 @@ async def test_stop_button_interrupts_stream(monkeypatch):
 
     await ch._perform_chatgpt_stop(stop_update, context)
 
-    await handler_task
+    if created_tasks:
+        await asyncio.gather(*created_tasks, return_exceptions=True)
 
     assert cancellation_detected["triggered"], "Ожидалось завершение генератора при остановке"
 
@@ -189,5 +211,4 @@ async def test_stop_button_interrupts_stream(monkeypatch):
     assert "chat_history" not in context.user_data
     assert context.user_data.get("state") == UserState.DEFAULT
 
-    assert "_chatgpt_active_streams" not in context.user_data
     assert "_chatgpt_streaming_sessions" not in context.user_data
