@@ -1,28 +1,55 @@
 import asyncio
+from typing import Iterable, List
+
+import httpx
 
 
-class DummyResponse:
-    def __init__(self, status_code: int, json_data=None, text: str = ""):
+class DummyStreamResponse:
+    def __init__(self, status_code: int, lines: Iterable[str] | None = None, text: str = ""):
         self.status_code = status_code
-        self._json = json_data or {}
+        self._lines: List[str] = list(lines or [])
         self.text = text
+        self._url: str = "http://test"
 
-    def json(self):
-        return self._json
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        # Ничего не делаем при выходе из контекста.
+        return False
+
+    def set_url(self, url: str) -> None:
+        self._url = url
+
+    def raise_for_status(self) -> None:
+        if 400 <= self.status_code:
+            request = httpx.Request("POST", self._url)
+            response = httpx.Response(self.status_code, request=request, text=self.text)
+            raise httpx.HTTPStatusError("error", request=request, response=response)
+
+    async def aiter_lines(self):
+        for line in self._lines:
+            yield line
 
 
 def test_get_chatgpt_response_fallback(monkeypatch):
     from services import chatgpt_service
 
     responses = [
-        DummyResponse(status_code=500, text="Internal Server Error"),
-        DummyResponse(
+        DummyStreamResponse(status_code=500, text="Internal Server Error"),
+        DummyStreamResponse(
             status_code=200,
-            json_data={"choices": [{"message": {"content": "second model success"}}]},
+            lines=[
+                'data: {"choices": [{"delta": {"content": "second model success"}}]}',
+                "data:",
+            ],
         ),
-        DummyResponse(
+        DummyStreamResponse(
             status_code=200,
-            json_data={"choices": [{"message": {"content": "second call success"}}]},
+            lines=[
+                'data: {"choices": [{"delta": {"content": "second call success"}}]}',
+                "data:",
+            ],
         ),
     ]
     requested_models = []
@@ -34,10 +61,12 @@ def test_get_chatgpt_response_fallback(monkeypatch):
             type(self).instances_created += 1
             self.post_calls = 0
 
-        async def post(self, url, json, headers):
+        def stream(self, method, url, json, headers):
             self.post_calls += 1
             requested_models.append(json["model"])
-            return responses.pop(0)
+            response = responses.pop(0)
+            response.set_url(url)
+            return response
 
         async def aclose(self):
             pass
@@ -49,10 +78,13 @@ def test_get_chatgpt_response_fallback(monkeypatch):
     monkeypatch.setattr(chatgpt_service.settings, "CHATGPT_MODELS", ["model-a", "model-b"], raising=False)
 
     async def run_test():
-        return await chatgpt_service.get_chatgpt_response(
+        chunks: list[str] = []
+        async for chunk in chatgpt_service.get_chatgpt_response(
             [{"role": "user", "content": "hi"}],
             dummy_application,
-        )
+        ):
+            chunks.append(chunk)
+        return "".join(chunks)
 
     first_result = asyncio.run(run_test())
     second_result = asyncio.run(run_test())
@@ -68,10 +100,13 @@ def test_get_chatgpt_response_missing_choices(monkeypatch):
     from services import chatgpt_service
 
     responses = [
-        DummyResponse(status_code=200, json_data={}),
-        DummyResponse(
+        DummyStreamResponse(status_code=200, lines=["data: {}", "data:"]),
+        DummyStreamResponse(
             status_code=200,
-            json_data={"choices": [{"message": {"content": "fallback success"}}]},
+            lines=[
+                'data: {"choices": [{"delta": {"content": "fallback success"}}]}',
+                "data:",
+            ],
         ),
     ]
     requested_models = []
@@ -83,10 +118,12 @@ def test_get_chatgpt_response_missing_choices(monkeypatch):
             type(self).instances_created += 1
             self.post_calls = 0
 
-        async def post(self, url, json, headers):
+        def stream(self, method, url, json, headers):
             self.post_calls += 1
             requested_models.append(json["model"])
-            return responses.pop(0)
+            response = responses.pop(0)
+            response.set_url(url)
+            return response
 
         async def aclose(self):
             pass
@@ -98,10 +135,13 @@ def test_get_chatgpt_response_missing_choices(monkeypatch):
     monkeypatch.setattr(chatgpt_service.settings, "CHATGPT_MODELS", ["model-a", "model-b"], raising=False)
 
     async def run_test():
-        return await chatgpt_service.get_chatgpt_response(
+        chunks: list[str] = []
+        async for chunk in chatgpt_service.get_chatgpt_response(
             [{"role": "user", "content": "hi"}],
             dummy_application,
-        )
+        ):
+            chunks.append(chunk)
+        return "".join(chunks)
 
     result = asyncio.run(run_test())
 
