@@ -369,6 +369,7 @@ async def _handle_chatgpt_message(update: Update, context: ContextTypes.DEFAULT_
         return
 
     placeholder_message = await message.reply_text("✍️")
+    previous_state = _get_user_state(context)
     _set_user_state(context, UserState.CHATGPT_STREAMING)
     chat_id = getattr(placeholder_message, "chat_id", update.effective_chat.id if update.effective_chat else None)
     message_id = getattr(placeholder_message, "message_id", None)
@@ -405,53 +406,58 @@ async def _handle_chatgpt_message(update: Update, context: ContextTypes.DEFAULT_
     last_edit_time = time.time()
     stream_failed = False
     failure_message = "Мне не удалось сгенерировать ответ. Попробуйте позже."
+    TELEGRAM_MAX_MESSAGE_LENGTH = 4096
 
     try:
-        raw_response_stream = get_chatgpt_response(history, context.application)
-        response_stream = raw_response_stream
-        if not hasattr(response_stream, "__aiter__"):
-            async def _single_chunk_stream():
-                result = await raw_response_stream  # type: ignore[func-returns-value]
-                if result:
-                    yield result
-
-            response_stream = _single_chunk_stream()
-
+        response_stream = get_chatgpt_response(history, context.application)
+        
         async for chunk in response_stream:
             if not chunk:
                 continue
 
-            full_response_text += chunk
             buffer += chunk
 
+            current_time = time.time()
             should_update = bool(buffer) and (
-                (time.time() - last_edit_time) > settings.STREAM_EDIT_INTERVAL_SECONDS
+                (current_time - last_edit_time) > settings.STREAM_EDIT_INTERVAL_SECONDS
                 or len(buffer.split()) > settings.STREAM_BUFFER_SIZE_WORDS
             )
 
             if should_update:
                 try:
-                    await _edit_placeholder(f"{full_response_text} ✍️")
-                except TelegramError as error:
-                    logger.warning("Не удалось обновить потоковое сообщение ChatGPT: %s", error)
-                else:
+                    await _edit_placeholder(f"{full_response_text}{buffer} ✍️")
+                    full_response_text += buffer
                     buffer = ""
-                    last_edit_time = time.time()
-    except Exception as error:  # noqa: BLE001
+                    last_edit_time = current_time
+                except TelegramError as e:
+                    if "Message is too long" in str(e):
+                        logger.warning("Сообщение достигло максимальной длины. Отправляю остаток в новом сообщении.")
+                        await _edit_placeholder(full_response_text)
+                        
+                        remaining_text = buffer
+                        async for remaining_chunk in response_stream:
+                            remaining_text += remaining_chunk
+                        
+                        full_response_text += remaining_text
+                        
+                        for i in range(0, len(remaining_text), TELEGRAM_MAX_MESSAGE_LENGTH):
+                            await message.reply_text(text=remaining_text[i:i + TELEGRAM_MAX_MESSAGE_LENGTH])
+                        
+                        break
+                    
+                    elif "Message is not modified" not in str(e):
+                        logger.warning("Не удалось обновить потоковое сообщение ChatGPT: %s", e)
+        else:
+            final_text = full_response_text + buffer
+            full_response_text = final_text
+            await _edit_placeholder(final_text)
+
+    except Exception as error:
         stream_failed = True
-        logger.error("Ошибка при получении ответа от ChatGPT: %s", error)
-        if not full_response_text:
-            full_response_text = failure_message
+        logger.error("Ошибка при получении ответа от ChatGPT: %s", error, exc_info=True)
+        await _edit_placeholder(failure_message)
     finally:
-        if not full_response_text.strip():
-            full_response_text = failure_message
-
-        _set_user_state(context, UserState.DEFAULT)
-
-        try:
-            await _edit_placeholder(full_response_text)
-        except TelegramError as error:
-            logger.error("Не удалось отправить финальный ответ ChatGPT: %s", error)
+        _set_user_state(context, previous_state)
 
     if not stream_failed and full_response_text and full_response_text.strip():
         context.user_data["chat_history"].append({"role": "assistant", "content": full_response_text})
@@ -486,10 +492,11 @@ async def _handle_support_llm_message(
         history = [history[0]] + history[-settings.SUPPORT_LLM_HISTORY_LIMIT:]
 
     context.user_data["support_llm_history"] = history
-    response_text = await get_chatgpt_response(
-        history,
-        context.application,
-    )
+    
+    response_chunks = [
+        chunk async for chunk in get_chatgpt_response(history, context.application)
+    ]
+    response_text = "".join(response_chunks)
 
     if response_text and response_text.strip():
         history.append({"role": "assistant", "content": response_text})
