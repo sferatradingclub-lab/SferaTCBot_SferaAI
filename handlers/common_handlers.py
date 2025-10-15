@@ -447,18 +447,62 @@ async def _stream_chatgpt_response(update: Update, context: ContextTypes.DEFAULT
         chat_id = getattr(placeholder_message, "chat_id", chat_id)
         message_id = getattr(placeholder_message, "message_id", None)
 
-    async def _edit_placeholder(text: str) -> None:
-        if bot and chat_id is not None and message_id is not None:
-            await context.bot.edit_message_text(
-                text=text,
+    async def _edit_placeholder(text: str, *, show_typing: bool = False) -> None:
+        nonlocal placeholder_message, message_id, chat_id
+        display_text = text
+        if show_typing:
+            display_text = f"{text} ✍️" if text else "✍️"
+
+        target_bot = bot or getattr(context, "bot", None)
+        if target_bot and chat_id is not None and message_id is not None:
+            await target_bot.edit_message_text(
+                text=display_text,
                 chat_id=chat_id,
                 message_id=message_id,
                 reply_markup=None,
             )
         elif placeholder_message is not None and hasattr(placeholder_message, "edit_text"):
-            await placeholder_message.edit_text(text=text, reply_markup=None)
+            await placeholder_message.edit_text(text=display_text, reply_markup=None)
         else:
-            await message.reply_text(text, reply_markup=None)
+            new_message = await message.reply_text(display_text, reply_markup=None)
+            placeholder_message = new_message
+            chat_id = getattr(new_message, "chat_id", chat_id)
+            message_id = getattr(new_message, "message_id", None)
+
+    async def _send_new_placeholder() -> None:
+        nonlocal placeholder_message, message_id, chat_id
+
+        target_chat_id = chat_id or (update.effective_chat.id if update.effective_chat else None)
+        if target_chat_id is None:
+            placeholder_message = None
+            message_id = None
+            return
+
+        target_bot = bot or getattr(context, "bot", None)
+        try:
+            if target_bot is not None:
+                placeholder_message = await target_bot.send_message(chat_id=target_chat_id, text="✍️")
+            else:
+                placeholder_message = await message.reply_text("✍️")
+        except TelegramError as error:
+            logger.warning(
+                "Не удалось отправить дополнительное placeholder-сообщение для ChatGPT: %s",
+                error,
+            )
+            placeholder_message = None
+            message_id = None
+            return
+
+        chat_id = getattr(placeholder_message, "chat_id", chat_id)
+        message_id = getattr(placeholder_message, "message_id", None)
+
+    full_response_parts: list[str] = []
+    current_message_text = ""
+    buffer = ""
+    final_response_text = ""
+
+    def _get_full_response_text() -> str:
+        return "".join(full_response_parts) + current_message_text
 
     history = context.user_data.get("chat_history") or [
         {"role": "system", "content": CHATGPT_SYSTEM_PROMPT}
@@ -473,12 +517,11 @@ async def _stream_chatgpt_response(update: Update, context: ContextTypes.DEFAULT
 
     context.user_data["chat_history"] = history
 
-    full_response_text = ""
-    buffer = ""
     last_edit_time = time.time()
     stream_failed = False
     failure_message = "Мне не удалось сгенерировать ответ. Попробуйте позже."
     TELEGRAM_MAX_MESSAGE_LENGTH = 4096
+    STREAMING_MAX_MESSAGE_LENGTH = TELEGRAM_MAX_MESSAGE_LENGTH - 2
 
     response_stream: Optional[Any] = None
     cancelled_by_user = False
@@ -495,10 +538,11 @@ async def _stream_chatgpt_response(update: Update, context: ContextTypes.DEFAULT
             if _get_user_state(context) != UserState.CHATGPT_STREAMING:
                 logger.info("Стриминг был прерван досрочно.")
                 cancelled_by_user = bool(context.user_data.get("_chatgpt_cancelled_by_user"))
-                if full_response_text:
-                    await _edit_placeholder(full_response_text)
-                else:
-                    await _edit_placeholder(CHATGPT_CANCELLED_MESSAGE)
+                if buffer:
+                    buffer = ""
+                current_message_text = ""
+                with suppress(TelegramError):
+                    await _edit_placeholder(CHATGPT_CANCELLED_MESSAGE, show_typing=False)
                 if response_stream is not None:
                     with suppress(Exception):
                         await response_stream.aclose()
@@ -509,68 +553,93 @@ async def _stream_chatgpt_response(update: Update, context: ContextTypes.DEFAULT
 
             buffer += chunk
 
-            if len(full_response_text + buffer) + 2 >= TELEGRAM_MAX_MESSAGE_LENGTH:
-                logger.warning("Сообщение достигло максимальной длины. Отправляю остаток в новом сообщении.")
-                await _edit_placeholder(full_response_text)
+            while buffer:
+                available_space = TELEGRAM_MAX_MESSAGE_LENGTH - len(current_message_text)
+                if available_space <= 0:
+                    if current_message_text:
+                        with suppress(TelegramError):
+                            await _edit_placeholder(current_message_text, show_typing=False)
+                        full_response_parts.append(current_message_text)
+                        current_message_text = ""
+                    await _send_new_placeholder()
+                    last_edit_time = 0
+                    continue
 
-                remaining_text = buffer
-                async for remaining_chunk in response_stream:
-                    remaining_text += remaining_chunk
+                if (
+                    len(current_message_text) + len(buffer) > STREAMING_MAX_MESSAGE_LENGTH
+                    or len(buffer) > available_space
+                ):
+                    portion = buffer[:available_space]
+                    logger.warning(
+                        "Сообщение достигло максимальной длины. Продолжаю стрим в новом сообщении."
+                    )
+                    try:
+                        await _edit_placeholder(current_message_text + portion, show_typing=False)
+                    except TelegramError as error:
+                        if "Message is not modified" not in str(error):
+                            logger.warning(
+                                "Не удалось зафиксировать переполненное сообщение ChatGPT: %s",
+                                error,
+                            )
+                    current_message_text += portion
+                    buffer = buffer[len(portion):]
+                    if current_message_text:
+                        full_response_parts.append(current_message_text)
+                        current_message_text = ""
+                    await _send_new_placeholder()
+                    last_edit_time = 0
+                    continue
 
-                full_response_text += remaining_text
-
-                for i in range(0, len(remaining_text), TELEGRAM_MAX_MESSAGE_LENGTH):
-                    await message.reply_text(text=remaining_text[i : i + TELEGRAM_MAX_MESSAGE_LENGTH])
-                buffer = ""
                 break
 
             current_time = time.time()
             should_update = bool(buffer) and (
                 (current_time - last_edit_time) > settings.STREAM_EDIT_INTERVAL_SECONDS
                 or len(buffer.split()) > settings.STREAM_BUFFER_SIZE_WORDS
+                or (len(current_message_text) + len(buffer)) > STREAMING_MAX_MESSAGE_LENGTH
             )
 
             if should_update:
                 try:
-                    await _edit_placeholder(f"{full_response_text}{buffer} ✍️")
-                    full_response_text += buffer
+                    await _edit_placeholder(current_message_text + buffer, show_typing=True)
+                    current_message_text += buffer
                     buffer = ""
                     last_edit_time = current_time
                 except TelegramError as error:
                     if "Message is not modified" not in str(error):
                         logger.warning("Не удалось обновить потоковое сообщение ChatGPT: %s", error)
         else:
-            final_text = full_response_text + buffer
-            if final_text:
-                if len(final_text) > TELEGRAM_MAX_MESSAGE_LENGTH:
-                    safe_text = final_text[:TELEGRAM_MAX_MESSAGE_LENGTH]
-                    await _edit_placeholder(safe_text)
-
-                    remaining_text = final_text[TELEGRAM_MAX_MESSAGE_LENGTH:]
-                    for i in range(0, len(remaining_text), TELEGRAM_MAX_MESSAGE_LENGTH):
-                        await message.reply_text(text=remaining_text[i : i + TELEGRAM_MAX_MESSAGE_LENGTH])
-                else:
-                    await _edit_placeholder(final_text)
-                full_response_text = final_text
+            if buffer:
+                try:
+                    await _edit_placeholder(current_message_text + buffer, show_typing=False)
+                    current_message_text += buffer
+                    buffer = ""
+                except TelegramError as error:
+                    if "Message is not modified" not in str(error):
+                        logger.warning("Не удалось завершить потоковое сообщение ChatGPT: %s", error)
+            else:
+                if current_message_text:
+                    with suppress(TelegramError):
+                        await _edit_placeholder(current_message_text, show_typing=False)
 
     except asyncio.CancelledError:
         cancelled_by_user = True
         if response_stream is not None:
             with suppress(Exception):
                 await response_stream.aclose()
-        if full_response_text:
-            with suppress(TelegramError):
-                await _edit_placeholder(full_response_text)
-        else:
-            with suppress(TelegramError):
-                await _edit_placeholder(CHATGPT_CANCELLED_MESSAGE)
+        if buffer:
+            buffer = ""
+        current_message_text = ""
+        with suppress(TelegramError):
+            await _edit_placeholder(CHATGPT_CANCELLED_MESSAGE, show_typing=False)
         context.user_data["_chatgpt_cancelled_by_user"] = True
     except Exception as error:
         stream_failed = True
         logger.error("Ошибка при получении ответа от ChatGPT: %s", error, exc_info=True)
         if _get_user_state(context) == UserState.CHATGPT_STREAMING:
-            await _edit_placeholder(failure_message)
+            await _edit_placeholder(failure_message, show_typing=False)
     finally:
+        final_response_text = _get_full_response_text()
         cancelled_by_user = cancelled_by_user or bool(context.user_data.get("_chatgpt_cancelled_by_user"))
         streaming_sessions = context.user_data.get("_chatgpt_streaming_sessions", 0) - 1
         if streaming_sessions > 0:
@@ -585,11 +654,11 @@ async def _stream_chatgpt_response(update: Update, context: ContextTypes.DEFAULT
     if (
         not stream_failed
         and not cancelled_by_user
-        and full_response_text
-        and full_response_text.strip()
+        and final_response_text
+        and final_response_text.strip()
         and "chat_history" in context.user_data
     ):
-        context.user_data["chat_history"].append({"role": "assistant", "content": full_response_text})
+        context.user_data["chat_history"].append({"role": "assistant", "content": final_response_text})
 
 
 async def _handle_chatgpt_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
