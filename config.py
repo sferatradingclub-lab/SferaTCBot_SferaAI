@@ -43,6 +43,9 @@ class Settings:
     DISCARDED_PAID_MODELS: List[str] = field(init=False)
     OPENROUTER_API_KEY: Optional[str] = field(init=False)
 
+    STREAM_EDIT_INTERVAL_SECONDS: float = field(init=False)
+    STREAM_BUFFER_SIZE_WORDS: int = field(init=False)
+
     TRAINING_BOT_URL: str = field(
         default="https://chatgpt.com/g/g-68d9b0f1d07c8191bba533ecfb9d1689-sferatc-lessons",
         init=False,
@@ -84,6 +87,7 @@ class Settings:
         self._load_image_urls()
         self._load_tools_settings()
         self._load_support_settings()
+        self._load_streaming_settings()
         self._emit_warnings()
 
     # ------------------------------------------------------------------
@@ -222,6 +226,44 @@ class Settings:
             "Если ты не знаешь ответа на вопрос, честно скажи об этом и предложи позвать "
             "администратора, нажав на кнопку 'Позвать администратора'."
         )
+
+    def _load_streaming_settings(self) -> None:
+        default_interval = 1.5
+        raw_interval = os.getenv("STREAM_EDIT_INTERVAL_SECONDS")
+        interval_value = default_interval
+        if raw_interval is not None and raw_interval.strip():
+            try:
+                parsed_interval = float(raw_interval)
+                if parsed_interval <= 0:
+                    raise ValueError("Интервал должен быть положительным")
+            except ValueError:
+                self.logger.warning(
+                    "Некорректное значение STREAM_EDIT_INTERVAL_SECONDS='%s'. Использую %s.",
+                    raw_interval,
+                    default_interval,
+                )
+            else:
+                interval_value = parsed_interval
+
+        default_buffer_size = 20
+        raw_buffer_size = os.getenv("STREAM_BUFFER_SIZE_WORDS")
+        buffer_size_value = default_buffer_size
+        if raw_buffer_size is not None and raw_buffer_size.strip():
+            try:
+                parsed_buffer_size = int(raw_buffer_size)
+                if parsed_buffer_size <= 0:
+                    raise ValueError("Размер буфера должен быть положительным")
+            except ValueError:
+                self.logger.warning(
+                    "Некорректное значение STREAM_BUFFER_SIZE_WORDS='%s'. Использую %s.",
+                    raw_buffer_size,
+                    default_buffer_size,
+                )
+            else:
+                buffer_size_value = parsed_buffer_size
+
+        self.STREAM_EDIT_INTERVAL_SECONDS = interval_value
+        self.STREAM_BUFFER_SIZE_WORDS = buffer_size_value
 
     def _emit_warnings(self) -> None:
         if self.DISCARDED_PAID_MODELS:

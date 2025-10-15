@@ -7,6 +7,7 @@ class UserState(Enum):
     DEFAULT = auto()
 
     CHATGPT_ACTIVE = auto()
+    CHATGPT_STREAMING = auto()
 
     SUPPORT_LLM_ACTIVE = auto()
     AWAITING_SUPPORT_MESSAGE = auto()

@@ -369,6 +369,7 @@ async def _handle_chatgpt_message(update: Update, context: ContextTypes.DEFAULT_
         return
 
     placeholder_message = await message.reply_text("✍️")
+    _set_user_state(context, UserState.CHATGPT_STREAMING)
     chat_id = getattr(placeholder_message, "chat_id", update.effective_chat.id if update.effective_chat else None)
     message_id = getattr(placeholder_message, "message_id", None)
     bot = getattr(context, "bot", None)
@@ -424,7 +425,8 @@ async def _handle_chatgpt_message(update: Update, context: ContextTypes.DEFAULT_
             buffer += chunk
 
             should_update = bool(buffer) and (
-                (time.time() - last_edit_time) > 1.5 or len(buffer.split()) > 20
+                (time.time() - last_edit_time) > settings.STREAM_EDIT_INTERVAL_SECONDS
+                or len(buffer.split()) > settings.STREAM_BUFFER_SIZE_WORDS
             )
 
             if should_update:
@@ -443,6 +445,8 @@ async def _handle_chatgpt_message(update: Update, context: ContextTypes.DEFAULT_
     finally:
         if not full_response_text.strip():
             full_response_text = failure_message
+
+        _set_user_state(context, UserState.DEFAULT)
 
         try:
             await _edit_placeholder(full_response_text, reply_markup=get_chatgpt_keyboard())
