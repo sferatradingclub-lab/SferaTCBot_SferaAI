@@ -1,3 +1,5 @@
+import time
+
 from typing import Awaitable, Callable, Dict, Optional
 
 from telegram import Update
@@ -353,7 +355,6 @@ async def help_command(
 
 async def _handle_chatgpt_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     message = update.message
-    # 1. Handle non-text messages or empty message objects.
     if not message or not message.text:
         if update.effective_chat:
             await context.bot.send_message(
@@ -363,52 +364,93 @@ async def _handle_chatgpt_message(update: Update, context: ContextTypes.DEFAULT_
             )
         return
 
-    # 2. Handle the "end chat" command.
     if message.text == "Закончить диалог":
         await stop_chatgpt_session(update, context)
         return
 
-    # 3. Get history from context. It should have been initialized in `show_chatgpt_menu`.
-    history = context.user_data.get("chat_history", [])
+    placeholder_message = await message.reply_text("✍️")
+    chat_id = getattr(placeholder_message, "chat_id", update.effective_chat.id if update.effective_chat else None)
+    message_id = getattr(placeholder_message, "message_id", None)
+    bot = getattr(context, "bot", None)
 
-    # 4. Append the new user message in the correct format.
+    async def _edit_placeholder(text: str, *, reply_markup=None) -> None:
+        if bot and chat_id is not None and message_id is not None:
+            await context.bot.edit_message_text(
+                text=text,
+                chat_id=chat_id,
+                message_id=message_id,
+                reply_markup=reply_markup,
+            )
+        elif hasattr(placeholder_message, "edit_text"):
+            await placeholder_message.edit_text(text=text, reply_markup=reply_markup)
+        else:
+            await message.reply_text(text, reply_markup=reply_markup)
+
+    history = context.user_data.get("chat_history") or [
+        {"role": "system", "content": CHATGPT_SYSTEM_PROMPT}
+    ]
+    history = list(history)
     history.append({"role": "user", "content": message.text})
 
-    # 5. Apply history slicing logic correctly.
-    if len(history) > 11: # (1 system + 5 pairs of user/assistant)
-        history = [history[0]] + history[-10:]
+    if len(history) > 11:
+        system_message = history[0] if history and history[0].get("role") == "system" else None
+        recent_messages = history[-10:]
+        history = ([system_message] + recent_messages) if system_message else recent_messages
 
-    # 6. Save the updated history.
     context.user_data["chat_history"] = history
 
-    # 7. Make the API call. The payload is the history itself.
-    response_text = await get_chatgpt_response(
-        history,
-        context.application,
-    )
+    full_response_text = ""
+    buffer = ""
+    last_edit_time = time.time()
+    stream_failed = False
+    failure_message = "Мне не удалось сгенерировать ответ. Попробуйте позже."
 
-    # 8. Handle the response.
-    if response_text and response_text.strip():
-        # Append the assistant's response.
-        context.user_data["chat_history"].append({"role": "assistant", "content": response_text})
+    try:
+        raw_response_stream = get_chatgpt_response(history, context.application)
+        response_stream = raw_response_stream
+        if not hasattr(response_stream, "__aiter__"):
+            async def _single_chunk_stream():
+                result = await raw_response_stream  # type: ignore[func-returns-value]
+                if result:
+                    yield result
 
-        max_length = 4096
-        chunks = [
-            response_text[i : i + max_length]
-            for i in range(0, len(response_text), max_length)
-        ] or [response_text]
+            response_stream = _single_chunk_stream()
 
-        for chunk in chunks[:-1]:
-            await message.reply_text(chunk)
+        async for chunk in response_stream:
+            if not chunk:
+                continue
 
-        await message.reply_text(chunks[-1], reply_markup=get_chatgpt_keyboard())
-    else:
-        # If the API fails, remove the user's last message to allow a clean retry.
-        context.user_data["chat_history"].pop()
-        await message.reply_text(
-            "Мне не удалось сгенерировать ответ. Попробуйте переформулировать ваш запрос.",
-            reply_markup=get_chatgpt_keyboard()
-        )
+            full_response_text += chunk
+            buffer += chunk
+
+            should_update = bool(buffer) and (
+                (time.time() - last_edit_time) > 1.5 or len(buffer.split()) > 20
+            )
+
+            if should_update:
+                try:
+                    await _edit_placeholder(f"{full_response_text} ✍️")
+                except TelegramError as error:
+                    logger.warning("Не удалось обновить потоковое сообщение ChatGPT: %s", error)
+                else:
+                    buffer = ""
+                    last_edit_time = time.time()
+    except Exception as error:  # noqa: BLE001
+        stream_failed = True
+        logger.error("Ошибка при получении ответа от ChatGPT: %s", error)
+        if not full_response_text:
+            full_response_text = failure_message
+    finally:
+        if not full_response_text.strip():
+            full_response_text = failure_message
+
+        try:
+            await _edit_placeholder(full_response_text, reply_markup=get_chatgpt_keyboard())
+        except TelegramError as error:
+            logger.error("Не удалось отправить финальный ответ ChatGPT: %s", error)
+
+    if not stream_failed and full_response_text and full_response_text.strip():
+        context.user_data["chat_history"].append({"role": "assistant", "content": full_response_text})
 
 
 async def _handle_support_llm_message(

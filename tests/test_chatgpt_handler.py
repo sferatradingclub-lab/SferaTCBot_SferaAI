@@ -74,11 +74,14 @@ def test_chat_history_preserves_order_with_concurrent_messages(monkeypatch):
         call_histories.append(list(history))
         future = asyncio.get_running_loop().create_future()
         pending_futures.append(future)
-        return await future
+        result = await future
+        if result:
+            yield result
 
     monkeypatch.setattr(ch, "get_chatgpt_response", fake_get_chatgpt_response)
 
     async def run_test():
+        bot = SimpleNamespace(edit_message_text=AsyncMock())
         context = SimpleNamespace(
             user_data={
                 "chat_history": [
@@ -86,22 +89,25 @@ def test_chat_history_preserves_order_with_concurrent_messages(monkeypatch):
                 ]
             },
             application=SimpleNamespace(),
+            bot=bot,
         )
 
+        placeholder1 = SimpleNamespace(chat_id=1, message_id=201)
         message1 = SimpleNamespace(
             text="Первый запрос",
             message_id=101,
-            reply_text=AsyncMock(),
+            reply_text=AsyncMock(return_value=placeholder1),
         )
         update1 = SimpleNamespace(
             message=message1,
             effective_chat=SimpleNamespace(id=1),
         )
 
+        placeholder2 = SimpleNamespace(chat_id=1, message_id=202)
         message2 = SimpleNamespace(
             text="Второй запрос",
             message_id=102,
-            reply_text=AsyncMock(),
+            reply_text=AsyncMock(return_value=placeholder2),
         )
         update2 = SimpleNamespace(
             message=message2,
@@ -143,14 +149,17 @@ def test_chat_history_preserves_order_with_concurrent_messages(monkeypatch):
             {"role": "assistant", "content": "Ответ на второй"},
         ]
 
-        message1.reply_text.assert_awaited_once_with(
-            "Ответ на первый",
-            reply_markup=keyboard,
-        )
-        message2.reply_text.assert_awaited_once_with(
-            "Ответ на второй",
-            reply_markup=keyboard,
-        )
+        message1.reply_text.assert_awaited_once_with("✍️")
+        message2.reply_text.assert_awaited_once_with("✍️")
+
+        assert bot.edit_message_text.await_count == 2
+        first_call = bot.edit_message_text.await_args_list[0]
+        second_call = bot.edit_message_text.await_args_list[1]
+
+        assert first_call.kwargs["text"] == "Ответ на первый"
+        assert first_call.kwargs["reply_markup"] == keyboard
+        assert second_call.kwargs["text"] == "Ответ на второй"
+        assert second_call.kwargs["reply_markup"] == keyboard
 
     asyncio.run(run_test())
 
