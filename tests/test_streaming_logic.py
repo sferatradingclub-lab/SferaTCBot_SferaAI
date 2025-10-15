@@ -106,8 +106,8 @@ async def test_streaming_handler_batches_edits(monkeypatch):
     assert final_call.kwargs["reply_markup"] is None
 
     assert state_transitions[0] == UserState.CHATGPT_STREAMING
-    assert state_transitions[-1] == UserState.DEFAULT
-    assert context.user_data["state"] == UserState.DEFAULT
+    assert state_transitions[-1] == UserState.CHATGPT_ACTIVE
+    assert context.user_data["state"] == UserState.CHATGPT_ACTIVE
 
     history = context.user_data["chat_history"]
     assert history == [
