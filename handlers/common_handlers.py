@@ -1,7 +1,9 @@
 import asyncio
+import asyncio
 import time
 from contextlib import suppress
 
+from typing import Any, Awaitable, Callable, Dict, Optional, Set
 from typing import Any, Awaitable, Callable, Dict, Optional, Set
 
 from telegram import Update
@@ -45,6 +47,7 @@ CHATGPT_SYSTEM_PROMPT = (
     "Категорически избегай генерации вредоносного, неэтичного или оскорбительного контента. "
     "Не давай финансовых или медицинских советов. Твоя цель — быть лучшим инструментом для решения задач пользователя."
 )
+CHATGPT_CANCELLED_MESSAGE = "Ответ остановлен пользователем."
 CHATGPT_CANCELLED_MESSAGE = "Ответ остановлен пользователем."
 
 
@@ -320,6 +323,7 @@ async def stop_chatgpt_session(
     is_new_user: bool,
 ) -> None:
     await _perform_chatgpt_stop(update, context)
+    await _perform_chatgpt_stop(update, context)
 
 
 @handle_errors
@@ -461,9 +465,13 @@ async def _stream_chatgpt_response(update: Update, context: ContextTypes.DEFAULT
 
     try:
         response_stream = get_chatgpt_response(history, context.application)
+        active_streams = context.user_data.setdefault("_chatgpt_active_streams", set())
+        active_streams.add(response_stream)
 
         async for chunk in response_stream:
             if _get_user_state(context) != UserState.CHATGPT_STREAMING:
+                logger.info("Стриминг был прерван досрочно.")
+                cancelled_by_user = bool(context.user_data.get("_chatgpt_cancelled_by_user"))
                 logger.info("Стриминг был прерван досрочно.")
                 cancelled_by_user = bool(context.user_data.get("_chatgpt_cancelled_by_user"))
                 if full_response_text:
@@ -552,7 +560,16 @@ async def _stream_chatgpt_response(update: Update, context: ContextTypes.DEFAULT
                 _set_user_state(context, UserState.CHATGPT_ACTIVE)
             if cancelled_by_user:
                 context.user_data.pop("_chatgpt_cancelled_by_user", None)
+            if cancelled_by_user:
+                context.user_data.pop("_chatgpt_cancelled_by_user", None)
 
+    if (
+        not stream_failed
+        and not cancelled_by_user
+        and full_response_text
+        and full_response_text.strip()
+        and "chat_history" in context.user_data
+    ):
     if (
         not stream_failed
         and not cancelled_by_user
