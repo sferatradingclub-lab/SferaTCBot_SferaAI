@@ -99,11 +99,11 @@ async def test_streaming_handler_batches_edits(monkeypatch):
         cumulative_length = len(streamed_text)
         assert call.kwargs.get("reply_markup") in (None,)
 
-    # Финальное обновление должно содержать полный ответ без индикатора и корректную клавиатуру
+    # Финальное обновление должно содержать полный ответ без индикатора
     assert final_call.kwargs["text"] == full_text
     assert final_call.kwargs["chat_id"] == placeholder_message.chat_id
     assert final_call.kwargs["message_id"] == placeholder_message.message_id
-    assert final_call.kwargs["reply_markup"] is keyboard_sentinel
+    assert final_call.kwargs["reply_markup"] is None
 
     assert state_transitions[0] == UserState.CHATGPT_STREAMING
     assert state_transitions[-1] == UserState.DEFAULT

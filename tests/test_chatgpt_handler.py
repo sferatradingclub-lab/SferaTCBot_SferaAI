@@ -157,9 +157,9 @@ def test_chat_history_preserves_order_with_concurrent_messages(monkeypatch):
         second_call = bot.edit_message_text.await_args_list[1]
 
         assert first_call.kwargs["text"] == "Ответ на первый"
-        assert first_call.kwargs["reply_markup"] == keyboard
+        assert first_call.kwargs["reply_markup"] is None
         assert second_call.kwargs["text"] == "Ответ на второй"
-        assert second_call.kwargs["reply_markup"] == keyboard
+        assert second_call.kwargs["reply_markup"] is None
 
     asyncio.run(run_test())
 

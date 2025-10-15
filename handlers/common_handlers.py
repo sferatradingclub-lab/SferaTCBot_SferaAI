@@ -449,7 +449,7 @@ async def _handle_chatgpt_message(update: Update, context: ContextTypes.DEFAULT_
         _set_user_state(context, UserState.DEFAULT)
 
         try:
-            await _edit_placeholder(full_response_text, reply_markup=get_chatgpt_keyboard())
+            await _edit_placeholder(full_response_text)
         except TelegramError as error:
             logger.error("Не удалось отправить финальный ответ ChatGPT: %s", error)
 
