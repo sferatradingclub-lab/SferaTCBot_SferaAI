@@ -1,9 +1,7 @@
 import asyncio
-import asyncio
 import time
 from contextlib import suppress
 
-from typing import Any, Awaitable, Callable, Dict, Optional, Set
 from typing import Any, Awaitable, Callable, Dict, Optional, Set
 
 from telegram import Update
@@ -47,7 +45,6 @@ CHATGPT_SYSTEM_PROMPT = (
     "Категорически избегай генерации вредоносного, неэтичного или оскорбительного контента. "
     "Не давай финансовых или медицинских советов. Твоя цель — быть лучшим инструментом для решения задач пользователя."
 )
-CHATGPT_CANCELLED_MESSAGE = "Ответ остановлен пользователем."
 CHATGPT_CANCELLED_MESSAGE = "Ответ остановлен пользователем."
 
 
@@ -114,19 +111,37 @@ def _set_default_state(context: ContextTypes.DEFAULT_TYPE) -> None:
     _set_user_state(context, UserState.DEFAULT)
 
 
+def _get_chatgpt_task_registry(context: ContextTypes.DEFAULT_TYPE) -> Optional[Dict[int, Set[asyncio.Task[Any]]]]:
+    application = getattr(context, "application", None)
+    if application is None:
+        return None
+
+    registry = getattr(application, "_chatgpt_streaming_tasks", None)
+    if registry is None:
+        registry = {}
+        setattr(application, "_chatgpt_streaming_tasks", registry)
+
+    return registry
+
+
 def _register_chatgpt_streaming_task(
     context: ContextTypes.DEFAULT_TYPE,
+    user_id: Optional[int],
     task: asyncio.Task[Any],
 ) -> None:
-    active_tasks: Set[asyncio.Task[Any]] = context.user_data.setdefault(
-        "_chatgpt_streaming_tasks",
-        set(),
-    )
+    if user_id is None:
+        return
+
+    registry = _get_chatgpt_task_registry(context)
+    if registry is None:
+        return
+
+    active_tasks = registry.setdefault(user_id, set())
 
     def _cleanup(done_task: asyncio.Task[Any]) -> None:
         active_tasks.discard(done_task)
         if not active_tasks:
-            context.user_data.pop("_chatgpt_streaming_tasks", None)
+            registry.pop(user_id, None)
 
     active_tasks.add(task)
     task.add_done_callback(lambda finished: _cleanup(finished))
@@ -134,13 +149,18 @@ def _register_chatgpt_streaming_task(
 
 async def _cancel_active_chatgpt_tasks(
     context: ContextTypes.DEFAULT_TYPE,
+    user_id: Optional[int],
     *,
     exclude: Optional[asyncio.Task[Any]] = None,
 ) -> bool:
-    active_tasks: Optional[Set[asyncio.Task[Any]]] = context.user_data.get(
-        "_chatgpt_streaming_tasks"
-    )
+    if user_id is None:
+        return False
 
+    registry = _get_chatgpt_task_registry(context)
+    if not registry:
+        return False
+
+    active_tasks = registry.get(user_id)
     if not active_tasks:
         return False
 
@@ -159,7 +179,11 @@ async def _cancel_active_chatgpt_tasks(
         await asyncio.gather(*to_cancel, return_exceptions=True)
 
     if not active_tasks:
-        context.user_data.pop("_chatgpt_streaming_tasks", None)
+        registry.pop(user_id, None)
+        if not registry:
+            application = getattr(context, "application", None)
+            if application and hasattr(application, "_chatgpt_streaming_tasks"):
+                delattr(application, "_chatgpt_streaming_tasks")
 
     return bool(to_cancel)
 
@@ -323,7 +347,6 @@ async def stop_chatgpt_session(
     is_new_user: bool,
 ) -> None:
     await _perform_chatgpt_stop(update, context)
-    await _perform_chatgpt_stop(update, context)
 
 
 @handle_errors
@@ -472,8 +495,6 @@ async def _stream_chatgpt_response(update: Update, context: ContextTypes.DEFAULT
             if _get_user_state(context) != UserState.CHATGPT_STREAMING:
                 logger.info("Стриминг был прерван досрочно.")
                 cancelled_by_user = bool(context.user_data.get("_chatgpt_cancelled_by_user"))
-                logger.info("Стриминг был прерван досрочно.")
-                cancelled_by_user = bool(context.user_data.get("_chatgpt_cancelled_by_user"))
                 if full_response_text:
                     await _edit_placeholder(full_response_text)
                 else:
@@ -560,16 +581,7 @@ async def _stream_chatgpt_response(update: Update, context: ContextTypes.DEFAULT
                 _set_user_state(context, UserState.CHATGPT_ACTIVE)
             if cancelled_by_user:
                 context.user_data.pop("_chatgpt_cancelled_by_user", None)
-            if cancelled_by_user:
-                context.user_data.pop("_chatgpt_cancelled_by_user", None)
 
-    if (
-        not stream_failed
-        and not cancelled_by_user
-        and full_response_text
-        and full_response_text.strip()
-        and "chat_history" in context.user_data
-    ):
     if (
         not stream_failed
         and not cancelled_by_user
@@ -602,12 +614,13 @@ async def _handle_chatgpt_message(update: Update, context: ContextTypes.DEFAULT_
     _set_user_state(context, UserState.CHATGPT_STREAMING)
     context.user_data.pop("_chatgpt_cancelled_by_user", None)
 
+    user = getattr(update, "effective_user", None)
     task = context.application.create_task(
         _stream_chatgpt_response(update, context),
         name=f"chatgpt-stream-{getattr(message, 'message_id', 'unknown')}",
     )
 
-    _register_chatgpt_streaming_task(context, task)
+    _register_chatgpt_streaming_task(context, getattr(user, "id", None), task)
 
 
 async def _handle_support_llm_message(
@@ -763,7 +776,9 @@ async def _perform_chatgpt_stop(update: Update, context: ContextTypes.DEFAULT_TY
     context.user_data["_chatgpt_cancelled_by_user"] = True
 
     current_task = asyncio.current_task()
-    await _cancel_active_chatgpt_tasks(context, exclude=current_task)
+    user = getattr(update, "effective_user", None)
+    user_id = getattr(user, "id", None)
+    await _cancel_active_chatgpt_tasks(context, user_id, exclude=current_task)
 
     _set_default_state(context)
 
