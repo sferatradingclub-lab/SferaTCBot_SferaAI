@@ -79,6 +79,7 @@ async def test_streaming_handler_batches_edits(monkeypatch):
     update = SimpleNamespace(
         message=message,
         effective_chat=SimpleNamespace(id=placeholder_message.chat_id),
+        effective_user=SimpleNamespace(id=111),
     )
 
     await ch._handle_chatgpt_message(update, context)

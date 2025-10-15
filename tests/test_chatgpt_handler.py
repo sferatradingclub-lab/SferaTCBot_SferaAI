@@ -82,13 +82,22 @@ def test_chat_history_preserves_order_with_concurrent_messages(monkeypatch):
 
     async def run_test():
         bot = SimpleNamespace(edit_message_text=AsyncMock())
+        class DummyApplication:
+            def __init__(self):
+                self._tasks: list[asyncio.Task] = []
+
+            def create_task(self, coro, *, name=None):
+                task = asyncio.create_task(coro, name=name)
+                self._tasks.append(task)
+                return task
+
         context = SimpleNamespace(
             user_data={
                 "chat_history": [
                     {"role": "system", "content": ch.CHATGPT_SYSTEM_PROMPT}
                 ]
             },
-            application=SimpleNamespace(),
+            application=DummyApplication(),
             bot=bot,
         )
 
@@ -101,6 +110,7 @@ def test_chat_history_preserves_order_with_concurrent_messages(monkeypatch):
         update1 = SimpleNamespace(
             message=message1,
             effective_chat=SimpleNamespace(id=1),
+            effective_user=SimpleNamespace(id=555),
         )
 
         placeholder2 = SimpleNamespace(chat_id=1, message_id=202)
@@ -112,10 +122,15 @@ def test_chat_history_preserves_order_with_concurrent_messages(monkeypatch):
         update2 = SimpleNamespace(
             message=message2,
             effective_chat=SimpleNamespace(id=1),
+            effective_user=SimpleNamespace(id=555),
         )
 
         task1 = asyncio.create_task(ch._handle_chatgpt_message(update1, context))
-        await asyncio.sleep(0)
+
+        for _ in range(20):
+            if pending_futures:
+                break
+            await asyncio.sleep(0.01)
 
         assert len(pending_futures) == 1
         assert call_histories[0] == [
@@ -124,7 +139,11 @@ def test_chat_history_preserves_order_with_concurrent_messages(monkeypatch):
         ]
 
         task2 = asyncio.create_task(ch._handle_chatgpt_message(update2, context))
-        await asyncio.sleep(0)
+
+        for _ in range(20):
+            if len(pending_futures) >= 2:
+                break
+            await asyncio.sleep(0.01)
 
         assert len(pending_futures) == 2
         assert call_histories[1] == [
