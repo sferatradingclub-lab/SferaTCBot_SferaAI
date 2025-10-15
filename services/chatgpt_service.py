@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from typing import Any, Dict, Optional, Sequence, Union
+from typing import Any, AsyncGenerator, Dict, Optional, Sequence
+
+import json
 
 import httpx
 from telegram.ext import Application
@@ -15,40 +17,20 @@ _DEFAULT_ERROR_MESSAGE = "Извините, сервис временно пер
 HTTPX_CLIENT_KEY = "httpx_client"
 
 
-def _extract_message_content(response_data: Dict[str, Any], model: str) -> Optional[str]:
-    choices = response_data.get("choices") if isinstance(response_data, dict) else None
-
-    if not isinstance(choices, list) or not choices:
-        logger.error(
-            "Ответ от модели %s не содержит массива choices или он пуст: %s",
-            model,
-            response_data,
-        )
-        return None
-
-    try:
-        return choices[0]["message"]["content"]
-    except (KeyError, IndexError) as error:
-        logger.error(
-            "Ответ от модели %s не содержит ожидаемых ключей message/content: %s",
-            model,
-            error,
-        )
-        return None
-
-
 async def get_chatgpt_response(
     history: Sequence[Dict[str, Any]],
     application: Optional[Application],
-) -> Union[str, None]:
+) -> AsyncGenerator[str, None]:
     """Отправляет историю диалога в OpenRouter, переключаясь между моделями при ошибках."""
 
     if not settings.OPENROUTER_API_KEY:
-        return "Функция ИИ-чата не настроена. Обратитесь к администратору."
+        yield "Функция ИИ-чата не настроена. Обратитесь к администратору."
+        return
 
     if application is None:
         logger.error("Application контекст отсутствует при попытке обращения к OpenRouter.")
-        return _DEFAULT_ERROR_MESSAGE
+        yield _DEFAULT_ERROR_MESSAGE
+        return
 
     client: Optional[httpx.AsyncClient] = application.bot_data.get(HTTPX_CLIENT_KEY)
 
@@ -56,7 +38,8 @@ async def get_chatgpt_response(
         logger.error(
             "HTTPX-клиент не найден в bot_data. Убедитесь, что он был инициализирован в post_init приложения."
         )
-        return _DEFAULT_ERROR_MESSAGE
+        yield _DEFAULT_ERROR_MESSAGE
+        return
 
     if "circuit_breaker_state" not in application.bot_data:
         application.bot_data["circuit_breaker_state"] = {}
@@ -108,62 +91,123 @@ async def get_chatgpt_response(
         payload: Dict[str, Any] = {
             "model": model,
             "messages": list(history),
+            "stream": True,
         }
 
         try:
             logger.info("Пытаюсь использовать модель: %s", model)
-            response = await client.post(url, json=payload, headers=headers)
+            async with client.stream("POST", url, json=payload, headers=headers) as response:
+                try:
+                    response.raise_for_status()
+                except httpx.HTTPStatusError:
+                    status_code = response.status_code
 
-            if response.status_code == 200:
-                content = _extract_message_content(response.json(), model)
-                if content:
-                    breaker_state[model] = {"failures": 0, "disabled_until": None}
-                    return content
-                continue
+                    if status_code == 429:
+                        logger.warning(
+                            "Достигнут лимит для модели %s. Переключаюсь на следующую.",
+                            model,
+                        )
+                        continue
 
-            if response.status_code == 429:
-                logger.warning("Достигнут лимит для модели %s. Переключаюсь на следующую.", model)
-                continue
+                    if 400 <= status_code < 500:
+                        if status_code in (401, 402):
+                            logger.critical(
+                                (
+                                    "Критическая ошибка авторизации при обращении к API OpenRouter для модели %s: "
+                                    "Статус %s, Ответ: %s. Проверьте валидность API-ключа и наличие средств."
+                                ),
+                                model,
+                                status_code,
+                                response.text,
+                            )
+                            unrecoverable_error_detected = True
+                            break
 
-            if 400 <= response.status_code < 500:
-                if response.status_code in (401, 402):
-                    logger.critical(
-                        (
-                            "Критическая ошибка авторизации при обращении к API OpenRouter для модели %s: "
-                            "Статус %s, Ответ: %s. Проверьте валидность API-ключа и наличие средств."
-                        ),
+                        logger.warning(
+                            (
+                                "Ошибка клиента от API OpenRouter для модели %s: Статус %s, Ответ: %s. "
+                                "Пробую следующую модель."
+                            ),
+                            model,
+                            status_code,
+                            response.text,
+                        )
+                        continue
+
+                    if 500 <= status_code < 600:
+                        logger.warning(
+                            "Восстановимая ошибка сервера от API OpenRouter для модели %s: Статус %s, Ответ: %s",
+                            model,
+                            status_code,
+                            response.text,
+                        )
+                        model_state["failures"] = model_state.get("failures", 0) + 1
+                        continue
+
+                    logger.error(
+                        "Неожиданный ответ от API OpenRouter для модели %s: Статус %s, Ответ: %s",
                         model,
-                        response.status_code,
+                        status_code,
                         response.text,
                     )
-                    unrecoverable_error_detected = True
-                    break
+                    model_state["failures"] = model_state.get("failures", 0) + 1
+                    continue
+
+                received_any_chunk = False
+
+                async for line in response.aiter_lines():
+                    if not line:
+                        continue
+
+                    if line.startswith(":"):
+                        # Комментарии SSE начинаются с двоеточия. Пропускаем такие строки.
+                        continue
+
+                    if not line.startswith("data:"):
+                        continue
+
+                    data_payload = line[len("data:") :].strip()
+
+                    if not data_payload or data_payload == "[DONE]":
+                        # Пустая строка или специальный маркер [DONE] сигнализируют об окончании потока.
+                        break
+
+                    try:
+                        event_data = json.loads(data_payload)
+                    except json.JSONDecodeError as error:
+                        logger.error(
+                            "Не удалось распарсить SSE-данные от модели %s: %s. Ошибка: %s",
+                            model,
+                            data_payload,
+                            error,
+                        )
+                        continue
+
+                    choices = event_data.get("choices")
+                    if not isinstance(choices, list):
+                        continue
+
+                    for choice in choices:
+                        delta = choice.get("delta") if isinstance(choice, dict) else None
+                        if not isinstance(delta, dict):
+                            continue
+
+                        content_fragment = delta.get("content")
+                        if not content_fragment:
+                            continue
+
+                        if not received_any_chunk:
+                            breaker_state[model] = {"failures": 0, "disabled_until": None}
+                        received_any_chunk = True
+                        yield content_fragment
+
+                if received_any_chunk:
+                    # Ответ успешно получен, прекращаем переключение между моделями.
+                    return
 
                 logger.warning(
-                    (
-                        "Ошибка клиента от API OpenRouter для модели %s: Статус %s, Ответ: %s. "
-                        "Пробую следующую модель."
-                    ),
+                    "Модель %s завершила поток без текстовых фрагментов. Пробую следующую.",
                     model,
-                    response.status_code,
-                    response.text,
-                )
-                continue
-
-            if 500 <= response.status_code < 600:
-                logger.warning(
-                    "Восстановимая ошибка сервера от API OpenRouter для модели %s: Статус %s, Ответ: %s",
-                    model,
-                    response.status_code,
-                    response.text,
-                )
-                model_state["failures"] = model_state.get("failures", 0) + 1
-            else:
-                logger.error(
-                    "Неожиданный ответ от API OpenRouter для модели %s: Статус %s, Ответ: %s",
-                    model,
-                    response.status_code,
-                    response.text,
                 )
                 model_state["failures"] = model_state.get("failures", 0) + 1
         except (httpx.RequestError, httpx.TimeoutException) as error:
