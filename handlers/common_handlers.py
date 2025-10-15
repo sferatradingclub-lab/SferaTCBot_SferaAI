@@ -5,7 +5,7 @@ from contextlib import suppress
 from typing import Any, Awaitable, Callable, Dict, Optional, Set
 
 from telegram import Update
-from telegram.error import TelegramError
+from telegram.error import RetryAfter, TelegramError
 from telegram.ext import ContextTypes
 from telegram.helpers import escape_markdown
 
@@ -517,6 +517,12 @@ async def _stream_chatgpt_response(update: Update, context: ContextTypes.DEFAULT
 
     context.user_data["chat_history"] = history
 
+    def _count_words(text: str) -> int:
+        stripped = text.strip()
+        if not stripped:
+            return 0
+        return len([word for word in stripped.split() if word])
+
     last_edit_time = time.time()
     stream_failed = False
     failure_message = "Мне не удалось сгенерировать ответ. Попробуйте позже."
@@ -525,6 +531,8 @@ async def _stream_chatgpt_response(update: Update, context: ContextTypes.DEFAULT
 
     response_stream: Optional[Any] = None
     cancelled_by_user = False
+
+    buffer_word_count = 0
 
     streaming_sessions = context.user_data.get("_chatgpt_streaming_sessions", 0) + 1
     context.user_data["_chatgpt_streaming_sessions"] = streaming_sessions
@@ -552,6 +560,7 @@ async def _stream_chatgpt_response(update: Update, context: ContextTypes.DEFAULT
                 continue
 
             buffer += chunk
+            buffer_word_count = _count_words(buffer)
 
             while buffer:
                 available_space = TELEGRAM_MAX_MESSAGE_LENGTH - len(current_message_text)
@@ -562,7 +571,7 @@ async def _stream_chatgpt_response(update: Update, context: ContextTypes.DEFAULT
                         full_response_parts.append(current_message_text)
                         current_message_text = ""
                     await _send_new_placeholder()
-                    last_edit_time = 0
+                    last_edit_time = time.time() - settings.STREAM_EDIT_INTERVAL_SECONDS
                     continue
 
                 if (
@@ -583,20 +592,29 @@ async def _stream_chatgpt_response(update: Update, context: ContextTypes.DEFAULT
                             )
                     current_message_text += portion
                     buffer = buffer[len(portion):]
+                    buffer_word_count = _count_words(buffer)
                     if current_message_text:
                         full_response_parts.append(current_message_text)
                         current_message_text = ""
                     await _send_new_placeholder()
-                    last_edit_time = 0
+                    last_edit_time = time.time() - settings.STREAM_EDIT_INTERVAL_SECONDS
                     continue
 
                 break
 
             current_time = time.time()
+            has_time_budget = (
+                current_time - last_edit_time
+            ) >= settings.STREAM_EDIT_INTERVAL_SECONDS
+            reached_word_threshold = (
+                buffer_word_count >= settings.STREAM_BUFFER_SIZE_WORDS
+            )
+            near_length_limit = (
+                len(current_message_text) + len(buffer)
+            ) > STREAMING_MAX_MESSAGE_LENGTH
+
             should_update = bool(buffer) and (
-                (current_time - last_edit_time) > settings.STREAM_EDIT_INTERVAL_SECONDS
-                or len(buffer.split()) > settings.STREAM_BUFFER_SIZE_WORDS
-                or (len(current_message_text) + len(buffer)) > STREAMING_MAX_MESSAGE_LENGTH
+                near_length_limit or reached_word_threshold or has_time_budget
             )
 
             if should_update:
@@ -604,16 +622,36 @@ async def _stream_chatgpt_response(update: Update, context: ContextTypes.DEFAULT
                     await _edit_placeholder(current_message_text + buffer, show_typing=True)
                     current_message_text += buffer
                     buffer = ""
-                    last_edit_time = current_time
+                    buffer_word_count = 0
+                    last_edit_time = time.time()
                 except TelegramError as error:
-                    if "Message is not modified" not in str(error):
-                        logger.warning("Не удалось обновить потоковое сообщение ChatGPT: %s", error)
+                    error_message = str(error)
+                    if "Message is not modified" in error_message:
+                        continue
+
+                    if isinstance(error, RetryAfter):
+                        retry_delay = max(
+                            float(getattr(error, "retry_after", 0)),
+                            settings.STREAM_EDIT_INTERVAL_SECONDS,
+                        )
+                        logger.warning(
+                            "Получен сигнал flood control (RetryAfter=%s). Пауза перед повтором.",
+                            getattr(error, "retry_after", None),
+                        )
+                        await asyncio.sleep(retry_delay)
+                        last_edit_time = time.time()
+                    else:
+                        logger.warning(
+                            "Не удалось обновить потоковое сообщение ChatGPT: %s", error
+                        )
+                        last_edit_time = time.time()
         else:
             if buffer:
                 try:
                     await _edit_placeholder(current_message_text + buffer, show_typing=False)
                     current_message_text += buffer
                     buffer = ""
+                    buffer_word_count = 0
                 except TelegramError as error:
                     if "Message is not modified" not in str(error):
                         logger.warning("Не удалось завершить потоковое сообщение ChatGPT: %s", error)
