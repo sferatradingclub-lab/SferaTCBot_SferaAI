@@ -1,6 +1,7 @@
+import asyncio
 import time
 
-from typing import Awaitable, Callable, Dict, Optional
+from typing import Any, Awaitable, Callable, Dict, Optional, Set
 
 from telegram import Update
 from telegram.error import TelegramError
@@ -43,6 +44,7 @@ CHATGPT_SYSTEM_PROMPT = (
     "Категорически избегай генерации вредоносного, неэтичного или оскорбительного контента. "
     "Не давай финансовых или медицинских советов. Твоя цель — быть лучшим инструментом для решения задач пользователя."
 )
+CHATGPT_CANCELLED_MESSAGE = "Ответ остановлен пользователем."
 
 
 def _get_user_state(context: ContextTypes.DEFAULT_TYPE) -> UserState:
@@ -266,18 +268,7 @@ async def stop_chatgpt_session(
     db_user: Optional[User],
     is_new_user: bool,
 ) -> None:
-    # Просто меняем состояние. Это сигнал для цикла генерации, чтобы он остановился.
-    _set_default_state(context)
-
-    context.user_data.pop("chat_history", None)
-
-    if update.message is None:
-        return
-
-    await update.message.reply_text(
-        "Диалог завершен. Вы вернулись в главное меню.",
-        reply_markup=get_main_menu_keyboard(update.effective_user.id),
-    )
+    await _perform_chatgpt_stop(update, context)
 
 
 @handle_errors
@@ -374,6 +365,10 @@ async def _handle_chatgpt_message(update: Update, context: ContextTypes.DEFAULT_
     streaming_sessions = context.user_data.get("_chatgpt_streaming_sessions", 0) + 1
     context.user_data["_chatgpt_streaming_sessions"] = streaming_sessions
     _set_user_state(context, UserState.CHATGPT_STREAMING)
+    current_task = asyncio.current_task()
+    if current_task is not None:
+        active_tasks: Set[Any] = context.user_data.setdefault("_chatgpt_streaming_tasks", set())
+        active_tasks.add(current_task)
     chat_id = getattr(placeholder_message, "chat_id", update.effective_chat.id if update.effective_chat else None)
     message_id = getattr(placeholder_message, "message_id", None)
     bot = getattr(context, "bot", None)
@@ -412,14 +407,32 @@ async def _handle_chatgpt_message(update: Update, context: ContextTypes.DEFAULT_
     failure_message = "Мне не удалось сгенерировать ответ. Попробуйте позже."
     TELEGRAM_MAX_MESSAGE_LENGTH = 4096
 
+    response_stream: Optional[Any] = None
+    cancelled_by_user = False
+
     try:
         response_stream = get_chatgpt_response(history, context.application)
+        active_streams = context.user_data.setdefault("_chatgpt_active_streams", set())
+        active_streams.add(response_stream)
 
         async for chunk in response_stream:
             if _get_user_state(context) != UserState.CHATGPT_STREAMING:
-                logger.info("Стриминг был прерван пользователем.")
+                logger.info("Стриминг был прерван досрочно.")
+                cancelled_by_user = bool(context.user_data.get("_chatgpt_cancelled_by_user"))
                 if full_response_text:
                     await _edit_placeholder(full_response_text)
+                else:
+                    await _edit_placeholder(CHATGPT_CANCELLED_MESSAGE)
+                try:
+                    await response_stream.aclose()
+                except RuntimeError:
+                    # Поток ещё исполняется – закроется в блоке finally.
+                    pass
+                except Exception as close_error:  # pragma: no cover - логирование для диагностики
+                    logger.warning(
+                        "Не удалось завершить поток ChatGPT при остановке пользователем: %s",
+                        close_error,
+                    )
                 break
 
             if not chunk:
@@ -480,6 +493,18 @@ async def _handle_chatgpt_message(update: Update, context: ContextTypes.DEFAULT_
         if _get_user_state(context) == UserState.CHATGPT_STREAMING:
             await _edit_placeholder(failure_message)
     finally:
+        cancelled_by_user = cancelled_by_user or bool(context.user_data.get("_chatgpt_cancelled_by_user"))
+        active_streams = context.user_data.get("_chatgpt_active_streams")
+        if active_streams and response_stream is not None:
+            active_streams.discard(response_stream)
+            if not active_streams:
+                context.user_data.pop("_chatgpt_active_streams", None)
+        if current_task is not None:
+            active_tasks = context.user_data.get("_chatgpt_streaming_tasks")
+            if active_tasks:
+                active_tasks.discard(current_task)
+                if not active_tasks:
+                    context.user_data.pop("_chatgpt_streaming_tasks", None)
         streaming_sessions = context.user_data.get("_chatgpt_streaming_sessions", 0) - 1
         if streaming_sessions > 0:
             context.user_data["_chatgpt_streaming_sessions"] = streaming_sessions
@@ -487,8 +512,16 @@ async def _handle_chatgpt_message(update: Update, context: ContextTypes.DEFAULT_
             context.user_data.pop("_chatgpt_streaming_sessions", None)
             if _get_user_state(context) == UserState.CHATGPT_STREAMING:
                 _set_user_state(context, UserState.CHATGPT_ACTIVE)
+            if cancelled_by_user:
+                context.user_data.pop("_chatgpt_cancelled_by_user", None)
 
-    if not stream_failed and full_response_text and full_response_text.strip():
+    if (
+        not stream_failed
+        and not cancelled_by_user
+        and full_response_text
+        and full_response_text.strip()
+        and "chat_history" in context.user_data
+    ):
         context.user_data["chat_history"].append({"role": "assistant", "content": full_response_text})
 
 
@@ -639,3 +672,51 @@ async def handle_message(
 
     await _send_main_menu_reminder(update, context, user.id if user else None)
 
+async def _cancel_active_chatgpt_streams(context: ContextTypes.DEFAULT_TYPE) -> bool:
+    """Останавливает все активные генераторы ответов ChatGPT."""
+
+    active_streams: Optional[Set[Any]] = context.user_data.get("_chatgpt_active_streams")
+    if not active_streams:
+        return False
+
+    cancelled_any = False
+    for stream in list(active_streams):
+        close = getattr(stream, "aclose", None)
+        if callable(close):
+            try:
+                await close()
+                cancelled_any = True
+            except RuntimeError:
+                # Генератор уже закрыт — игнорируем.
+                pass
+            except Exception as error:  # pragma: no cover - логируем для диагностики
+                logger.warning("Не удалось корректно закрыть поток ChatGPT: %s", error)
+        active_streams.discard(stream)
+
+    if not active_streams:
+        context.user_data.pop("_chatgpt_active_streams", None)
+
+    return cancelled_any
+
+
+async def _perform_chatgpt_stop(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Останавливает текущую сессию ChatGPT и возвращает пользователя в главное меню."""
+
+    context.user_data["_chatgpt_cancelled_by_user"] = True
+
+    await _cancel_active_chatgpt_streams(context)
+
+    _set_default_state(context)
+
+    context.user_data.pop("chat_history", None)
+
+    if update.message is None:
+        return
+
+    user = update.effective_user
+    keyboard = get_main_menu_keyboard(user.id) if user else None
+
+    await update.message.reply_text(
+        "Диалог завершен. Вы вернулись в главное меню.",
+        reply_markup=keyboard,
+    )
