@@ -62,6 +62,7 @@ from handlers.verification_handlers import (
 settings = get_settings()
 logger = settings.logger
 MINI_APP_PUBLIC_DIR = Path(__file__).resolve().parent / "mini_app" / "public"
+MINI_APP_STATIC_ROUTE = "/mini-app/static"
 
 
 def setup_database() -> None:
@@ -224,7 +225,11 @@ def main() -> Application:
 
 if settings.WEBHOOK_URL:
     asgi_app = FastAPI()
-    asgi_app.mount("/", StaticFiles(directory=MINI_APP_PUBLIC_DIR, html=True), name="mini_app_static")
+    asgi_app.mount(
+        MINI_APP_STATIC_ROUTE,
+        StaticFiles(directory=MINI_APP_PUBLIC_DIR),
+        name="mini_app_static",
+    )
     application = main()
 
     @asgi_app.get("/", include_in_schema=False)
