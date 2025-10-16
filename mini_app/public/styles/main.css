@@ -1,55 +1,73 @@
-:root {
-  color-scheme: light dark;
-}
-
+/* Базовые стили Telegram Mini App для корректной работы в светлой и тёмной темах */
 body {
   margin: 0;
   padding: 0;
   font-family: "Inter", "Segoe UI", Roboto, sans-serif;
-  background-color: var(--tg-theme-bg-color, #f5f5f5);
-  color: var(--tg-theme-text-color, #1c1c1c);
+  background-color: var(--tg-theme-bg-color);
+  color: var(--tg-theme-text-color);
   min-height: 100vh;
   display: flex;
   justify-content: center;
   align-items: center;
+  box-sizing: border-box;
 }
 
 #app {
-  width: min(480px, 90vw);
+  width: min(480px, 92vw);
   padding: 24px;
   border-radius: 16px;
   background-color: var(--tg-theme-secondary-bg-color, rgba(255, 255, 255, 0.85));
-  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.15);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.12);
   backdrop-filter: blur(8px);
   text-align: center;
 }
 
 h1 {
-  margin-top: 0;
-  margin-bottom: 16px;
+  margin: 0 0 16px;
   font-size: 1.75rem;
+  font-weight: 700;
 }
 
-#user-info {
-  margin-bottom: 24px;
-  font-size: 1rem;
+p {
+  margin: 16px 0 0;
   line-height: 1.5;
 }
 
+#user-info {
+  margin-bottom: 16px;
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+hr {
+  border: none;
+  height: 1px;
+  background-color: var(--tg-theme-hint-color, rgba(0, 0, 0, 0.1));
+  margin: 16px 0;
+}
+
 button {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 24px;
   padding: 12px 20px;
   border: none;
   border-radius: 12px;
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
-  color: var(--tg-theme-button-text-color, #fff);
-  background: linear-gradient(135deg, var(--tg-theme-button-color, #2aabee), #0077ff);
-  box-shadow: 0 8px 20px rgba(42, 171, 238, 0.35);
+  background-color: var(--tg-theme-button-color);
+  color: var(--tg-theme-button-text-color);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 button:hover {
   transform: translateY(-2px);
-  box-shadow: 0 12px 24px rgba(42, 171, 238, 0.45);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+}
+
+button:active {
+  transform: translateY(0);
+  box-shadow: none;
 }
