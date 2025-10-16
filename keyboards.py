@@ -1,17 +1,30 @@
-from telegram import ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram import (
+    ReplyKeyboardMarkup,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton,
+    KeyboardButton,
+    WebAppInfo,
+)
 from config import get_settings
 
 settings = get_settings()
 
 # --- Клавиатура главного меню ---
 main_menu_keyboard_layout = [
+    ["🚀 Открыть приложение 🚀"],
     ["Пройти бесплатное обучение", "ИИ-психолог"],
     ["Полезные инструменты", "Бесплатный ChatGPT"],
-    ["Поддержка"]
+    ["Поддержка"],
 ]
 
 def get_main_menu_keyboard(user_id: int) -> ReplyKeyboardMarkup:
     current_menu = [row[:] for row in main_menu_keyboard_layout]
+    webhook_url = settings.WEBHOOK_URL
+    if webhook_url:
+        current_menu[0][0] = KeyboardButton(
+            text="🚀 Открыть приложение 🚀",
+            web_app=WebAppInfo(url=webhook_url),
+        )
     if str(user_id) == settings.ADMIN_CHAT_ID:
         current_menu.append(["👑 Админка"])
     return ReplyKeyboardMarkup(current_menu, resize_keyboard=True)

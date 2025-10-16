@@ -1,7 +1,8 @@
-from datetime import time
-from zoneinfo import ZoneInfo
 import traceback
 from pprint import pformat
+from datetime import time
+from zoneinfo import ZoneInfo
+from pathlib import Path
 
 import httpx
 from httpx import Timeout
@@ -16,6 +17,8 @@ from telegram.ext import (
     CallbackQueryHandler,
 )
 from fastapi import FastAPI, Request, Response
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 import uvicorn
 
 from config import get_settings
@@ -58,6 +61,7 @@ from handlers.verification_handlers import (
 
 settings = get_settings()
 logger = settings.logger
+MINI_APP_PUBLIC_DIR = Path(__file__).resolve().parent / "mini_app" / "public"
 
 
 def setup_database() -> None:
@@ -220,7 +224,12 @@ def main() -> Application:
 
 if settings.WEBHOOK_URL:
     asgi_app = FastAPI()
+    asgi_app.mount("/", StaticFiles(directory=MINI_APP_PUBLIC_DIR, html=True), name="mini_app_static")
     application = main()
+
+    @asgi_app.get("/", include_in_schema=False)
+    async def serve_mini_app() -> FileResponse:
+        return FileResponse(MINI_APP_PUBLIC_DIR / "index.html")
 
     async def _ensure_started() -> None:
         """Гарантирует корректный запуск приложения и инициализацию ресурсов."""
