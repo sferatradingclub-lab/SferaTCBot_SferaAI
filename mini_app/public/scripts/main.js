@@ -1,8 +1,17 @@
 document.addEventListener('DOMContentLoaded', () => {
   const tg = window.Telegram?.WebApp;
-  if (tg) tg.ready();
+  const isTelegram = !!tg;
 
-  const mainMenu = document.getElementById('main-menu');
+  if (isTelegram) {
+    tg.ready();
+    // Скрыть кнопку "Закрыть", если Telegram сам добавляет
+    document.getElementById('btn-close').style.display = 'none';
+  } else {
+    // В браузере показать кнопку
+    document.getElementById('btn-close').style.display = 'block';
+  }
+
+ const mainMenu = document.getElementById('main-menu');
   const sectionsWrapper = document.getElementById('sections');
   
   const sectionMap = {
@@ -28,12 +37,24 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   Object.entries(sectionMap).forEach(([buttonId, sectionId]) => {
-    document.getElementById(buttonId)?.addEventListener('click', () => showSection(sectionId));
+    const button = document.getElementById(buttonId);
+    if (button) {
+      button.addEventListener('click', () => showSection(sectionId));
+      // Добавь touch-события для Telegram
+      button.addEventListener('touchstart', () => button.classList.add('active'));
+      button.addEventListener('touchend', () => button.classList.remove('active'));
+    }
   });
 
   sectionsWrapper.querySelectorAll('.back-btn').forEach(button => {
     button.addEventListener('click', showMenu);
   });
 
-  document.getElementById('btn-close')?.addEventListener('click', () => tg?.close());
+  document.getElementById('btn-close')?.addEventListener('click', () => {
+    if (isTelegram) {
+      tg.close();
+    } else {
+      window.close(); // Или alert для браузера
+    }
+ });
 });
