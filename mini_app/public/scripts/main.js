@@ -1,25 +1,25 @@
+// Проверка Telegram API сразу, до DOMContentLoaded
+const tg = window.Telegram?.WebApp;
+const isTelegram = !!tg;
+
+console.log('Telegram WebApp:', tg); // Для отладки
+console.log('isTelegram:', isTelegram); // Для отладки
+
 document.addEventListener('DOMContentLoaded', () => {
-  const tg = window.Telegram?.WebApp;
-  const isTelegram = !!tg;
-
-  console.log('Telegram WebApp:', tg); // Для отладки
-  console.log('isTelegram:', isTelegram); // Для отладки
-
- if (isTelegram) {
-    tg.ready();
-    // Скрыть кнопку "Закрыть", если Telegram сам добавляет
-    const closeBtn = document.getElementById('btn-close');
-    if (closeBtn) {
+  // Прячем кнопку "Закрыть" в Telegram, показываем в браузере
+  const closeBtn = document.getElementById('btn-close');
+  if (closeBtn) {
+    if (isTelegram) {
       closeBtn.style.display = 'none';
       console.log('Кнопка "Закрыть" скрыта в Telegram');
-    }
-  } else {
-    // В браузере показать кнопку
-    const closeBtn = document.getElementById('btn-close');
-    if (closeBtn) {
+    } else {
       closeBtn.style.display = 'block';
       console.log('Кнопка "Закрыть" показана в браузере');
     }
+  }
+
+  if (isTelegram) {
+    tg.ready();
   }
 
  const mainMenu = document.getElementById('main-menu');
