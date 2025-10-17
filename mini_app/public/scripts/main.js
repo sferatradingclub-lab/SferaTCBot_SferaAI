@@ -26,8 +26,7 @@ const resolveTelegramWebApp = () => {
 const initializeMiniApp = () => {
   const mainMenu = document.getElementById('main-menu');
   const sectionsWrapper = document.getElementById('sections');
-  // Ищем кнопку в новом фиксированном контейнере
-  const closeButton = document.querySelector('#close-button-container #btn-close');
+  const closeButton = document.getElementById('btn-close');
 
   const sectionMap = {
     'btn-screener': 'section-screener',
