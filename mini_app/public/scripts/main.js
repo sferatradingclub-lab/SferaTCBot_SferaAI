@@ -6,23 +6,18 @@ console.log('Telegram WebApp:', tg); // Для отладки
 console.log('isTelegram:', isTelegram); // Для отладки
 
 document.addEventListener('DOMContentLoaded', () => {
-  // Прячем кнопку "Закрыть" в Telegram, показываем в браузере
-  const closeBtn = document.getElementById('btn-close');
+  // Кнопка "Закрыть" всегда видна, но в Telegram работает через API
+ const closeBtn = document.getElementById('btn-close');
   if (closeBtn) {
     if (isTelegram) {
-      closeBtn.style.display = 'none';
-      console.log('Кнопка "Закрыть" скрыта в Telegram');
+      tg.ready();
+      console.log('Telegram Mini App: кнопка "Закрыть" активирована');
     } else {
-      closeBtn.style.display = 'block';
-      console.log('Кнопка "Закрыть" показана в браузере');
+      console.log('Браузер: кнопка "Закрыть" отображена');
     }
-  }
+ }
 
-  if (isTelegram) {
-    tg.ready();
-  }
-
- const mainMenu = document.getElementById('main-menu');
+  const mainMenu = document.getElementById('main-menu');
   const sectionsWrapper = document.getElementById('sections');
   
   const sectionMap = {
@@ -63,9 +58,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('btn-close')?.addEventListener('click', () => {
     if (isTelegram) {
-      tg.close();
+      tg.close(); // Закрытие через Telegram API
     } else {
-      window.close(); // Или alert для браузера
+      alert('Закрытие в браузере'); // Или window.close() для браузера
     }
- });
+  });
 });
