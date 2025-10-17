@@ -17,6 +17,7 @@ from telegram.ext import (
     CallbackQueryHandler,
 )
 from fastapi import FastAPI, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 import uvicorn
@@ -225,6 +226,13 @@ def main() -> Application:
 
 if settings.WEBHOOK_URL:
     asgi_app = FastAPI()
+    asgi_app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],  # Или укажи ["https://web.telegram.org", "https://t.me"]
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     asgi_app.mount(
         MINI_APP_STATIC_ROUTE,
         StaticFiles(directory=MINI_APP_PUBLIC_DIR),
