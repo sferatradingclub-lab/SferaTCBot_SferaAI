@@ -228,7 +228,7 @@ if settings.WEBHOOK_URL:
     asgi_app = FastAPI()
     asgi_app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],  # Или укажи ["https://web.telegram.org", "https://t.me"]
+        allow_origins=["https://web.telegram.org", "https://t.me"],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
