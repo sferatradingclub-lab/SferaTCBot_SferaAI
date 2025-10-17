@@ -11,10 +11,12 @@
   --transition: 220ms ease;
 }
 
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+}
 
 body {
- margin: 0;
+  margin: 0;
   min-height: 100vh;
   display: flex;
   align-items: center;
@@ -92,8 +94,16 @@ body::before {
   color: var(--text-muted);
 }
 
-.menu-buttons { display: flex; flex-direction: column; gap: 18px; }
-button { font: inherit; color: inherit; }
+.menu-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
 
 .menu-btn {
   position: relative;
@@ -117,9 +127,13 @@ button { font: inherit; color: inherit; }
 }
 
 .close-btn {
-  margin-top: 30px;
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  bottom: 36px;
   background: rgba(255, 0, 255, 0.1);
   border-color: rgba(255, 0, 255, 0.3);
+  z-index: 5;
 }
 
 .close-btn:hover,
@@ -129,16 +143,40 @@ button { font: inherit; color: inherit; }
   box-shadow: 0 0 15px rgba(255, 0, 255, 0.5);
 }
 
-#sections { display: none; }
-#sections.visible { display: block; }
+#sections {
+  display: none;
+}
 
-.section { display: none; padding: 20px; }
-.section.active { display: block; text-align: center; }
-.section-text { line-height: 1.6; }
-.back-btn { margin-top: 20px; }
+#sections.visible {
+  display: block;
+}
 
-#main-menu.hidden { display: none; }
+.section {
+  display: none;
+  padding: 20px;
+}
+
+.section.active {
+  display: block;
+  text-align: center;
+}
+
+.section-text {
+  line-height: 1.6;
+}
+
+.back-btn {
+  margin-top: 20px;
+}
+
+#main-menu.hidden {
+  display: none;
+}
 
 /* Убираем старые стили, так как кнопка теперь в фиксированном контейнере */
 
-@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
