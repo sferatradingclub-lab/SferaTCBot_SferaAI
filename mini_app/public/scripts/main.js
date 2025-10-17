@@ -23,7 +23,7 @@ const resolveTelegramWebApp = () => {
   return null;
 };
 
-document.addEventListener('DOMContentLoaded', () => {
+const initializeMiniApp = () => {
   const mainMenu = document.getElementById('main-menu');
   const sectionsWrapper = document.getElementById('sections');
   const closeButton = document.getElementById('btn-close');
@@ -112,6 +112,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (closeButton) {
     closeButton.hidden = false;
+    closeButton.removeAttribute('hidden');
     closeButton.classList.remove('hidden');
     closeButton.style.display = '';
 
@@ -129,4 +130,10 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
-});
+};
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initializeMiniApp, { once: true });
+} else {
+  initializeMiniApp();
+}
