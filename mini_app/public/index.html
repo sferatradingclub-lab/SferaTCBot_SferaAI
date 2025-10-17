@@ -3,64 +3,56 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Экосистема SferaTC</title>
+    <title>SferaTC Mini App</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <link
-      href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700&family=Share+Tech+Mono&display=swap"
       rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700&family=Share+Tech+Mono&display=swap"
     />
     <link rel="stylesheet" href="styles/main.css" />
   </head>
   <body>
     <div id="app">
       <div id="main-menu" class="neon-card">
-        <div class="menu-header">
-          <h1 class="logo">SferaTC</h1>
+        <header class="menu-header">
+          <h1 class="logo">SFERATC</h1>
           <p class="tagline">SFERA TRADING CLUB</p>
-        </div>
-        <div class="menu-buttons">
-          <button id="btn-screener" class="menu-btn">AI Screener</button>
-          <button id="btn-news" class="menu-btn">AI News</button>
-          <button id="btn-analyst" class="menu-btn">AI Analyst</button>
-          <button id="btn-game" class="menu-btn">Game</button>
-        </div>
+        </header>
+        <nav class="menu-buttons" aria-label="Главное меню">
+          <button id="btn-screener" class="menu-btn" type="button">AI Screener</button>
+          <button id="btn-news" class="menu-btn" type="button">AI News</button>
+          <button id="btn-analyst" class="menu-btn" type="button">AI Analyst</button>
+          <button id="btn-game" class="menu-btn" type="button">Game</button>
+        </nav>
         <button id="btn-close" class="menu-btn close-btn" type="button">Закрыть</button>
       </div>
       <div id="sections">
         <div id="section-screener" class="section">
           <div class="section-content">
-            <p class="section-text">
-              Данный раздел в разработке. Следите за новостями и обновлениями в нашем SferaTC Bot.
-            </p>
+            <p class="section-text">Данный раздел в разработке. Следите за новостями и обновлениями в нашем SferaTC Bot.</p>
             <button class="menu-btn back-btn" type="button">Назад</button>
           </div>
         </div>
         <div id="section-news" class="section">
           <div class="section-content">
-            <p class="section-text">
-              Данный раздел в разработке. Следите за новостями и обновлениями в нашем SferaTC Bot.
-            </p>
+            <p class="section-text">Данный раздел в разработке. Следите за новостями и обновлениями в нашем SferaTC Bot.</p>
             <button class="menu-btn back-btn" type="button">Назад</button>
           </div>
         </div>
         <div id="section-analyst" class="section">
           <div class="section-content">
-            <p class="section-text">
-              Данный раздел в разработке. Следите за новостями и обновлениями в нашем SferaTC Bot.
-            </p>
+            <p class="section-text">Данный раздел в разработке. Следите за новостями и обновлениями в нашем SferaTC Bot.</p>
             <button class="menu-btn back-btn" type="button">Назад</button>
           </div>
         </div>
         <div id="section-game" class="section">
           <div class="section-content">
-            <p class="section-text">
-              Данный раздел в разработке. Следите за новостями и обновлениями в нашем SferaTC Bot.
-            </p>
+            <p class="section-text">Данный раздел в разработке. Следите за новостями и обновлениями в нашем SferaTC Bot.</p>
             <button class="menu-btn back-btn" type="button">Назад</button>
           </div>
         </div>
       </div>
     </div>
-    <script src="../src/main.js"></script>
+    <script src="scripts/main.js" defer></script>
   </body>
 </html>
