@@ -45,6 +45,8 @@ body::before {
   width: min(420px, 92vw);
   padding: 32px 24px 36px;
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 .neon-card {
@@ -116,17 +118,12 @@ button { font: inherit; color: inherit; }
   box-shadow: 0 0 15px rgba(0, 255, 255, 0.5);
 }
 
-/* Фиксированный контейнер для кнопки "Закрыть" */
+/* Контейнер для кнопки "Закрыть" - будет прижиматься к низу основного контента */
 #close-button-container {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
+  margin-top: auto; /* Этот ключ заставит контейнер опуститься в низ flex-контейнера */
   display: flex;
   justify-content: center;
   padding: 0 16px 20px;
-  pointer-events: none; /* Чтобы клики проходили сквозь контейнер, если нужно */
-  z-index: 1000;
 }
 
 #close-button-container .close-btn {
@@ -134,7 +131,6 @@ button { font: inherit; color: inherit; }
   max-width: 420px;
   background: rgba(255, 0, 255, 0.1);
   border-color: rgba(255, 0, 255, 0.3);
-  pointer-events: auto; /* Включаем клики для самой кнопки */
 }
 
 #close-button-container .close-btn:hover,
