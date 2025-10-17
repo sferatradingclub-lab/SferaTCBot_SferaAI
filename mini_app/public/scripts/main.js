@@ -72,6 +72,20 @@ const initializeMiniApp = () => {
     );
   }
 
+  // Ожидаем стабилизации viewport на мобильных устройствах
+  if (telegramWebApp && telegramWebApp.viewportStable) {
+    const handleViewportStable = () => {
+      document.body.classList.add('viewport-stable');
+      console.log('SferaTC Mini App: Viewport стабилизировался.');
+    };
+
+    if (telegramWebApp.isViewportStable()) {
+      handleViewportStable();
+    } else {
+      telegramWebApp.onEvent('viewport_stable', handleViewportStable);
+    }
+  }
+
   const showSection = (sectionId) => {
     const section = document.getElementById(sectionId);
     if (!section || !mainMenu || !sectionsWrapper) {

@@ -139,4 +139,20 @@ button { font: inherit; color: inherit; }
 
 #main-menu.hidden { display: none; }
 
+/* Стили для корректировки после стабилизации viewport на мобильных */
+body[data-app-env="telegram"].viewport-stable #main-menu .close-btn {
+  visibility: visible !important;
+  opacity: 1 !important;
+  position: relative !important;
+  margin-top: 30px !important;
+}
+
+/* Гарантируем, что кнопка видна изначально, но может быть скрыта динамически */
+#main-menu .close-btn {
+  visibility: visible;
+  opacity: 1;
+  position: relative;
+  transition: opacity var(--transition), visibility var(--transition);
+}
+
 @keyframes spin { to { transform: rotate(360deg); } }
