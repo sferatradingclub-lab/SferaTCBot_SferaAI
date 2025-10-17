@@ -2,13 +2,24 @@ document.addEventListener('DOMContentLoaded', () => {
   const tg = window.Telegram?.WebApp;
   const isTelegram = !!tg;
 
-  if (isTelegram) {
+  console.log('Telegram WebApp:', tg); // Для отладки
+  console.log('isTelegram:', isTelegram); // Для отладки
+
+ if (isTelegram) {
     tg.ready();
     // Скрыть кнопку "Закрыть", если Telegram сам добавляет
-    document.getElementById('btn-close').style.display = 'none';
+    const closeBtn = document.getElementById('btn-close');
+    if (closeBtn) {
+      closeBtn.style.display = 'none';
+      console.log('Кнопка "Закрыть" скрыта в Telegram');
+    }
   } else {
     // В браузере показать кнопку
-    document.getElementById('btn-close').style.display = 'block';
+    const closeBtn = document.getElementById('btn-close');
+    if (closeBtn) {
+      closeBtn.style.display = 'block';
+      console.log('Кнопка "Закрыть" показана в браузере');
+    }
   }
 
  const mainMenu = document.getElementById('main-menu');
