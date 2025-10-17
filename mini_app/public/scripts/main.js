@@ -1,32 +1,13 @@
-const resolveTelegramWebApp = () => {
-  if (typeof window === 'undefined') {
-    return null;
-  }
-
-  if (window.Telegram && window.Telegram.WebApp) {
-    return window.Telegram.WebApp;
-  }
-
-  try {
-    if (
-      window.parent &&
-      window.parent !== window &&
-      window.parent.Telegram &&
-      window.parent.Telegram.WebApp
-    ) {
-      return window.parent.Telegram.WebApp;
-    }
-  } catch (error) {
-    console.debug('SferaTC Mini App: не удалось получить Telegram.WebApp из родительского окна.', error);
-  }
-
-  return null;
-};
-
-const initializeMiniApp = () => {
+document.addEventListener('DOMContentLoaded', () => {
+  // Ждем полной загрузки DOM
   const mainMenu = document.getElementById('main-menu');
   const sectionsWrapper = document.getElementById('sections');
   const closeButton = document.getElementById('btn-close');
+
+  if (!mainMenu || !closeButton) {
+    console.error('SferaTC Mini App: Критические элементы DOM не найдены.');
+    return;
+  }
 
   const sectionMap = {
     'btn-screener': 'section-screener',
@@ -35,100 +16,95 @@ const initializeMiniApp = () => {
     'btn-game': 'section-game',
   };
 
-  let telegramWebApp = resolveTelegramWebApp();
-  let readyCalled = false;
-
-  const applyEnvironmentState = (webAppInstance) => {
-    telegramWebApp = webAppInstance;
-    const isTelegram = Boolean(webAppInstance);
-
-    document.body.setAttribute('data-app-env', isTelegram ? 'telegram' : 'browser');
-
-    if (isTelegram) {
-      if (!readyCalled) {
-        try {
-          webAppInstance.ready();
-          readyCalled = true;
-        } catch (error) {
-          console.warn('SferaTC Mini App: не удалось вызвать Telegram.WebApp.ready()', error);
-        }
+  // Функция для безопасного получения WebApp
+  const getTelegramWebApp = () => {
+    try {
+      if (window.Telegram && window.Telegram.WebApp) {
+        return window.Telegram.WebApp;
       }
-    } else {
-      console.warn(
-        'SferaTC Mini App: Telegram Web App API не обнаружен. Кнопка "Закрыть" использует window.close().' 
-      );
+      if (window.parent && window.parent.Telegram && window.parent.Telegram.WebApp) {
+        return window.parent.Telegram.WebApp;
+      }
+    } catch (e) {
+      console.debug('SferaTC Mini App: Не удалось получить WebApp из родительского окна.');
     }
+    return null;
   };
 
-  applyEnvironmentState(telegramWebApp);
+  let webApp = getTelegramWebApp();
 
-  if (!telegramWebApp) {
-    window.addEventListener(
-      'TelegramWebAppReady',
-      () => {
-        applyEnvironmentState(resolveTelegramWebApp());
-      },
-      { once: true }
-    );
+  // Если WebApp еще не загружен, ждем события
+  if (!webApp) {
+    window.addEventListener('TelegramWebAppReady', () => {
+      webApp = getTelegramWebApp();
+      console.log('SferaTC Mini App: Telegram WebApp API готов.');
+    }, { once: true });
+  } else {
+    console.log('SferaTC Mini App: Telegram WebApp API уже загружен.');
   }
 
+  // Показываем, что мы в Telegram
+  if (webApp) {
+    document.body.setAttribute('data-app-env', 'telegram');
+    try {
+      webApp.ready();
+      console.log('SferaTC Mini App: webApp.ready() вызван.');
+    } catch (e) {
+      console.warn('SferaTC Mini App: Не удалось вызвать webApp.ready().', e);
+    }
+  } else {
+    document.body.setAttribute('data-app-env', 'browser');
+    console.warn('SferaTC Mini App: Telegram WebApp API не найден. Кнопка "Закрыть" будет использовать window.close().');
+  }
+
+  // Логика навигации
   const showSection = (sectionId) => {
     const section = document.getElementById(sectionId);
-    if (!section || !mainMenu || !sectionsWrapper) {
-      return;
-    }
-
+    if (!section || !mainMenu || !sectionsWrapper) return;
     mainMenu.classList.add('hidden');
     sectionsWrapper.classList.add('visible');
     section.classList.add('active');
   };
 
   const showMenu = () => {
-    if (!mainMenu || !sectionsWrapper) {
-      return;
-    }
-
+    if (!mainMenu || !sectionsWrapper) return;
     mainMenu.classList.remove('hidden');
     sectionsWrapper.classList.remove('visible');
-    sectionsWrapper.querySelectorAll('.section.active').forEach((section) => {
-      section.classList.remove('active');
-    });
+    sectionsWrapper.querySelectorAll('.section.active').forEach(s => s.classList.remove('active'));
   };
 
+  // Обработчики для кнопок меню
   Object.entries(sectionMap).forEach(([buttonId, sectionId]) => {
     const button = document.getElementById(buttonId);
     if (button) {
       button.addEventListener('click', () => showSection(sectionId));
-      button.addEventListener('touchstart', () => button.classList.add('active'));
-      button.addEventListener('touchend', () => button.classList.remove('active'));
     }
   });
 
-  if (sectionsWrapper) {
-    sectionsWrapper.querySelectorAll('.back-btn').forEach((button) => {
-      button.addEventListener('click', showMenu);
-    });
-  }
+  // Обработчики для кнопок "Назад"
+  sectionsWrapper?.querySelectorAll('.back-btn').forEach(button => {
+    button.addEventListener('click', showMenu);
+  });
 
+  // Обработчик для кнопки "Закрыть" - САМАЯ ВАЖНАЯ ЧАСТЬ
   if (closeButton) {
+    console.log('SferaTC Mini App: Кнопка "Закрыть" найдена. Добавляем обработчик.');
     closeButton.addEventListener('click', () => {
-      const currentWebApp = resolveTelegramWebApp();
-
+      const currentWebApp = getTelegramWebApp();
       if (currentWebApp && typeof currentWebApp.close === 'function') {
+        console.log('SferaTC Mini App: Вызов currentWebApp.close()');
         currentWebApp.close();
       } else {
+        console.log('SferaTC Mini App: Попытка вызвать window.close()');
         try {
           window.close();
         } catch (error) {
-          console.warn('SferaTC Mini App: window.close() недоступен в этом окружении.', error);
+          console.error('SferaTC Mini App: window.close() недоступен.', error);
+          alert('Не удалось закрыть приложение. Пожалуйста, используйте кнопку возврата в Telegram.');
         }
       }
     });
+  } else {
+    console.error('SferaTC Mini App: Кнопка "Закрыть" НЕ найдена!');
   }
-};
-
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initializeMiniApp, { once: true });
-} else {
-  initializeMiniApp();
-}
+});

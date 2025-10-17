@@ -55,8 +55,6 @@ body::before {
   backdrop-filter: blur(var(--blur));
   -webkit-backdrop-filter: blur(var(--blur));
   box-shadow: 0 32px 68px rgba(0, 0, 0, 0.55);
-  /* Добавляем нижний отступ, чтобы кнопка не прилипала к краю */
-  padding-bottom: 80px;
 }
 
 .neon-card::before {
@@ -118,21 +116,14 @@ button { font: inherit; color: inherit; }
   box-shadow: 0 0 15px rgba(0, 255, 255, 0.5);
 }
 
-/* Стили для кнопки "Закрыть" с абсолютным позиционированием */
-.neon-card .close-btn {
-  position: absolute;
-  bottom: 20px; /* Расстояние от низа карточки */
-  left: 50%;
-  transform: translateX(-50%);
-  width: calc(100% - 56px); /* 100% ширины минус отступы по 28px с каждой стороны */
-  max-width: 420px;
-  margin: 0; /* Убираем верхний отступ, так как позиционируем абсолютом */
+.close-btn {
+  margin-top: 30px;
   background: rgba(255, 0, 255, 0.1);
   border-color: rgba(255, 0, 255, 0.3);
 }
 
-.neon-card .close-btn:hover,
-.neon-card .close-btn:active {
+.close-btn:hover,
+.close-btn:active {
   background: rgba(255, 0, 255, 0.2);
   border-color: var(--magenta);
   box-shadow: 0 0 15px rgba(255, 0, 255, 0.5);
