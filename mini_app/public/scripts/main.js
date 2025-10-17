@@ -1,19 +1,10 @@
-/**
- * Main interaction logic for the SferaTC Mini App.
- * Handles Telegram WebApp initialisation and navigation
- * between main menu and feature placeholders.
- */
 document.addEventListener('DOMContentLoaded', () => {
   const tg = window.Telegram?.WebApp;
-
-  if (tg) {
-    tg.ready();
-  }
+  if (tg) tg.ready();
 
   const mainMenu = document.getElementById('main-menu');
   const sectionsWrapper = document.getElementById('sections');
-  const sectionElements = Array.from(sectionsWrapper.querySelectorAll('.section'));
-
+  
   const sectionMap = {
     'btn-screener': 'section-screener',
     'btn-news': 'section-news',
@@ -21,53 +12,28 @@ document.addEventListener('DOMContentLoaded', () => {
     'btn-game': 'section-game',
   };
 
-  const hideSections = () => {
-    sectionElements.forEach((section) => section.classList.remove('active'));
-    sectionsWrapper.classList.remove('visible');
-  };
-
   const showSection = (sectionId) => {
     const section = document.getElementById(sectionId);
+    if (!section) return;
 
-    if (!section) {
-      return;
-    }
-
-    hideSections();
-    section.classList.add('active');
-    sectionsWrapper.classList.add('visible');
     mainMenu.classList.add('hidden');
+    sectionsWrapper.classList.add('visible');
+    section.classList.add('active');
   };
 
   const showMenu = () => {
-    hideSections();
     mainMenu.classList.remove('hidden');
+    sectionsWrapper.classList.remove('visible');
+    sectionsWrapper.querySelectorAll('.section.active').forEach(s => s.classList.remove('active'));
   };
 
   Object.entries(sectionMap).forEach(([buttonId, sectionId]) => {
-    const button = document.getElementById(buttonId);
-    if (!button) {
-      return;
-    }
-
-    button.addEventListener('click', () => {
-      showSection(sectionId);
-    });
+    document.getElementById(buttonId)?.addEventListener('click', () => showSection(sectionId));
   });
 
-  const backButtons = sectionsWrapper.querySelectorAll('.back-btn');
-  backButtons.forEach((button) => {
+  sectionsWrapper.querySelectorAll('.back-btn').forEach(button => {
     button.addEventListener('click', showMenu);
   });
 
-  const closeButton = document.getElementById('btn-close');
-  if (closeButton) {
-    closeButton.addEventListener('click', () => {
-      if (tg) {
-        tg.close();
-      } else {
-        window.close();
-      }
-    });
-  }
+  document.getElementById('btn-close')?.addEventListener('click', () => tg?.close());
 });
