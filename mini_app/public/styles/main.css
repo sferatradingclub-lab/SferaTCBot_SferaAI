@@ -116,14 +116,29 @@ button { font: inherit; color: inherit; }
   box-shadow: 0 0 15px rgba(0, 255, 255, 0.5);
 }
 
-.close-btn {
-  margin-top: 30px;
-  background: rgba(255, 0, 255, 0.1);
-  border-color: rgba(255, 0, 255, 0.3);
+/* Фиксированный контейнер для кнопки "Закрыть" */
+#close-button-container {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  padding: 0 16px 20px;
+  pointer-events: none; /* Чтобы клики проходили сквозь контейнер, если нужно */
+  z-index: 1000;
 }
 
-.close-btn:hover,
-.close-btn:active {
+#close-button-container .close-btn {
+  width: 100%;
+  max-width: 420px;
+  background: rgba(255, 0, 255, 0.1);
+  border-color: rgba(255, 0, 255, 0.3);
+  pointer-events: auto; /* Включаем клики для самой кнопки */
+}
+
+#close-button-container .close-btn:hover,
+#close-button-container .close-btn:active {
   background: rgba(255, 0, 255, 0.2);
   border-color: var(--magenta);
   box-shadow: 0 0 15px rgba(255, 0, 255, 0.5);
@@ -139,20 +154,6 @@ button { font: inherit; color: inherit; }
 
 #main-menu.hidden { display: none; }
 
-/* Стили для корректировки после стабилизации viewport на мобильных */
-body[data-app-env="telegram"].viewport-stable #main-menu .close-btn {
-  visibility: visible !important;
-  opacity: 1 !important;
-  position: relative !important;
-  margin-top: 30px !important;
-}
-
-/* Гарантируем, что кнопка видна изначально, но может быть скрыта динамически */
-#main-menu .close-btn {
-  visibility: visible;
-  opacity: 1;
-  position: relative;
-  transition: opacity var(--transition), visibility var(--transition);
-}
+/* Убираем старые стили, так как кнопка теперь в фиксированном контейнере */
 
 @keyframes spin { to { transform: rotate(360deg); } }

@@ -26,7 +26,8 @@ const resolveTelegramWebApp = () => {
 const initializeMiniApp = () => {
   const mainMenu = document.getElementById('main-menu');
   const sectionsWrapper = document.getElementById('sections');
-  const closeButton = document.getElementById('btn-close');
+  // Ищем кнопку в новом фиксированном контейнере
+  const closeButton = document.querySelector('#close-button-container #btn-close');
 
   const sectionMap = {
     'btn-screener': 'section-screener',
@@ -72,20 +73,6 @@ const initializeMiniApp = () => {
     );
   }
 
-  // Ожидаем стабилизации viewport на мобильных устройствах
-  if (telegramWebApp && telegramWebApp.viewportStable) {
-    const handleViewportStable = () => {
-      document.body.classList.add('viewport-stable');
-      console.log('SferaTC Mini App: Viewport стабилизировался.');
-    };
-
-    if (telegramWebApp.isViewportStable()) {
-      handleViewportStable();
-    } else {
-      telegramWebApp.onEvent('viewport_stable', handleViewportStable);
-    }
-  }
-
   const showSection = (sectionId) => {
     const section = document.getElementById(sectionId);
     if (!section || !mainMenu || !sectionsWrapper) {
@@ -125,11 +112,6 @@ const initializeMiniApp = () => {
   }
 
   if (closeButton) {
-    closeButton.hidden = false;
-    closeButton.removeAttribute('hidden');
-    closeButton.classList.remove('hidden');
-    closeButton.style.display = '';
-
     closeButton.addEventListener('click', () => {
       const currentWebApp = resolveTelegramWebApp();
 
