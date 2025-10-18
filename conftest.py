@@ -18,7 +18,7 @@ from telegram.ext import (
     CallbackQueryHandler,
     CommandHandler,
     MessageHandler,
-    Filters,
+    filters,
 )
 from telegram.request import BaseRequest
 
@@ -106,7 +106,7 @@ def application_bundle(monkeypatch, sqlite_session_factory):
 
         application.add_handler(CommandHandler("start", start))
         application.add_handler(CommandHandler("admin", admin_handlers.show_admin_panel))
-        application.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
+        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
         application.add_handler(CallbackQueryHandler(user_actions_handler, pattern="^user_"))
         application.add_handler(CallbackQueryHandler(admin_handlers.admin_menu_handler, pattern="^admin_"))
         application.add_handler(CallbackQueryHandler(admin_handlers.broadcast_confirmation_handler, pattern="^broadcast_"))
