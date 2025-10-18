@@ -7,6 +7,7 @@ import asyncio
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.error import TelegramError
 from telegram.ext import ContextTypes
+from telegram.helpers import escape_markdown
 
 from config import get_settings
 from models.crud import iter_broadcast_targets
@@ -115,8 +116,9 @@ async def run_broadcast(
 
     logger.info("Рассылка завершена. Всего получателей: %s", total_targets)
 
+    title = escape_markdown("Рассылка завершена!", version=2)
     report_text = (
-        "✅ **Рассылка завершена!**\n\n"
+        f"✅ *{title}*\n\n"
         f"• Успешно: *{success}*\n"
         f"• Заблокировали: *{blocked}*\n"
         f"• Ошибки: *{error}*"
