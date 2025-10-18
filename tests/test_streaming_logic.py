@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from handlers import common_handlers as ch
 from handlers.states import UserState
+from handlers.user import chatgpt_handler as chatgpt
 
 
 @pytest.fixture(scope="module")
@@ -24,10 +24,10 @@ async def test_streaming_handler_batches_edits(monkeypatch):
             await asyncio.sleep(0.01)
             yield piece
 
-    monkeypatch.setattr(ch, "get_chatgpt_response", fake_get_chatgpt_response)
+    monkeypatch.setattr(chatgpt, "get_chatgpt_response", fake_get_chatgpt_response)
 
     keyboard_sentinel = object()
-    monkeypatch.setattr(ch, "get_chatgpt_keyboard", lambda: keyboard_sentinel)
+    monkeypatch.setattr(chatgpt, "get_chatgpt_keyboard", lambda: keyboard_sentinel)
 
     time_values = iter([0.0, 0.3, 0.6, 2.2, 2.4, 2.7, 4.5])
 
@@ -39,16 +39,16 @@ async def test_streaming_handler_batches_edits(monkeypatch):
 
     time_mock = MagicMock(side_effect=time_side_effect)
     monkeypatch.setattr(time, "time", time_mock)
-    monkeypatch.setattr(ch.time, "time", time_mock)
+    monkeypatch.setattr(chatgpt.time, "time", time_mock)
 
-    original_set_user_state = ch._set_user_state
+    original_set_user_state = chatgpt.StateManager.set_user_state
     state_transitions = []
 
-    def tracking_set_user_state(context, state):
+    def tracking_set_user_state(self, state):
         state_transitions.append(state)
-        original_set_user_state(context, state)
+        original_set_user_state(self, state)
 
-    monkeypatch.setattr(ch, "_set_user_state", tracking_set_user_state)
+    monkeypatch.setattr(chatgpt.StateManager, "set_user_state", tracking_set_user_state)
 
     placeholder_message = SimpleNamespace(chat_id=777, message_id=101)
 
@@ -82,7 +82,7 @@ async def test_streaming_handler_batches_edits(monkeypatch):
         effective_user=SimpleNamespace(id=111),
     )
 
-    await ch._handle_chatgpt_message(update, context)
+    await chatgpt.handle_chatgpt_message(update, context)
 
     assert created_tasks, "Ожидалась задача потоковой генерации"
 
@@ -142,8 +142,10 @@ async def test_stop_button_interrupts_stream(monkeypatch):
         finally:
             cancellation_detected["triggered"] = True
 
-    monkeypatch.setattr(ch, "get_chatgpt_response", fake_stream)
-    monkeypatch.setattr(ch, "get_main_menu_keyboard", lambda user_id: "main_menu_keyboard")
+    monkeypatch.setattr(chatgpt, "get_chatgpt_response", fake_stream)
+    monkeypatch.setattr(
+        chatgpt, "get_main_menu_keyboard", lambda user_id: "main_menu_keyboard"
+    )
 
     placeholder_message = SimpleNamespace(chat_id=555, message_id=999)
     message = SimpleNamespace(
@@ -164,7 +166,7 @@ async def test_stop_button_interrupts_stream(monkeypatch):
         user_data={
             "state": UserState.CHATGPT_ACTIVE,
             "chat_history": [
-                {"role": "system", "content": ch.CHATGPT_SYSTEM_PROMPT},
+                {"role": "system", "content": chatgpt.CHATGPT_SYSTEM_PROMPT},
             ],
         },
         bot=bot,
@@ -177,7 +179,7 @@ async def test_stop_button_interrupts_stream(monkeypatch):
         effective_user=SimpleNamespace(id=321),
     )
 
-    await ch._handle_chatgpt_message(update, context)
+    await chatgpt.handle_chatgpt_message(update, context)
 
     for _ in range(20):
         if created_tasks:
@@ -194,14 +196,17 @@ async def test_stop_button_interrupts_stream(monkeypatch):
         effective_user=SimpleNamespace(id=321),
     )
 
-    await ch._perform_chatgpt_stop(stop_update, context)
+    await chatgpt.perform_chatgpt_stop(stop_update, context)
 
     if created_tasks:
         await asyncio.gather(*created_tasks, return_exceptions=True)
 
     assert cancellation_detected["triggered"], "Ожидалось завершение генератора при остановке"
 
-    assert bot.edit_message_text.await_args_list[-1].kwargs["text"] == ch.CHATGPT_CANCELLED_MESSAGE
+    assert (
+        bot.edit_message_text.await_args_list[-1].kwargs["text"]
+        == chatgpt.CHATGPT_CANCELLED_MESSAGE
+    )
 
     stop_message.reply_text.assert_awaited_once()
     args, kwargs = stop_message.reply_text.await_args

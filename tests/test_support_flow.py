@@ -18,6 +18,7 @@ from handlers import common_handlers
 from handlers import verification_handlers
 from handlers import decorators as handler_decorators
 from handlers.states import AdminState, UserState
+from handlers.user import support_handler
 
 
 class DummyDBContext:
@@ -73,11 +74,13 @@ async def test_support_messages_override_verification(monkeypatch):
 
     support_calls = []
 
+    original_support_handler = support_handler.handle_support_message
+
     async def support_wrapper(update, context):
         support_calls.append(update.message.text)
-        await verification_handlers.handle_support_message(update, context)
+        await original_support_handler(update, context)
 
-    monkeypatch.setattr(common_handlers, "handle_support_message", support_wrapper)
+    monkeypatch.setattr(support_handler, "handle_support_message", support_wrapper)
 
     user = SimpleNamespace(id=111, full_name="Test User", username="tester")
     context = SimpleNamespace(
