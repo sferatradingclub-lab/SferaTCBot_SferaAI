@@ -1,5 +1,5 @@
 // Основной модуль Telegram Mini App SferaTC.
-// Скрипт инициализирует WebApp, обрабатывает навигацию между разделами и добавляет кнопку закрытия.
+// Скрипт инициализирует WebApp и обрабатывает навигацию между разделами.
 const resolveTelegramWebApp = () => {
   if (typeof window === 'undefined') {
     return null;
@@ -30,7 +30,6 @@ const initializeMiniApp = () => {
   const sectionsWrapper = document.getElementById('sections');
   const sectionElements = Array.from(document.querySelectorAll('.section'));
   const backButtons = document.querySelectorAll('.back-btn');
-  const closeButton = document.getElementById('btn-close');
 
   let telegramWebApp = resolveTelegramWebApp();
   let readyCalled = false;
@@ -61,9 +60,7 @@ const initializeMiniApp = () => {
         });
       }
     } else {
-      console.warn(
-        'SferaTC Mini App: Telegram Web App API не обнаружен. Кнопка "Закрыть" использует window.close().' 
-      );
+      console.warn('SferaTC Mini App: Telegram Web App API не обнаружен. Приложение работает в режиме браузера.');
     }
   };
 
@@ -138,28 +135,6 @@ const initializeMiniApp = () => {
     });
   });
 
-  if (closeButton) {
-    // На мобильных клиентах Telegram button.hidden может оставаться true из-за кэшированного старого CSS/JS.
-    // Мы явно синхронизируем все способы скрытия элемента: атрибут hidden, CSS-класс и inline-стили.
-    closeButton.hidden = false; // Убираем флаг hidden на уровне DOM-свойства, чтобы браузер отрендерил кнопку.
-    closeButton.removeAttribute('hidden'); // Удаляем атрибут hidden, который может сохраниться в разметке.
-    closeButton.classList.remove('hidden'); // Снимаем CSS-класс, который мог скрывать кнопку ранее.
-    closeButton.style.display = ''; // Сбрасываем inline-стиль, чтобы применились стандартные стили кнопки.
-
-    closeButton.addEventListener('click', () => {
-      const currentWebApp = resolveTelegramWebApp();
-
-      if (currentWebApp && typeof currentWebApp.close === 'function') {
-        currentWebApp.close();
-      } else {
-        try {
-          window.close();
-        } catch (error) {
-          console.warn('SferaTC Mini App: window.close() недоступен в этом окружении.', error);
-        }
-      }
-    });
-  }
 };
 
 if (document.readyState === 'loading') {
