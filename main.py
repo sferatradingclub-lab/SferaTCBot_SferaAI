@@ -331,15 +331,22 @@ if settings.WEBHOOK_URL:
     @asgi_app.post(f"/{settings.WEBHOOK_PATH}")
     async def telegram(request: Request) -> Response:
         """Принимает обновления от Telegram."""
-        if settings.WEBHOOK_SECRET_TOKEN:
-            secret_header = request.headers.get("X-Telegram-Bot-Api-Secret-Token")
-            if secret_header != settings.WEBHOOK_SECRET_TOKEN:
-                return Response(status_code=403)
+        # Импортируем утилиты безопасности
+        from security_utils import validate_telegram_webhook, validate_update_data
+        
+        # Проверяем, что запрос пришел от Telegram
+        if not validate_telegram_webhook(request):
+            return Response(status_code=403)
 
         try:
             await _ensure_started()
 
             update_data = await request.json()
+            # Проверяем, что данные являются валидным обновлением Telegram
+            if not validate_update_data(update_data):
+                logger.warning(f"Получены неверные данные обновления: {update_data}")
+                return Response(status_code=40)
+
             update = Update.de_json(data=update_data, bot=application.bot)
             await application.update_queue.put(update)
             return Response(status_code=200)
@@ -356,4 +363,11 @@ if settings.WEBHOOK_URL:
 else:
     logger.info(f"Бот @{settings.BOT_USERNAME} запускается в режиме Polling.")
     application = main()
-    application.run_polling()
+    # Добавляем проверку наличия вебхука и выводим предупреждение о безопасности
+    if not settings.WEBHOOK_URL:
+        logger.warning(
+            "ВНИМАНИЕ: Бот запускается в режиме polling без вебхука. "
+            "Рекомендуется использовать вебхуки для продакшена. "
+            "Убедитесь, что токен Telegram защищен и не публикуется в открытом виде."
+        )
+    application.run_polling(drop_pending_updates=True)

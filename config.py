@@ -27,22 +27,42 @@ class Settings:
     LOG_TO_FILE: bool = field(init=False)
     LOG_FILE_PATH: str = field(init=False)
 
-    TELEGRAM_TOKEN: str = field(init=False)
+    _TELEGRAM_TOKEN: str = field(init=False, repr=False)
     BOT_USERNAME: str = field(init=False)
-    ADMIN_CHAT_ID: str = field(init=False)
+    _ADMIN_CHAT_ID: str = field(init=False, repr=False)
+    
+    @property
+    def TELEGRAM_TOKEN(self) -> str:
+        """Возвращает токен Telegram бота."""
+        return self._TELEGRAM_TOKEN
+        
+    @property
+    def ADMIN_CHAT_ID(self) -> str:
+        """Возвращает ID администратора."""
+        return self._ADMIN_CHAT_ID
 
     WEBHOOK_URL: Optional[str] = field(init=False)
     WEBHOOK_LISTEN: str = field(init=False)
     WEBHOOK_PORT: int = field(init=False)
     WEBHOOK_PATH: str = field(init=False)
-    WEBHOOK_SECRET_TOKEN: Optional[str] = field(init=False)
+    _WEBHOOK_SECRET_TOKEN: Optional[str] = field(init=False, repr=False)
     WEBHOOK_DROP_PENDING_UPDATES: bool = field(init=False)
+    
+    @property
+    def WEBHOOK_SECRET_TOKEN(self) -> Optional[str]:
+        """Возвращает секретный токен вебхука."""
+        return self._WEBHOOK_SECRET_TOKEN
 
     DATABASE_URL: str = field(init=False)
 
     CHATGPT_MODELS: List[str] = field(init=False)
     DISCARDED_PAID_MODELS: List[str] = field(init=False)
-    OPENROUTER_API_KEY: Optional[str] = field(init=False)
+    _OPENROUTER_API_KEY: Optional[str] = field(init=False, repr=False)
+    
+    @property
+    def OPENROUTER_API_KEY(self) -> Optional[str]:
+        """Возвращает API ключ OpenRouter."""
+        return self._OPENROUTER_API_KEY
 
     STREAM_EDIT_INTERVAL_SECONDS: float = field(init=False)
     STREAM_BUFFER_SIZE_WORDS: int = field(init=False)
@@ -173,8 +193,8 @@ class Settings:
             self.logger.critical(message)
             raise ValueError(message)
 
-        self.TELEGRAM_TOKEN = token
-        self.ADMIN_CHAT_ID = admin_chat_id
+        self._TELEGRAM_TOKEN = token
+        self._ADMIN_CHAT_ID = admin_chat_id
         self.BOT_USERNAME = os.getenv("BOT_USERNAME", "SferaTC_bot")
 
     def _load_webhook_settings(self) -> None:
@@ -185,7 +205,7 @@ class Settings:
             self.TELEGRAM_TOKEN, os.getenv("WEBHOOK_PATH")
         )
         secret = os.getenv("WEBHOOK_SECRET_TOKEN")
-        self.WEBHOOK_SECRET_TOKEN = secret.strip() if secret else None
+        self._WEBHOOK_SECRET_TOKEN = secret.strip() if secret else None
         self.WEBHOOK_DROP_PENDING_UPDATES = self._env_flag(
             "WEBHOOK_DROP_PENDING_UPDATES", default=True
         )
@@ -208,7 +228,7 @@ class Settings:
         free_models, discarded = self._ensure_free_models(raw_models)
         self.CHATGPT_MODELS = free_models
         self.DISCARDED_PAID_MODELS = discarded
-        self.OPENROUTER_API_KEY = self._read_optional("OPENROUTER_API_KEY")
+        self._OPENROUTER_API_KEY = self._read_optional("OPENROUTER_API_KEY")
 
     def _load_image_urls(self) -> None:
         """Загрузка URL изображений с валидацией."""
@@ -396,6 +416,9 @@ class Settings:
         handlers.append(stream_handler)
 
         if self.LOG_TO_FILE:
+            # Проверяем, что путь к файлу лога не содержит потенциально опасные символы
+            if '..' in self.LOG_FILE_PATH or self.LOG_FILE_PATH.startswith('/'):
+                raise ValueError("Некорректный путь к файлу лога")
             try:
                 file_handler = logging.FileHandler(self.LOG_FILE_PATH, encoding="utf-8")
             except OSError as exc:  # pragma: no cover - зависимость от окружения

@@ -168,7 +168,8 @@ def get_user_by_username(db: Session, username: Optional[str]):
     """Возвращает пользователя по его username без учета регистра."""
     if username is None:
         return None
-    normalized_username = username.lower()
+    # Экранируем специальные символы для безопасности SQL запроса
+    normalized_username = username.lower().replace('%', '\\%').replace('_', '\\_')
     return db.query(User).filter(func.lower(User.username) == normalized_username).first()
 
 
