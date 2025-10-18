@@ -2,6 +2,8 @@
 from datetime import datetime, date
 from typing import Iterator, Optional
 
+import logging
+
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -9,6 +11,9 @@ from config import get_settings
 
 settings = get_settings()
 from .user import User
+
+
+logger = logging.getLogger(__name__)
 
 
 def get_user(db: Session, user_id: int):
@@ -101,12 +106,25 @@ def ban_user_in_db(db: Session, user_id: int, ban_status: bool) -> bool:
 
 def delete_user_in_db(db: Session, user_id: int) -> bool:
     """Удаляет пользователя из базы данных."""
+    logger.info(f"Попытка удалить пользователя {user_id}...")
     user = db.query(User).filter(User.user_id == user_id).first()
     if user is None:
+        logger.warning(f"Пользователь {user_id} не найден для удаления.")
         return False
-    db.delete(user)
-    db.commit()
-    return True
+    try:
+        logger.info(f"Найден пользователь {user_id}, вызываю db.delete...")
+        db.delete(user)
+        logger.info(f"Вызываю db.commit для удаления пользователя {user_id}...")
+        db.commit()
+        logger.info(f"Удаление пользователя {user_id} успешно подтверждено (commit).")
+        return True
+    except Exception as e:
+        logger.error(
+            f"!!! ОШИБКА подтверждения (commit) удаления для пользователя {user_id}: {e}",
+            exc_info=True,
+        )
+        db.rollback()
+        return False
 
 
 def iter_broadcast_targets(db: Session, *, chunk_size: int = 500) -> Iterator[int]:
