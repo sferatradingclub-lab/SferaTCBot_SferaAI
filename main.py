@@ -38,6 +38,7 @@ from handlers.common_handlers import (
 )
 from handlers.user.chatgpt_handler import show_chatgpt_menu, stop_chatgpt_session
 from handlers.user.support_handler import show_support_menu, escalate_support_to_admin
+from services.notifier import Notifier
 from handlers.admin_handlers import (
     show_admin_panel,
     admin_menu_handler,
@@ -146,10 +147,10 @@ async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYP
     if not bot:
         return
 
+    notifier = Notifier(bot)
     try:
-        await bot.send_message(
-            chat_id=settings.ADMIN_CHAT_ID,
-            text=admin_message,
+        await notifier.send_admin_notification(
+            admin_message,
             parse_mode="MarkdownV2",
             disable_web_page_preview=True,
         )

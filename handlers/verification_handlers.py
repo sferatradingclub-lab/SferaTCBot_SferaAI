@@ -7,6 +7,7 @@ from telegram.error import TelegramError
 
 from config import get_settings
 from keyboards import get_verification_links_keyboard, get_support_keyboard
+from services.notifier import Notifier
 from services.state_manager import StateManager
 
 settings = get_settings()
@@ -65,15 +66,12 @@ async def handle_id_submission(update: Update, context: ContextTypes.DEFAULT_TYP
         InlineKeyboardButton("💬 Написать", callback_data=f'user_message_{user.id}')
     ]]
 
-    try:
-        await context.bot.send_message(chat_id=settings.ADMIN_CHAT_ID, text=message_to_admin, parse_mode='MarkdownV2', reply_markup=InlineKeyboardMarkup(keyboard))
-    except TelegramError as e:
-        logger.error(
-            "КРИТИЧЕСКАЯ ОШИБКА: Не удалось отправить заявку админу (%s). Причина: %s.",
-            settings.ADMIN_CHAT_ID,
-            e.message,
-        )
-        raise
+    notifier = Notifier(context.bot)
+    await notifier.send_admin_notification(
+        message_to_admin,
+        parse_mode='MarkdownV2',
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
 
     await update.message.reply_text("Спасибо! Твоя заявка принята на ручную проверку. Обычно это занимает не более часа.")
 
@@ -108,9 +106,9 @@ async def handle_support_message(update: Update, context: ContextTypes.DEFAULT_T
             admin_info_text = (f"❗️ Новый вопрос от *{user_fullname}* \\({user_username}\\)\\.\nUser ID: `{user.id}`")
             admin_keyboard = [[InlineKeyboardButton("💬 Ответить", callback_data=f'user_reply_{user.id}_{update.message.message_id}')]]
 
-        await context.bot.send_message(
-            chat_id=settings.ADMIN_CHAT_ID,
-            text=admin_info_text,
+        notifier = Notifier(context.bot)
+        await notifier.send_admin_notification(
+            admin_info_text,
             reply_to_message_id=copied_message.message_id,
             reply_markup=InlineKeyboardMarkup(admin_keyboard),
             parse_mode='MarkdownV2'
@@ -144,10 +142,14 @@ async def user_actions_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         if action == "approve":
             approve_user_in_db(db, user_id)
             logger.info(f"Админ ({query.from_user.id}) одобрил заявку {user_id}")
-            try:
-                await context.bot.send_message(chat_id=user_id, text="🎉 Поздравляем! Ваша заявка одобрена! Теперь вам доступен полный курс.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🎉 Перейти к полному курсу!", url=settings.FULL_COURSE_URL)]]))
-            except TelegramError as e:
-                logger.error(f"Не удалось отправить уведомление об одобрении пользователю {user_id}: {e.message}")
+            notifier = Notifier(context.bot)
+            await notifier.send_message(
+                chat_id=user_id,
+                text="🎉 Поздравляем! Ваша заявка одобрена! Теперь вам доступен полный курс.",
+                reply_markup=InlineKeyboardMarkup(
+                    [[InlineKeyboardButton("🎉 Перейти к полному курсу!", url=settings.FULL_COURSE_URL)]]
+                ),
+            )
             await query.edit_message_text(f"{original_message}\n\n*Статус: ✅ Одобрено*", parse_mode='MarkdownV2')
 
         elif action == "reject":
@@ -155,10 +157,12 @@ async def user_actions_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             logger.info(f"Админ ({query.from_user.id}) отклонил заявку {user_id}")
             rejection_text = "К сожалению, ваша заявка была отклонена. Возможно, произошла ошибка. Если у вас есть вопросы, напишите в поддержку."
             support_button = [[InlineKeyboardButton("✍️ Написать в поддержку", callback_data="support_from_rejection")]]
-            try:
-                await context.bot.send_message(chat_id=user_id, text=rejection_text, reply_markup=InlineKeyboardMarkup(support_button))
-            except TelegramError as e:
-                logger.error(f"Не удалось отправить уведомление об отклонении пользователю {user_id}: {e.message}")
+            notifier = Notifier(context.bot)
+            await notifier.send_message(
+                chat_id=user_id,
+                text=rejection_text,
+                reply_markup=InlineKeyboardMarkup(support_button),
+            )
             await query.edit_message_text(f"{original_message}\n\n*Статус: ❌ Отклонено*", parse_mode='MarkdownV2')
 
         elif action == "revoke":

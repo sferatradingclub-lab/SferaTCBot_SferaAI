@@ -8,7 +8,6 @@ from datetime import datetime
 from typing import Optional
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
-from telegram.error import TelegramError
 from telegram.ext import ContextTypes
 from telegram.helpers import escape_markdown
 
@@ -19,6 +18,7 @@ from models.crud import (
     get_user,
     get_user_by_username,
 )
+from services.notifier import Notifier
 from services.state_manager import StateManager
 
 settings = get_settings()
@@ -71,28 +71,25 @@ async def handle_direct_message(update: Update, context: ContextTypes.DEFAULT_TY
         return
 
     text_to_send = message.text or ""
-    try:
-        send_kwargs = {
-            "chat_id": target_user_id,
-            "text": text_to_send,
-            "reply_markup": InlineKeyboardMarkup(
-                [[InlineKeyboardButton("✍️ Ответить", callback_data="support_from_dm")]]
-            ),
-        }
-        if reply_to_message_id is not None:
-            send_kwargs["reply_to_message_id"] = reply_to_message_id
+    send_kwargs = {
+        "chat_id": target_user_id,
+        "text": text_to_send,
+        "reply_markup": InlineKeyboardMarkup(
+            [[InlineKeyboardButton("✍️ Ответить", callback_data="support_from_dm")]]
+        ),
+    }
+    if reply_to_message_id is not None:
+        send_kwargs["reply_to_message_id"] = reply_to_message_id
 
-        await context.bot.send_message(**send_kwargs)
-        await message.reply_text("✅ Сообщение успешно отправлено!")
-    except TelegramError as error:
-        logger.error(
-            "Не удалось отправить DM пользователю %s: %s",
-            target_user_id,
-            error.message,
-        )
+    notifier = Notifier(context.bot)
+    sent_message = await notifier.send_message(**send_kwargs)
+
+    if sent_message is None:
         await message.reply_text(
-            f"❌ Не удалось отправить сообщение. Ошибка: {error.message}"
+            "❌ Не удалось отправить сообщение пользователю. Возможно, он заблокировал бота."
         )
+    else:
+        await message.reply_text("✅ Сообщение успешно отправлено!")
 
 
 async def approve_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -116,13 +113,19 @@ async def approve_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             await update.message.reply_text(
                 f"✅ Пользователь {user_id_to_approve} успешно одобрен."
             )
-            await context.bot.send_message(
+            notifier = Notifier(context.bot)
+            result = await notifier.send_message(
                 chat_id=user_id_to_approve,
                 text="🎉 Поздравляем! Ваша заявка одобрена! Теперь вам доступен полный курс.",
                 reply_markup=InlineKeyboardMarkup(
                     [[InlineKeyboardButton("🎉 Перейти к полному курсу!", url=settings.FULL_COURSE_URL)]]
                 ),
             )
+            if result is None:
+                logger.warning(
+                    "Не удалось отправить уведомление об одобрении пользователю %s",
+                    user_id_to_approve,
+                )
         else:
             await update.message.reply_text(
                 f"Ошибка! Пользователь с ID {user_id_to_approve} не найден."
@@ -219,12 +222,15 @@ async def display_user_card(
             reply_markup=InlineKeyboardMarkup(keyboard),
         )
     else:
-        await context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text=card_text,
-            parse_mode="MarkdownV2",
-            reply_markup=InlineKeyboardMarkup(keyboard),
-        )
+        chat = update.effective_chat
+        if chat is not None:
+            notifier = Notifier(context.bot)
+            await notifier.send_message(
+                chat_id=chat.id,
+                text=card_text,
+                parse_mode="MarkdownV2",
+                reply_markup=InlineKeyboardMarkup(keyboard),
+            )
 
 
 __all__ = [

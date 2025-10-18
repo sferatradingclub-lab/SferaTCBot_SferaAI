@@ -9,6 +9,7 @@ from telegram.ext import ContextTypes
 from telegram.helpers import escape_markdown
 
 from config import get_settings
+from services.notifier import Notifier
 from db_session import get_db
 from models.crud import (
     count_active_users_on_date,
@@ -134,9 +135,9 @@ async def daily_stats_job(
         new=new_yesterday,
         approved=approved_yesterday,
     )
-    await context.bot.send_message(
-        chat_id=settings.ADMIN_CHAT_ID,
-        text=report_text,
+    notifier = Notifier(context.bot)
+    await notifier.send_admin_notification(
+        report_text,
         parse_mode="MarkdownV2",
     )
 
