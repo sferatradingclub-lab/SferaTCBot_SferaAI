@@ -13,7 +13,7 @@ from telegram.ext import (
     CommandHandler,
     ContextTypes,
     MessageHandler,
-    filters,
+    Filters,
     CallbackQueryHandler,
 )
 from fastapi import FastAPI, Request, Response
@@ -202,22 +202,22 @@ def main() -> Application:
     application.add_handler(CallbackQueryHandler(escalate_support_to_admin, pattern=rf'^{settings.SUPPORT_ESCALATION_CALLBACK}$'))
 
     # Кнопки главного меню (MessageHandler)
-    application.add_handler(MessageHandler(filters.TEXT & filters.Regex('^Пройти бесплатное обучение$'), show_training_menu))
-    application.add_handler(MessageHandler(filters.TEXT & filters.Regex('^ИИ-психолог$'), show_psychologist_menu))
-    application.add_handler(MessageHandler(filters.TEXT & filters.Regex('^Полезные инструменты$'), show_tools_menu))
-    application.add_handler(MessageHandler(filters.TEXT & filters.Regex('^Бесплатный ChatGPT$'), show_chatgpt_menu))
-    application.add_handler(MessageHandler(filters.TEXT & filters.Regex('^Поддержка$'), show_support_menu))
-    application.add_handler(MessageHandler(filters.TEXT & filters.Regex('^👑 Админка$'), show_admin_panel))
+    application.add_handler(MessageHandler(Filters.text & Filters.regex('^Пройти бесплатное обучение$'), show_training_menu))
+    application.add_handler(MessageHandler(Filters.text & Filters.regex('^ИИ-психолог$'), show_psychologist_menu))
+    application.add_handler(MessageHandler(Filters.text & Filters.regex('^Полезные инструменты$'), show_tools_menu))
+    application.add_handler(MessageHandler(Filters.text & Filters.regex('^Бесплатный ChatGPT$'), show_chatgpt_menu))
+    application.add_handler(MessageHandler(Filters.text & Filters.regex('^Поддержка$'), show_support_menu))
+    application.add_handler(MessageHandler(Filters.text & Filters.regex('^👑 Админка$'), show_admin_panel))
 
     # Все остальные сообщения пользователя (должен быть последним!)
     media_filters = (
-        filters.TEXT
-        | filters.PHOTO
-        | filters.VIDEO
-        | filters.DOCUMENT
-        | filters.AUDIO
+        Filters.text
+        | Filters.photo
+        | Filters.video
+        | Filters.document
+        | Filters.audio
     )
-    application.add_handler(MessageHandler(media_filters & ~filters.COMMAND, handle_message))
+    application.add_handler(MessageHandler(media_filters & ~Filters.command, handle_message))
 
     # Задачи
     application.job_queue.run_daily(
