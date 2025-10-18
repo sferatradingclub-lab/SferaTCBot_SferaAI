@@ -14,7 +14,7 @@ from handlers.states import AdminState, UserState
 _StateEnum = TypeVar("_StateEnum", bound=Enum)
 
 
-@dataclass(slots=True)
+@dataclass
 class _StateDescriptor(Generic[_StateEnum]):
     key: str
     enum_cls: Type[_StateEnum]
