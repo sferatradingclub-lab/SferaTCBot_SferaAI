@@ -48,13 +48,22 @@ class Notifier:
 
         try:
             resolved_chat_id = int(admin_chat_id)
-        except (TypeError, ValueError):
+            self._logger.info(f"Попытка отправить админ-уведомление в чат {resolved_chat_id}")
+        except (TypeError, ValueError) as e:
             self._logger.error(
-                "ADMIN_CHAT_ID имеет некорректный формат: %s", admin_chat_id
+                f"ADMIN_CHAT_ID имеет некорректный формат: {admin_chat_id}. Ошибка: {e}"
             )
             return None
 
-        return await self.send_message(resolved_chat_id, text, **kwargs)
+        self._logger.info(f"Вызов send_message для админ-уведомления в чат {resolved_chat_id}")
+        result = await self.send_message(resolved_chat_id, text, **kwargs)
+        
+        if result is None:
+            self._logger.error(f"send_message вернул None для админ-уведомления в чат {resolved_chat_id}")
+        else:
+            self._logger.info(f"Админ-уведомление успешно отправлено в чат {resolved_chat_id}, Message ID: {result.message_id}")
+            
+        return result
 
 
 __all__ = ["Notifier"]
