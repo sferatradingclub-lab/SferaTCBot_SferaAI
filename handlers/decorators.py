@@ -11,7 +11,6 @@ from config import get_settings
 from db_session import get_db
 from models.crud import create_user, get_user, update_user_last_seen
 from models.user import User
-from services import user_service as user_service_module
 from services.notifier import Notifier
 from services.user_service import get_or_create_user
 
@@ -35,10 +34,6 @@ def user_bootstrap(func: HandlerFunc) -> HandlerFunc:
         if user is None:
             handler_kwargs = {**kwargs, "db_user": None, "is_new_user": False}
             return await func(update, context, *args, **handler_kwargs)
-
-        user_service_module.get_db = get_db
-        user_service_module.get_user = get_user
-        user_service_module.create_user = create_user
 
         db_user, is_new_user = await get_or_create_user(update, context)
         if db_user is None or db_user.is_banned:
