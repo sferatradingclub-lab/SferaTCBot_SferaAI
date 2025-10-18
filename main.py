@@ -35,11 +35,9 @@ from handlers.common_handlers import (
     handle_message,
     show_training_menu,
     show_psychologist_menu,
-    show_chatgpt_menu,
-    show_support_menu,
-    stop_chatgpt_session,
-    escalate_support_to_admin
 )
+from handlers.user.chatgpt_handler import show_chatgpt_menu, stop_chatgpt_session
+from handlers.user.support_handler import show_support_menu, escalate_support_to_admin
 from handlers.admin_handlers import (
     show_admin_panel,
     admin_menu_handler,

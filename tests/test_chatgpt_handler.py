@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock
 
 from handlers import decorators as handler_decorators
 from handlers.states import UserState
+from handlers.user import chatgpt_handler as chatgpt
 
 import pytest
 
@@ -26,7 +27,7 @@ def test_handle_message_prompts_for_text_when_missing(monkeypatch):
     )
     monkeypatch.setattr(handler_decorators, "create_user", lambda db, data: data)
     monkeypatch.setattr(handler_decorators, "update_user_last_seen", lambda db, user_id: None)
-    monkeypatch.setattr(ch, "get_chatgpt_keyboard", lambda: keyboard)
+    monkeypatch.setattr(chatgpt, "get_chatgpt_keyboard", lambda: keyboard)
 
     prompt_text = "Пожалуйста, отправьте текстовое сообщение."
 
@@ -65,7 +66,7 @@ def test_chat_history_preserves_order_with_concurrent_messages(monkeypatch):
     from handlers import common_handlers as ch
 
     keyboard = object()
-    monkeypatch.setattr(ch, "get_chatgpt_keyboard", lambda: keyboard)
+    monkeypatch.setattr(chatgpt, "get_chatgpt_keyboard", lambda: keyboard)
 
     call_histories = []
     pending_futures = []
@@ -78,7 +79,7 @@ def test_chat_history_preserves_order_with_concurrent_messages(monkeypatch):
         if result:
             yield result
 
-    monkeypatch.setattr(ch, "get_chatgpt_response", fake_get_chatgpt_response)
+    monkeypatch.setattr(chatgpt, "get_chatgpt_response", fake_get_chatgpt_response)
 
     async def run_test():
         bot = SimpleNamespace(edit_message_text=AsyncMock())
@@ -94,7 +95,7 @@ def test_chat_history_preserves_order_with_concurrent_messages(monkeypatch):
         context = SimpleNamespace(
             user_data={
                 "chat_history": [
-                    {"role": "system", "content": ch.CHATGPT_SYSTEM_PROMPT}
+                    {"role": "system", "content": chatgpt.CHATGPT_SYSTEM_PROMPT}
                 ]
             },
             application=DummyApplication(),
@@ -125,7 +126,7 @@ def test_chat_history_preserves_order_with_concurrent_messages(monkeypatch):
             effective_user=SimpleNamespace(id=555),
         )
 
-        task1 = asyncio.create_task(ch._handle_chatgpt_message(update1, context))
+        task1 = asyncio.create_task(chatgpt.handle_chatgpt_message(update1, context))
 
         for _ in range(20):
             if pending_futures:
@@ -134,11 +135,11 @@ def test_chat_history_preserves_order_with_concurrent_messages(monkeypatch):
 
         assert len(pending_futures) == 1
         assert call_histories[0] == [
-            {"role": "system", "content": ch.CHATGPT_SYSTEM_PROMPT},
+            {"role": "system", "content": chatgpt.CHATGPT_SYSTEM_PROMPT},
             {"role": "user", "content": "Первый запрос"},
         ]
 
-        task2 = asyncio.create_task(ch._handle_chatgpt_message(update2, context))
+        task2 = asyncio.create_task(chatgpt.handle_chatgpt_message(update2, context))
 
         for _ in range(20):
             if len(pending_futures) >= 2:
@@ -147,7 +148,7 @@ def test_chat_history_preserves_order_with_concurrent_messages(monkeypatch):
 
         assert len(pending_futures) == 2
         assert call_histories[1] == [
-            {"role": "system", "content": ch.CHATGPT_SYSTEM_PROMPT},
+            {"role": "system", "content": chatgpt.CHATGPT_SYSTEM_PROMPT},
             {"role": "user", "content": "Первый запрос"},
             {"role": "user", "content": "Второй запрос"},
         ]
@@ -161,7 +162,7 @@ def test_chat_history_preserves_order_with_concurrent_messages(monkeypatch):
         history = context.user_data["chat_history"]
 
         assert history == [
-            {"role": "system", "content": ch.CHATGPT_SYSTEM_PROMPT},
+            {"role": "system", "content": chatgpt.CHATGPT_SYSTEM_PROMPT},
             {"role": "user", "content": "Первый запрос"},
             {"role": "user", "content": "Второй запрос"},
             {"role": "assistant", "content": "Ответ на первый"},

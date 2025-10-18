@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock
 
 from handlers import decorators as handler_decorators
 from handlers.states import UserState
+from handlers.user import support_handler
 
 
 class DummyDBContext:
@@ -16,8 +17,6 @@ class DummyDBContext:
 
 
 def test_ensure_manual_support_state_detects_first_transition():
-    from handlers.common_handlers import _ensure_manual_support_state
-
     context = SimpleNamespace(
         user_data={
             'state': UserState.SUPPORT_LLM_ACTIVE,
@@ -25,12 +24,12 @@ def test_ensure_manual_support_state_detects_first_transition():
         }
     )
 
-    first_transition = _ensure_manual_support_state(context)
+    first_transition = support_handler._ensure_manual_support_state(context)
     assert first_transition is True
     assert context.user_data['state'] == UserState.AWAITING_SUPPORT_MESSAGE
 
     context.user_data['support_llm_history'] = ['keep']
-    second_transition = _ensure_manual_support_state(context)
+    second_transition = support_handler._ensure_manual_support_state(context)
     assert second_transition is False
     assert context.user_data['support_llm_history'] == ['keep']
 
@@ -83,8 +82,6 @@ def test_support_messages_forwarded_while_state_active(monkeypatch):
 
 
 def test_escalation_prompt_sent_once_on_manual_support_transition(monkeypatch):
-    from handlers import common_handlers as ch
-
     async def run_test():
         monkeypatch.setattr(handler_decorators, "get_db", lambda: DummyDBContext())
         monkeypatch.setattr(
@@ -117,11 +114,13 @@ def test_escalation_prompt_sent_once_on_manual_support_transition(monkeypatch):
             effective_user=SimpleNamespace(id=1, full_name="Tester", username="tester"),
         )
 
-        await ch.escalate_support_to_admin(update, context)
+        await support_handler.escalate_support_to_admin(update, context)
 
         query.answer.assert_awaited_once()
         message.edit_reply_markup.assert_awaited_once_with(reply_markup=None)
-        message.reply_text.assert_awaited_once_with(ch.SUPPORT_ESCALATION_PROMPT)
+        message.reply_text.assert_awaited_once_with(
+            support_handler.SUPPORT_ESCALATION_PROMPT
+        )
         assert context.user_data['state'] == UserState.AWAITING_SUPPORT_MESSAGE
         assert 'support_llm_history' not in context.user_data
         assert context.user_data['support_thank_you_sent'] is False
@@ -129,7 +128,7 @@ def test_escalation_prompt_sent_once_on_manual_support_transition(monkeypatch):
         message.reply_text.reset_mock()
         context.user_data['support_llm_history'] = ['keep']
 
-        await ch.escalate_support_to_admin(update, context)
+        await support_handler.escalate_support_to_admin(update, context)
 
         message.reply_text.assert_not_awaited()
         assert context.user_data['support_llm_history'] == ['keep']

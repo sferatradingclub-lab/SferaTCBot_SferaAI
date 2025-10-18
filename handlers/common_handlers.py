@@ -1,25 +1,23 @@
-import asyncio
-import time
-from contextlib import suppress
+"""Base user handlers that route messages across bot subsystems."""
 
-from typing import Any, Awaitable, Callable, Dict, Optional, Set
+from __future__ import annotations
+
+from typing import Optional
 
 from telegram import Update
-from telegram.error import RetryAfter, TelegramError
+from telegram.error import TelegramError
 from telegram.ext import ContextTypes
 from telegram.helpers import escape_markdown
 
 from config import get_safe_url, get_settings
 from keyboards import (
     get_channel_keyboard,
-    get_chatgpt_keyboard,
     get_main_menu_keyboard,
     get_psychologist_keyboard,
-    get_support_llm_keyboard,
     get_training_keyboard,
 )
 from models.user import User
-from services.chatgpt_service import get_chatgpt_response
+from services.state_manager import StateManager
 
 from .admin_handlers import handle_admin_message
 from .decorators import user_bootstrap
@@ -27,165 +25,15 @@ from .error_handler import handle_errors
 from .states import AdminState, UserState
 from .verification_handlers import (
     handle_id_submission,
-    handle_support_message,
     start_verification_process,
 )
+from .user.chatgpt_handler import handle_chatgpt_message, handle_streaming_state
+from .user.support_handler import handle_manual_support_message, handle_support_llm_message
 
 settings = get_settings()
 logger = settings.logger
 
-SupportPromptSender = Callable[[str], Awaitable[object]]
-SUPPORT_ESCALATION_PROMPT = "Опишите вашу проблему одним сообщением, и мы передадим его администратору."
 FRIENDLY_MAIN_MENU_REMINDER = "Выберите действие в меню ниже:"
-CHATGPT_SYSTEM_PROMPT = (
-    "Ты — универсальный ИИ-ассистент, созданный для помощи пользователю в самых разных задачах. "
-    "Твои главные принципы: полезность, точность и безопасность. Всегда стремись дать наиболее "
-    "полный и структурированный ответ. Если задача творческая — предлагай оригинальные идеи. "
-    "Если техническая — будь точным и приводи примеры. Общайся вежливо и нейтрально. "
-    "Категорически избегай генерации вредоносного, неэтичного или оскорбительного контента. "
-    "Не давай финансовых или медицинских советов. Твоя цель — быть лучшим инструментом для решения задач пользователя."
-)
-CHATGPT_CANCELLED_MESSAGE = "Ответ остановлен пользователем."
-
-
-def _get_user_state(context: ContextTypes.DEFAULT_TYPE) -> UserState:
-    raw_state = context.user_data.get("state", UserState.DEFAULT)
-    if isinstance(raw_state, UserState):
-        return raw_state
-    legacy_map: Dict[str, UserState] = {
-        "chatgpt_active": UserState.CHATGPT_ACTIVE,
-        "support_llm_active": UserState.SUPPORT_LLM_ACTIVE,
-        "awaiting_support_message": UserState.AWAITING_SUPPORT_MESSAGE,
-    }
-    return legacy_map.get(str(raw_state), UserState.DEFAULT)
-
-
-def _set_user_state(context: ContextTypes.DEFAULT_TYPE, state: UserState) -> None:
-    context.user_data["state"] = state
-
-
-def _get_admin_state(context: ContextTypes.DEFAULT_TYPE) -> AdminState:
-    raw_state = context.user_data.get("admin_state", AdminState.DEFAULT)
-    if isinstance(raw_state, AdminState):
-        return raw_state
-    legacy_map: Dict[str, AdminState] = {
-        "broadcast_awaiting_message": AdminState.BROADCAST_AWAITING_MESSAGE,
-        "broadcast_awaiting_confirmation": AdminState.BROADCAST_AWAITING_CONFIRMATION,
-        "users_awaiting_id": AdminState.USERS_AWAITING_ID,
-        "users_awaiting_dm": AdminState.USERS_AWAITING_DM,
-    }
-    return legacy_map.get(str(raw_state), AdminState.DEFAULT)
-
-
-def _ensure_manual_support_state(context: ContextTypes.DEFAULT_TYPE) -> bool:
-    """Готовит состояние для ручной поддержки."""
-
-    already_manual = _get_user_state(context) == UserState.AWAITING_SUPPORT_MESSAGE
-    _set_user_state(context, UserState.AWAITING_SUPPORT_MESSAGE)
-
-    return not already_manual
-
-
-async def _activate_manual_support(
-    context: ContextTypes.DEFAULT_TYPE,
-    prompt_sender: SupportPromptSender,
-) -> None:
-    """Переводит пользователя в ручной режим и отправляет подсказку, если нужно."""
-
-    first_manual_transition = _ensure_manual_support_state(context)
-
-    if first_manual_transition:
-        context.user_data.pop("support_llm_history", None)
-        context.user_data["support_thank_you_sent"] = False
-
-        try:
-            await prompt_sender(SUPPORT_ESCALATION_PROMPT)
-        except Exception as error:  # pragma: no cover - логирование ошибки
-            logger.error(
-                "Не удалось отправить подсказку для ручной поддержки: %s",
-                error,
-            )
-
-
-def _set_default_state(context: ContextTypes.DEFAULT_TYPE) -> None:
-    _set_user_state(context, UserState.DEFAULT)
-
-
-def _get_chatgpt_task_registry(context: ContextTypes.DEFAULT_TYPE) -> Optional[Dict[int, Set[asyncio.Task[Any]]]]:
-    application = getattr(context, "application", None)
-    if application is None:
-        return None
-
-    registry = getattr(application, "_chatgpt_streaming_tasks", None)
-    if registry is None:
-        registry = {}
-        setattr(application, "_chatgpt_streaming_tasks", registry)
-
-    return registry
-
-
-def _register_chatgpt_streaming_task(
-    context: ContextTypes.DEFAULT_TYPE,
-    user_id: Optional[int],
-    task: asyncio.Task[Any],
-) -> None:
-    if user_id is None:
-        return
-
-    registry = _get_chatgpt_task_registry(context)
-    if registry is None:
-        return
-
-    active_tasks = registry.setdefault(user_id, set())
-
-    def _cleanup(done_task: asyncio.Task[Any]) -> None:
-        active_tasks.discard(done_task)
-        if not active_tasks:
-            registry.pop(user_id, None)
-
-    active_tasks.add(task)
-    task.add_done_callback(lambda finished: _cleanup(finished))
-
-
-async def _cancel_active_chatgpt_tasks(
-    context: ContextTypes.DEFAULT_TYPE,
-    user_id: Optional[int],
-    *,
-    exclude: Optional[asyncio.Task[Any]] = None,
-) -> bool:
-    if user_id is None:
-        return False
-
-    registry = _get_chatgpt_task_registry(context)
-    if not registry:
-        return False
-
-    active_tasks = registry.get(user_id)
-    if not active_tasks:
-        return False
-
-    to_cancel: list[asyncio.Task[Any]] = []
-
-    for task in list(active_tasks):
-        if task is exclude:
-            continue
-        if task.done():
-            active_tasks.discard(task)
-            continue
-        task.cancel()
-        to_cancel.append(task)
-
-    if to_cancel:
-        await asyncio.gather(*to_cancel, return_exceptions=True)
-
-    if not active_tasks:
-        registry.pop(user_id, None)
-        if not registry:
-            application = getattr(context, "application", None)
-            if application and hasattr(application, "_chatgpt_streaming_tasks"):
-                delattr(application, "_chatgpt_streaming_tasks")
-
-    return bool(to_cancel)
 
 
 @handle_errors
@@ -197,6 +45,7 @@ async def start(
     is_new_user: bool,
 ) -> None:
     user = update.effective_user
+    state_manager = StateManager(context)
 
     if is_new_user and user is not None:
         logger.info(f"Новый пользователь: {user.id} ({user.full_name}) @{user.username}")
@@ -205,7 +54,7 @@ async def start(
             f"@{escape_markdown(user.username, version=2)}" if user.username else "Нет"
         )
         admin_message = (
-            "👋 Новый пользователь\!\n\n"
+            "👋 Новый пользователь!\n\n"
             f"Имя: {user_fullname}\nUsername: {user_username}\nID: `{user.id}`"
         )
         try:
@@ -223,7 +72,7 @@ async def start(
 
     payload = " ".join(context.args)
     if payload == "trial_completed":
-        _set_user_state(context, UserState.AWAITING_VERIFICATION_ID)
+        state_manager.set_user_state(UserState.AWAITING_VERIFICATION_ID)
         await start_verification_process(update, context)
         return
 
@@ -248,7 +97,7 @@ async def start(
             reply_markup=get_channel_keyboard(),
         )
     await update.message.reply_text(
-        "Выберите действие в меню ниже:",
+        FRIENDLY_MAIN_MENU_REMINDER,
         reply_markup=get_main_menu_keyboard(user.id),
     )
 
@@ -317,99 +166,6 @@ async def show_psychologist_menu(
 
 @handle_errors
 @user_bootstrap
-async def show_chatgpt_menu(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
-    db_user: Optional[User],
-    is_new_user: bool,
-) -> None:
-    _set_user_state(context, UserState.CHATGPT_ACTIVE)
-    context.user_data["chat_history"] = [
-        {"role": "system", "content": CHATGPT_SYSTEM_PROMPT}
-    ]
-
-    if update.message is None:
-        return
-
-    await update.message.reply_text(
-        "Вы начали диалог с ИИ-ассистентом. Просто отправьте ваше сообщение. "
-        "Чтобы закончить, нажмите кнопку ниже или введите /stop_chat.",
-        reply_markup=get_chatgpt_keyboard(),
-    )
-
-
-@handle_errors
-@user_bootstrap
-async def stop_chatgpt_session(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
-    db_user: Optional[User],
-    is_new_user: bool,
-) -> None:
-    await _perform_chatgpt_stop(update, context)
-
-
-@handle_errors
-@user_bootstrap
-async def show_support_menu(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
-    db_user: Optional[User],
-    is_new_user: bool,
-) -> None:
-    _set_user_state(context, UserState.SUPPORT_LLM_ACTIVE)
-    context.user_data["support_llm_history"] = [
-        {"role": "system", "content": settings.SUPPORT_LLM_SYSTEM_PROMPT}
-    ]
-
-    if update.message is None:
-        return
-
-    support_caption = (
-        "Я — ИИ-поддержка SferaTC и готов помочь. Опишите проблему текстом, а если понадобится человек, "
-        f"нажмите кнопку «{settings.SUPPORT_ESCALATION_BUTTON_TEXT}»."
-    )
-    support_photo_url = get_safe_url(settings.SUPPORT_IMAGE_URL, "support_image")
-    if support_photo_url:
-        await update.message.reply_photo(
-            photo=support_photo_url,
-            caption=support_caption,
-            reply_markup=get_support_llm_keyboard(),
-        )
-    else:
-        await update.message.reply_text(
-            support_caption,
-            reply_markup=get_support_llm_keyboard(),
-        )
-
-
-@handle_errors
-@user_bootstrap
-async def escalate_support_to_admin(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
-    db_user: Optional[User],
-    is_new_user: bool,
-) -> None:
-    query = update.callback_query
-    if query is None:
-        return
-
-    await query.answer("Подключаю администратора…")
-    message = query.message
-    if message:
-        try:
-            if message.text:
-                await message.edit_reply_markup(reply_markup=None)
-            elif message.caption:
-                await message.edit_caption(caption=message.caption, reply_markup=None)
-        except TelegramError as error:
-            logger.warning(f"Не удалось обновить сообщение поддержки: {error}")
-        await _activate_manual_support(context, message.reply_text)
-
-
-@handle_errors
-@user_bootstrap
 async def help_command(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
@@ -422,383 +178,6 @@ async def help_command(
     await update.message.reply_text(
         "Это бот образовательной экосистемы SferaTC. Используйте меню для навигации по разделам."
     )
-
-
-async def _stream_chatgpt_response(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    message = update.message
-    if message is None or not message.text:
-        return
-
-    user_text = message.text
-    placeholder_message = None
-    bot = getattr(context, "bot", None)
-    chat_id = update.effective_chat.id if update.effective_chat else None
-    message_id: Optional[int] = None
-
-    try:
-        placeholder_message = await message.reply_text("✍️")
-    except TelegramError as error:
-        logger.warning("Не удалось отправить placeholder для ChatGPT: %s", error)
-    except asyncio.CancelledError:
-        context.user_data["_chatgpt_cancelled_by_user"] = True
-        raise
-
-    if placeholder_message is not None:
-        chat_id = getattr(placeholder_message, "chat_id", chat_id)
-        message_id = getattr(placeholder_message, "message_id", None)
-
-    async def _edit_placeholder(text: str, *, show_typing: bool = False) -> None:
-        nonlocal placeholder_message, message_id, chat_id
-        display_text = text
-        if show_typing:
-            display_text = f"{text} ✍️" if text else "✍️"
-
-        target_bot = bot or getattr(context, "bot", None)
-        if target_bot and chat_id is not None and message_id is not None:
-            await target_bot.edit_message_text(
-                text=display_text,
-                chat_id=chat_id,
-                message_id=message_id,
-                reply_markup=None,
-            )
-        elif placeholder_message is not None and hasattr(placeholder_message, "edit_text"):
-            await placeholder_message.edit_text(text=display_text, reply_markup=None)
-        else:
-            new_message = await message.reply_text(display_text, reply_markup=None)
-            placeholder_message = new_message
-            chat_id = getattr(new_message, "chat_id", chat_id)
-            message_id = getattr(new_message, "message_id", None)
-
-    async def _send_new_placeholder() -> None:
-        nonlocal placeholder_message, message_id, chat_id
-
-        target_chat_id = chat_id or (update.effective_chat.id if update.effective_chat else None)
-        if target_chat_id is None:
-            placeholder_message = None
-            message_id = None
-            return
-
-        target_bot = bot or getattr(context, "bot", None)
-        try:
-            if target_bot is not None:
-                placeholder_message = await target_bot.send_message(chat_id=target_chat_id, text="✍️")
-            else:
-                placeholder_message = await message.reply_text("✍️")
-        except TelegramError as error:
-            logger.warning(
-                "Не удалось отправить дополнительное placeholder-сообщение для ChatGPT: %s",
-                error,
-            )
-            placeholder_message = None
-            message_id = None
-            return
-
-        chat_id = getattr(placeholder_message, "chat_id", chat_id)
-        message_id = getattr(placeholder_message, "message_id", None)
-
-    full_response_parts: list[str] = []
-    current_message_text = ""
-    buffer = ""
-    final_response_text = ""
-
-    def _get_full_response_text() -> str:
-        return "".join(full_response_parts) + current_message_text
-
-    history = context.user_data.get("chat_history") or [
-        {"role": "system", "content": CHATGPT_SYSTEM_PROMPT}
-    ]
-    history = list(history)
-    history.append({"role": "user", "content": user_text})
-
-    if len(history) > 11:
-        system_message = history[0] if history and history[0].get("role") == "system" else None
-        recent_messages = history[-10:]
-        history = ([system_message] + recent_messages) if system_message else recent_messages
-
-    context.user_data["chat_history"] = history
-
-    def _count_words(text: str) -> int:
-        stripped = text.strip()
-        if not stripped:
-            return 0
-        return len([word for word in stripped.split() if word])
-
-    last_edit_time = time.time()
-    stream_failed = False
-    failure_message = "Мне не удалось сгенерировать ответ. Попробуйте позже."
-    TELEGRAM_MAX_MESSAGE_LENGTH = 4096
-    STREAMING_MAX_MESSAGE_LENGTH = TELEGRAM_MAX_MESSAGE_LENGTH - 2
-
-    response_stream: Optional[Any] = None
-    cancelled_by_user = False
-
-    buffer_word_count = 0
-
-    streaming_sessions = context.user_data.get("_chatgpt_streaming_sessions", 0) + 1
-    context.user_data["_chatgpt_streaming_sessions"] = streaming_sessions
-
-    try:
-        response_stream = get_chatgpt_response(history, context.application)
-        active_streams = context.user_data.setdefault("_chatgpt_active_streams", set())
-        active_streams.add(response_stream)
-
-        async for chunk in response_stream:
-            if _get_user_state(context) != UserState.CHATGPT_STREAMING:
-                logger.info("Стриминг был прерван досрочно.")
-                cancelled_by_user = bool(context.user_data.get("_chatgpt_cancelled_by_user"))
-                if buffer:
-                    buffer = ""
-                current_message_text = ""
-                with suppress(TelegramError):
-                    await _edit_placeholder(CHATGPT_CANCELLED_MESSAGE, show_typing=False)
-                if response_stream is not None:
-                    with suppress(Exception):
-                        await response_stream.aclose()
-                break
-
-            if not chunk:
-                continue
-
-            buffer += chunk
-            buffer_word_count = _count_words(buffer)
-
-            while buffer:
-                available_space = TELEGRAM_MAX_MESSAGE_LENGTH - len(current_message_text)
-                if available_space <= 0:
-                    if current_message_text:
-                        with suppress(TelegramError):
-                            await _edit_placeholder(current_message_text, show_typing=False)
-                        full_response_parts.append(current_message_text)
-                        current_message_text = ""
-                    await _send_new_placeholder()
-                    last_edit_time = time.time() - settings.STREAM_EDIT_INTERVAL_SECONDS
-                    continue
-
-                if (
-                    len(current_message_text) + len(buffer) > STREAMING_MAX_MESSAGE_LENGTH
-                    or len(buffer) > available_space
-                ):
-                    portion = buffer[:available_space]
-                    logger.warning(
-                        "Сообщение достигло максимальной длины. Продолжаю стрим в новом сообщении."
-                    )
-                    try:
-                        await _edit_placeholder(current_message_text + portion, show_typing=False)
-                    except TelegramError as error:
-                        if "Message is not modified" not in str(error):
-                            logger.warning(
-                                "Не удалось зафиксировать переполненное сообщение ChatGPT: %s",
-                                error,
-                            )
-                    current_message_text += portion
-                    buffer = buffer[len(portion):]
-                    buffer_word_count = _count_words(buffer)
-                    if current_message_text:
-                        full_response_parts.append(current_message_text)
-                        current_message_text = ""
-                    await _send_new_placeholder()
-                    last_edit_time = time.time() - settings.STREAM_EDIT_INTERVAL_SECONDS
-                    continue
-
-                break
-
-            current_time = time.time()
-            has_time_budget = (
-                current_time - last_edit_time
-            ) >= settings.STREAM_EDIT_INTERVAL_SECONDS
-            reached_word_threshold = (
-                buffer_word_count >= settings.STREAM_BUFFER_SIZE_WORDS
-            )
-            near_length_limit = (
-                len(current_message_text) + len(buffer)
-            ) > STREAMING_MAX_MESSAGE_LENGTH
-
-            should_update = bool(buffer) and (
-                near_length_limit or reached_word_threshold or has_time_budget
-            )
-
-            if should_update:
-                try:
-                    await _edit_placeholder(current_message_text + buffer, show_typing=True)
-                    current_message_text += buffer
-                    buffer = ""
-                    buffer_word_count = 0
-                    last_edit_time = time.time()
-                except TelegramError as error:
-                    error_message = str(error)
-                    if "Message is not modified" in error_message:
-                        continue
-
-                    if isinstance(error, RetryAfter):
-                        retry_delay = max(
-                            float(getattr(error, "retry_after", 0)),
-                            settings.STREAM_EDIT_INTERVAL_SECONDS,
-                        )
-                        logger.warning(
-                            "Получен сигнал flood control (RetryAfter=%s). Пауза перед повтором.",
-                            getattr(error, "retry_after", None),
-                        )
-                        await asyncio.sleep(retry_delay)
-                        last_edit_time = time.time()
-                    else:
-                        logger.warning(
-                            "Не удалось обновить потоковое сообщение ChatGPT: %s", error
-                        )
-                        last_edit_time = time.time()
-        else:
-            if buffer:
-                try:
-                    await _edit_placeholder(current_message_text + buffer, show_typing=False)
-                    current_message_text += buffer
-                    buffer = ""
-                    buffer_word_count = 0
-                except TelegramError as error:
-                    if "Message is not modified" not in str(error):
-                        logger.warning("Не удалось завершить потоковое сообщение ChatGPT: %s", error)
-            else:
-                if current_message_text:
-                    with suppress(TelegramError):
-                        await _edit_placeholder(current_message_text, show_typing=False)
-
-    except asyncio.CancelledError:
-        cancelled_by_user = True
-        if response_stream is not None:
-            with suppress(Exception):
-                await response_stream.aclose()
-        if buffer:
-            buffer = ""
-        current_message_text = ""
-        with suppress(TelegramError):
-            await _edit_placeholder(CHATGPT_CANCELLED_MESSAGE, show_typing=False)
-        context.user_data["_chatgpt_cancelled_by_user"] = True
-    except Exception as error:
-        stream_failed = True
-        logger.error("Ошибка при получении ответа от ChatGPT: %s", error, exc_info=True)
-        if _get_user_state(context) == UserState.CHATGPT_STREAMING:
-            await _edit_placeholder(failure_message, show_typing=False)
-    finally:
-        final_response_text = _get_full_response_text()
-        cancelled_by_user = cancelled_by_user or bool(context.user_data.get("_chatgpt_cancelled_by_user"))
-        streaming_sessions = context.user_data.get("_chatgpt_streaming_sessions", 0) - 1
-        if streaming_sessions > 0:
-            context.user_data["_chatgpt_streaming_sessions"] = streaming_sessions
-        else:
-            context.user_data.pop("_chatgpt_streaming_sessions", None)
-            if _get_user_state(context) == UserState.CHATGPT_STREAMING:
-                _set_user_state(context, UserState.CHATGPT_ACTIVE)
-            if cancelled_by_user:
-                context.user_data.pop("_chatgpt_cancelled_by_user", None)
-
-    if (
-        not stream_failed
-        and not cancelled_by_user
-        and final_response_text
-        and final_response_text.strip()
-        and "chat_history" in context.user_data
-    ):
-        context.user_data["chat_history"].append({"role": "assistant", "content": final_response_text})
-
-
-async def _handle_chatgpt_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    message = update.message
-    if not message or not message.text:
-        if update.effective_chat:
-            await context.bot.send_message(
-                chat_id=update.effective_chat.id,
-                text="Пожалуйста, отправьте текстовое сообщение.",
-                reply_markup=get_chatgpt_keyboard(),
-            )
-        return
-
-    if message.text == "Закончить диалог":
-        await stop_chatgpt_session(update, context)
-        return
-
-    if context.application is None:
-        await message.reply_text("Мне не удалось обратиться к ChatGPT. Попробуйте позже.")
-        return
-
-    _set_user_state(context, UserState.CHATGPT_STREAMING)
-    context.user_data.pop("_chatgpt_cancelled_by_user", None)
-
-    user = getattr(update, "effective_user", None)
-    task = context.application.create_task(
-        _stream_chatgpt_response(update, context),
-        name=f"chatgpt-stream-{getattr(message, 'message_id', 'unknown')}",
-    )
-
-    _register_chatgpt_streaming_task(context, getattr(user, "id", None), task)
-
-
-async def _handle_support_llm_message(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
-) -> None:
-    message = update.message
-    text = (message.text or "").strip() if message else ""
-
-    if text.lower() == settings.SUPPORT_ESCALATION_BUTTON_TEXT.lower():
-        await _activate_manual_support(context, message.reply_text)
-        return
-
-    if not text:
-        if message:
-            await message.reply_text(
-                "ИИ-поддержка сейчас работает только с текстовыми сообщениями. "
-                f"Опишите вопрос словами или нажмите «{settings.SUPPORT_ESCALATION_BUTTON_TEXT}».",
-                reply_markup=get_support_llm_keyboard(),
-            )
-        return
-
-    history = context.user_data.get("support_llm_history") or [
-        {"role": "system", "content": settings.SUPPORT_LLM_SYSTEM_PROMPT}
-    ]
-    history = history + [{"role": "user", "content": text}]
-
-    if len(history) > settings.SUPPORT_LLM_HISTORY_LIMIT + 1:
-        history = [history[0]] + history[-settings.SUPPORT_LLM_HISTORY_LIMIT:]
-
-    context.user_data["support_llm_history"] = history
-    
-    response_chunks = [
-        chunk async for chunk in get_chatgpt_response(history, context.application)
-    ]
-    response_text = "".join(response_chunks)
-
-    if response_text and response_text.strip():
-        history.append({"role": "assistant", "content": response_text})
-        context.user_data["support_llm_history"] = history
-        if message:
-            await message.reply_text(
-                response_text,
-                reply_markup=get_support_llm_keyboard(),
-            )
-    else:
-        if message:
-            await message.reply_text(
-                "Мне не удалось решить вопрос. Попробуйте переформулировать или нажмите «"
-                f"{settings.SUPPORT_ESCALATION_BUTTON_TEXT}».",
-                reply_markup=get_support_llm_keyboard(),
-            )
-
-
-async def _handle_manual_support_message(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
-) -> None:
-    message = update.message
-    if message is None:
-        return
-
-    if message.text == "Вернуться в меню":
-        _set_default_state(context)
-        await message.reply_text(
-            "Вы вернулись в главное меню.",
-            reply_markup=get_main_menu_keyboard(update.effective_user.id),
-        )
-        return
-
-    await handle_support_message(update, context)
 
 
 async def _send_main_menu_reminder(
@@ -825,7 +204,7 @@ async def _send_main_menu_reminder(
                 error,
             )
     else:
-        logger.warning("Получено сообщение без состояния и информации о чате.")
+        logger.warning("Получено ссообщение без состояния и информации о чате.")
 
 
 @handle_errors
@@ -837,34 +216,29 @@ async def handle_message(
     is_new_user: bool,
 ) -> None:
     user = update.effective_user
-    admin_state = _get_admin_state(context)
+    state_manager = StateManager(context)
+
+    admin_state = state_manager.get_admin_state()
     if user and str(user.id) == settings.ADMIN_CHAT_ID and admin_state != AdminState.DEFAULT:
         await handle_admin_message(update, context)
         return
 
-    state = _get_user_state(context)
+    state = state_manager.get_user_state()
 
     if state is UserState.CHATGPT_STREAMING:
-        if update.message and update.message.text == "Закончить диалог":
-            await stop_chatgpt_session(update, context)
-        else:
-            wait_text = "Пожалуйста, подождите, пока я закончу отвечать на предыдущий запрос."
-            if update.message and hasattr(update.message, "reply_text"):
-                await update.message.reply_text(wait_text)
-            elif update.effective_chat:
-                await context.bot.send_message(chat_id=update.effective_chat.id, text=wait_text)
+        await handle_streaming_state(update, context)
         return
 
     if state is UserState.CHATGPT_ACTIVE:
-        await _handle_chatgpt_message(update, context)
+        await handle_chatgpt_message(update, context)
         return
 
     if state is UserState.SUPPORT_LLM_ACTIVE:
-        await _handle_support_llm_message(update, context)
+        await handle_support_llm_message(update, context)
         return
 
     if state is UserState.AWAITING_SUPPORT_MESSAGE:
-        await _handle_manual_support_message(update, context)
+        await handle_manual_support_message(update, context)
         return
 
     if state is UserState.AWAITING_VERIFICATION_ID:
@@ -877,27 +251,11 @@ async def handle_message(
 
     await _send_main_menu_reminder(update, context, user.id if user else None)
 
-async def _perform_chatgpt_stop(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Останавливает текущую сессию ChatGPT и возвращает пользователя в главное меню."""
 
-    context.user_data["_chatgpt_cancelled_by_user"] = True
-
-    current_task = asyncio.current_task()
-    user = getattr(update, "effective_user", None)
-    user_id = getattr(user, "id", None)
-    await _cancel_active_chatgpt_tasks(context, user_id, exclude=current_task)
-
-    _set_default_state(context)
-
-    context.user_data.pop("chat_history", None)
-
-    if update.message is None:
-        return
-
-    user = update.effective_user
-    keyboard = get_main_menu_keyboard(user.id) if user else None
-
-    await update.message.reply_text(
-        "Диалог завершен. Вы вернулись в главное меню.",
-        reply_markup=keyboard,
-    )
+__all__ = [
+    "start",
+    "show_training_menu",
+    "show_psychologist_menu",
+    "help_command",
+    "handle_message",
+]

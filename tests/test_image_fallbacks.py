@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock
 
 from handlers import decorators as handler_decorators
 from handlers.states import UserState
+from handlers.user import support_handler
 
 
 def _setup_message():
@@ -138,10 +139,10 @@ def test_psychologist_menu_fallbacks_to_text(monkeypatch):
 
 
 def test_support_menu_fallbacks_to_text(monkeypatch):
-    from handlers import common_handlers as ch
-
-    monkeypatch.setattr(ch, "get_safe_url", lambda url, context: None)
-    monkeypatch.setattr(ch, "get_support_llm_keyboard", lambda: "support_keyboard")
+    monkeypatch.setattr(support_handler, "get_safe_url", lambda url, context: None)
+    monkeypatch.setattr(
+        support_handler, "get_support_llm_keyboard", lambda: "support_keyboard"
+    )
     monkeypatch.setattr(handler_decorators, "get_db", _fake_get_db)
     monkeypatch.setattr(
         handler_decorators,
@@ -159,7 +160,7 @@ def test_support_menu_fallbacks_to_text(monkeypatch):
         )
         context = SimpleNamespace(user_data={}, bot=SimpleNamespace(send_message=AsyncMock()))
 
-        await ch.show_support_menu(update, context)
+        await support_handler.show_support_menu(update, context)
 
         assert message.reply_photo.await_count == 0
         message.reply_text.assert_awaited_once_with(
