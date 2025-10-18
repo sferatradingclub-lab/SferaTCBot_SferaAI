@@ -126,23 +126,6 @@ button {
   box-shadow: 0 0 15px rgba(0, 255, 255, 0.5);
 }
 
-.close-btn {
-  position: absolute;
-  left: 24px;
-  right: 24px;
-  bottom: 36px;
-  background: rgba(255, 0, 255, 0.1);
-  border-color: rgba(255, 0, 255, 0.3);
-  z-index: 5;
-}
-
-.close-btn:hover,
-.close-btn:active {
-  background: rgba(255, 0, 255, 0.2);
-  border-color: var(--magenta);
-  box-shadow: 0 0 15px rgba(255, 0, 255, 0.5);
-}
-
 #sections {
   display: none;
 }
