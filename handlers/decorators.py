@@ -87,7 +87,7 @@ def user_bootstrap(func: HandlerFunc) -> HandlerFunc:
                 else "Нет"
             )
             admin_message = (
-                "👋 Новый пользователь!\n\n"
+                "👋 Новый пользователь\\!\n\n"
                 + "Имя: {fullname}\nUsername: {username}\nID: `{user_id}`".format(
                     fullname=user_fullname,
                     username=user_username,
