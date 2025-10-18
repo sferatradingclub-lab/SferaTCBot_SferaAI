@@ -209,8 +209,15 @@ def main() -> Application:
     application.add_handler(MessageHandler(filters.TEXT & filters.Regex('^Поддержка$'), show_support_menu))
     application.add_handler(MessageHandler(filters.TEXT & filters.Regex('^👑 Админка$'), show_admin_panel))
 
-    # Все остальные текстовые сообщения (должен быть последним!)
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    # Все остальные сообщения пользователя (должен быть последним!)
+    media_filters = (
+        filters.TEXT
+        | filters.PHOTO
+        | filters.VIDEO
+        | filters.DOCUMENT
+        | filters.AUDIO
+    )
+    application.add_handler(MessageHandler(media_filters & ~filters.COMMAND, handle_message))
 
     # Задачи
     application.job_queue.run_daily(
