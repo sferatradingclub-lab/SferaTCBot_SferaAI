@@ -3,13 +3,23 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Добавить для правильной интеграции с Telegram -->
+    <meta name="color-scheme" content="dark light" />
     <title>SferaTC Mini App</title>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    
+    <!-- Оптимизация загрузки ресурсов -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://telegram.org" />
+    <link rel="dns-prefetch" href="https://fonts.gstatic.com" />
+    
+    <script src="https://telegram.org/js/telegram-web-app.js" defer></script>
     <link
       href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700&family=Share+Tech+Mono&display=swap"
       rel="stylesheet"
+      media="print"
+      onload="this.media='all'"
     />
-    <link rel="stylesheet" href="/mini-app/static/styles/main.css?v=6" />
+    <link rel="stylesheet" href="/mini-app/static/styles/main.css?v=7" />
   </head>
   <body>
     <div id="app">
@@ -18,40 +28,61 @@
           <h1 class="logo">SFERATC</h1>
           <p class="tagline">SFERA TRADING CLUB</p>
         </header>
-        <nav class="menu-buttons">
-          <button id="btn-screener" class="menu-btn">AI Screener</button>
-          <button id="btn-news" class="menu-btn">AI News</button>
-          <button id="btn-analyst" class="menu-btn">AI Analyst</button>
-          <button id="btn-game" class="menu-btn">Game</button>
+        <nav class="menu-buttons" role="navigation" aria-label="Главное меню">
+          <button id="btn-screener" class="menu-btn" aria-describedby="screener-desc">
+            <span class="sr-only" id="screener-desc">Открыть AI Screener</span>
+            AI Screener
+          </button>
+          <button id="btn-news" class="menu-btn" aria-describedby="news-desc">
+            <span class="sr-only" id="news-desc">Открыть AI News</span>
+            AI News
+          </button>
+          <button id="btn-analyst" class="menu-btn" aria-describedby="analyst-desc">
+            <span class="sr-only" id="analyst-desc">Открыть AI Analyst</span>
+            AI Analyst
+          </button>
+          <button id="btn-game" class="menu-btn" aria-describedby="game-desc">
+            <span class="sr-only" id="game-desc">Открыть Game</span>
+            Game
+          </button>
         </nav>
       </div>
-      <div id="sections">
-        <div id="section-screener" class="section">
+
+      <div id="sections" aria-live="polite">
+        <div id="section-screener" class="section" role="region" aria-labelledby="screener-heading">
           <div class="section-content">
+            <h2 id="screener-heading" class="sr-only">AI Screener</h2>
             <p class="section-text">Данный раздел в разработке. Следите за новостями и обновлениями в нашем SferaTC Bot.</p>
-            <button class="menu-btn back-btn">Назад</button>
+            <button class="menu-btn back-btn" aria-label="Вернуться в главное меню">Назад</button>
           </div>
         </div>
-        <div id="section-news" class="section">
+        
+        <div id="section-news" class="section" role="region" aria-labelledby="news-heading">
           <div class="section-content">
+            <h2 id="news-heading" class="sr-only">AI News</h2>
             <p class="section-text">Данный раздел в разработке. Следите за новостями и обновлениями в нашем SferaTC Bot.</p>
-            <button class="menu-btn back-btn">Назад</button>
+            <button class="menu-btn back-btn" aria-label="Вернуться в главное меню">Назад</button>
           </div>
         </div>
-        <div id="section-analyst" class="section">
+        
+        <div id="section-analyst" class="section" role="region" aria-labelledby="analyst-heading">
           <div class="section-content">
+            <h2 id="analyst-heading" class="sr-only">AI Analyst</h2>
             <p class="section-text">Данный раздел в разработке. Следите за новостями и обновлениями в нашем SferaTC Bot.</p>
-            <button class="menu-btn back-btn">Назад</button>
+            <button class="menu-btn back-btn" aria-label="Вернуться в главное меню">Назад</button>
           </div>
         </div>
-        <div id="section-game" class="section">
+        
+        <div id="section-game" class="section" role="region" aria-labelledby="game-heading">
           <div class="section-content">
+            <h2 id="game-heading" class="sr-only">Game</h2>
             <p class="section-text">Данный раздел в разработке. Следите за новостями и обновлениями в нашем SferaTC Bot.</p>
-            <button class="menu-btn back-btn">Назад</button>
+            <button class="menu-btn back-btn" aria-label="Вернуться в главное меню">Назад</button>
           </div>
         </div>
       </div>
     </div>
-    <script src="/mini-app/static/scripts/main.js?v=6"></script>
+    
+    <script src="/mini-app/static/scripts/main.js?v=7" defer></script>
   </body>
 </html>
