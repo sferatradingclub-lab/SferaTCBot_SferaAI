@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import ClassVar, Dict, List, Optional
@@ -80,6 +81,8 @@ class Settings:
         self.LOG_FILE_PATH = os.getenv("LOG_FILE_PATH", "bot.log")
         self.logger = self._configure_logging()
 
+        # Улучшенная валидация без внешних зависимостей
+        self._validate_core_settings()
         self._load_core_settings()
         self._load_webhook_settings()
         self._load_database_settings()
@@ -89,6 +92,65 @@ class Settings:
         self._load_support_settings()
         self._load_streaming_settings()
         self._emit_warnings()
+
+    def _validate_core_settings(self) -> None:
+        """Валидация критически важных настроек без внешних библиотек."""
+        required_vars = {
+            "TELEGRAM_TOKEN": os.getenv("TELEGRAM_TOKEN"),
+            "ADMIN_CHAT_ID": os.getenv("ADMIN_CHAT_ID"),
+        }
+        
+        missing = [name for name, value in required_vars.items() if not value]
+        if missing:
+            message = f"Отсутствуют обязательные переменные окружения: {', '.join(missing)}"
+            self.logger.critical(message)
+            raise ValueError(message)
+        
+        # Валидация формата токена
+        token = required_vars["TELEGRAM_TOKEN"]
+        if not self._validate_telegram_token(token):
+            raise ValueError("Некорректный формат токена Telegram")
+        
+        # Валидация ID админа
+        admin_id = required_vars["ADMIN_CHAT_ID"]
+        if not self._validate_admin_chat_id(admin_id):
+            raise ValueError("Некорректный формат ADMIN_CHAT_ID")
+
+    @staticmethod
+    def _validate_telegram_token(token: str) -> bool:
+        """Валидация токена Telegram без внешних библиотек."""
+        if not token or len(token) < 35:
+            return False
+        # Формат: 123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11
+        pattern = r'^\d+:[A-Za-z0-9_-]{35}$'
+        return bool(re.match(pattern, token))
+
+    @staticmethod
+    def _validate_admin_chat_id(chat_id: str) -> bool:
+        """Валидация ID чата администратора."""
+        try:
+            int(chat_id)
+            return True
+        except ValueError:
+            return False
+
+    @staticmethod
+    def _validate_url(url: str) -> bool:
+        """Валидация URL без внешних библиотек."""
+        if not url:
+            return True  # Опциональные URL могут быть пустыми
+        
+        if not url.startswith(('http://', 'https://')):
+            return False
+        
+        # Простая проверка домена
+        if '://' in url:
+            domain_part = url.split('://', 1)[1]
+            if '/' in domain_part:
+                domain_part = domain_part.split('/', 1)[0]
+            return len(domain_part) > 0
+        
+        return False
 
     # ------------------------------------------------------------------
     # Loading helpers
@@ -129,7 +191,14 @@ class Settings:
         )
 
     def _load_database_settings(self) -> None:
-        self.DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./sferatc_dev.db")
+        """Загрузка настроек базы данных с валидацией."""
+        db_url = os.getenv("DATABASE_URL", "sqlite:///./sferatc_dev.db")
+        
+        # Валидация URL базы данных
+        if not self._validate_database_url(db_url):
+            raise ValueError(f"Некорректный DATABASE_URL: {db_url}")
+        
+        self.DATABASE_URL = db_url
 
     def _load_chatgpt_settings(self) -> None:
         raw_models = [
@@ -142,12 +211,26 @@ class Settings:
         self.OPENROUTER_API_KEY = self._read_optional("OPENROUTER_API_KEY")
 
     def _load_image_urls(self) -> None:
-        self.WELCOME_IMAGE_URL = self._read_optional("WELCOME_IMAGE_URL")
-        self.TRAINING_IMAGE_URL = self._read_optional("TRAINING_IMAGE_URL")
-        self.PSYCHOLOGIST_IMAGE_URL = self._read_optional("PSYCHOLOGIST_IMAGE_URL")
-        self.CHATGPT_IMAGE_URL = self._read_optional("CHATGPT_IMAGE_URL")
-        self.SUPPORT_IMAGE_URL = self._read_optional("SUPPORT_IMAGE_URL")
-        self.TOOLS_IMAGE_URL = self._read_optional("TOOLS_IMAGE_URL")
+        """Загрузка URL изображений с валидацией."""
+        urls = {
+            "WELCOME_IMAGE_URL": os.getenv("WELCOME_IMAGE_URL"),
+            "TRAINING_IMAGE_URL": os.getenv("TRAINING_IMAGE_URL"),
+            "PSYCHOLOGIST_IMAGE_URL": os.getenv("PSYCHOLOGIST_IMAGE_URL"),
+            "CHATGPT_IMAGE_URL": os.getenv("CHATGPT_IMAGE_URL"),
+            "SUPPORT_IMAGE_URL": os.getenv("SUPPORT_IMAGE_URL"),
+            "TOOLS_IMAGE_URL": os.getenv("TOOLS_IMAGE_URL"),
+        }
+        
+        for name, url in urls.items():
+            if url and not self._validate_url(url):
+                raise ValueError(f"Некорректный {name}: {url}")
+        
+        self.WELCOME_IMAGE_URL = urls["WELCOME_IMAGE_URL"]
+        self.TRAINING_IMAGE_URL = urls["TRAINING_IMAGE_URL"]
+        self.PSYCHOLOGIST_IMAGE_URL = urls["PSYCHOLOGIST_IMAGE_URL"]
+        self.CHATGPT_IMAGE_URL = urls["CHATGPT_IMAGE_URL"]
+        self.SUPPORT_IMAGE_URL = urls["SUPPORT_IMAGE_URL"]
+        self.TOOLS_IMAGE_URL = urls["TOOLS_IMAGE_URL"]
 
     def _load_tools_settings(self) -> None:
         self.TOOLS_DATA = {
@@ -282,6 +365,22 @@ class Settings:
             self.logger.warning(
                 "OPENROUTER_API_KEY не найден. Функция 'Бесплатный ChatGPT' будет недоступна."
             )
+
+        # Новые предупреждения о валидации
+        if self.WEBHOOK_URL and not self._validate_url(self.WEBHOOK_URL):
+            self.logger.warning(
+                "Некорректный WEBHOOK_URL в конфигурации: %s", self.WEBHOOK_URL
+            )
+
+    @staticmethod
+    def _validate_database_url(url: str) -> bool:
+        """Валидация URL базы данных."""
+        valid_schemes = ('sqlite', 'postgresql', 'mysql', 'oracle')
+        if '://' not in url:
+            return False
+        
+        scheme = url.split('://', 1)[0]
+        return scheme in valid_schemes
 
     # ------------------------------------------------------------------
     # Utility helpers
