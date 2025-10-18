@@ -6,7 +6,6 @@ from typing import Optional
 
 from telegram import Update
 from telegram.ext import ContextTypes
-from telegram.helpers import escape_markdown
 
 from config import get_safe_url, get_settings
 from keyboards import (
@@ -42,26 +41,10 @@ async def start(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
     db_user: Optional[User],
-    is_new_user: bool,
+    **_: object,
 ) -> None:
     user = update.effective_user
     state_manager = StateManager(context)
-
-    if is_new_user and user is not None:
-        logger.info(f"Новый пользователь: {user.id} ({user.full_name}) @{user.username}")
-        user_fullname = escape_markdown(user.full_name or "Имя не указано", version=2)
-        user_username = (
-            f"@{escape_markdown(user.username, version=2)}" if user.username else "Нет"
-        )
-        admin_message = (
-            "👋 Новый пользователь!\n\n"
-            f"Имя: {user_fullname}\nUsername: {user_username}\nID: `{user.id}`"
-        )
-        notifier = Notifier(context.bot)
-        await notifier.send_admin_notification(
-            admin_message,
-            parse_mode="MarkdownV2",
-        )
 
     payload = " ".join(context.args)
     if payload == "trial_completed":
