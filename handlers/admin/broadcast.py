@@ -11,6 +11,7 @@ from telegram.helpers import escape_markdown
 
 from config import get_settings
 from models.crud import iter_broadcast_targets
+from services.notifier import Notifier
 from services.state_manager import StateManager
 from handlers.states import AdminState
 
@@ -85,11 +86,10 @@ async def run_broadcast(
         asyncio_module = admin_module.asyncio
     admin_user_data = context.application.user_data.get(int(settings.ADMIN_CHAT_ID), {})
     message_id_to_send = admin_user_data.pop("broadcast_message_id", None)
+    notifier = Notifier(context.bot)
+
     if not message_id_to_send:
-        await context.bot.send_message(
-            chat_id=settings.ADMIN_CHAT_ID,
-            text="❌ Ошибка: не найдено сообщение для рассылки.",
-        )
+        await notifier.send_admin_notification("❌ Ошибка: не найдено сообщение для рассылки.")
         return
 
     success, blocked, error = 0, 0, 0
@@ -123,9 +123,8 @@ async def run_broadcast(
         f"• Заблокировали: *{blocked}*\n"
         f"• Ошибки: *{error}*"
     )
-    await context.bot.send_message(
-        chat_id=settings.ADMIN_CHAT_ID,
-        text=report_text,
+    await notifier.send_admin_notification(
+        report_text,
         parse_mode="MarkdownV2",
         reply_markup=InlineKeyboardMarkup(
             [[InlineKeyboardButton("⬅️ В админку", callback_data="admin_main")]]

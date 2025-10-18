@@ -14,6 +14,7 @@ from telegram.ext import ContextTypes
 from config import get_settings
 from keyboards import get_chatgpt_keyboard, get_main_menu_keyboard
 from services.chatgpt_service import get_chatgpt_response
+from services.notifier import Notifier
 from services.state_manager import StateManager
 from handlers.decorators import user_bootstrap
 from handlers.error_handler import handle_errors
@@ -157,7 +158,8 @@ async def handle_streaming_state(update: Update, context: ContextTypes.DEFAULT_T
     if message and hasattr(message, "reply_text"):
         await message.reply_text(wait_text)
     elif update.effective_chat:
-        await context.bot.send_message(chat_id=update.effective_chat.id, text=wait_text)
+        notifier = Notifier(context.bot)
+        await notifier.send_message(chat_id=update.effective_chat.id, text=wait_text)
 
 
 async def perform_chatgpt_stop(
@@ -190,7 +192,8 @@ async def handle_chatgpt_message(update: Update, context: ContextTypes.DEFAULT_T
     message = update.message
     if not message or not message.text:
         if update.effective_chat:
-            await context.bot.send_message(
+            notifier = Notifier(context.bot)
+            await notifier.send_message(
                 chat_id=update.effective_chat.id,
                 text="Пожалуйста, отправьте текстовое сообщение.",
                 reply_markup=get_chatgpt_keyboard(),

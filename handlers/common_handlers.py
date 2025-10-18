@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Optional
 
 from telegram import Update
-from telegram.error import TelegramError
 from telegram.ext import ContextTypes
 from telegram.helpers import escape_markdown
 
@@ -17,6 +16,7 @@ from keyboards import (
     get_training_keyboard,
 )
 from models.user import User
+from services.notifier import Notifier
 from services.state_manager import StateManager
 
 from .admin_handlers import handle_admin_message
@@ -57,18 +57,11 @@ async def start(
             "👋 Новый пользователь!\n\n"
             f"Имя: {user_fullname}\nUsername: {user_username}\nID: `{user.id}`"
         )
-        try:
-            await context.bot.send_message(
-                chat_id=settings.ADMIN_CHAT_ID,
-                text=admin_message,
-                parse_mode="MarkdownV2",
-            )
-        except Exception as error:  # pragma: no cover - логирование ошибки
-            logger.error(
-                "Не удалось отправить уведомление о новом пользователе админу: %s",
-                error,
-            )
-            raise
+        notifier = Notifier(context.bot)
+        await notifier.send_admin_notification(
+            admin_message,
+            parse_mode="MarkdownV2",
+        )
 
     payload = " ".join(context.args)
     if payload == "trial_completed":
@@ -192,17 +185,12 @@ async def _send_main_menu_reminder(
     if message and hasattr(message, "reply_text"):
         await message.reply_text(reminder_text, reply_markup=menu_keyboard)
     elif update.effective_chat and user_id:
-        try:
-            await context.bot.send_message(
-                chat_id=update.effective_chat.id,
-                text=reminder_text,
-                reply_markup=menu_keyboard,
-            )
-        except TelegramError as error:
-            logger.warning(
-                "Не удалось отправить напоминание без текстового сообщения: %s",
-                error,
-            )
+        notifier = Notifier(context.bot)
+        await notifier.send_message(
+            chat_id=update.effective_chat.id,
+            text=reminder_text,
+            reply_markup=menu_keyboard,
+        )
     else:
         logger.warning("Получено ссообщение без состояния и информации о чате.")
 

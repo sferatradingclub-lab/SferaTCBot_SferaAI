@@ -7,10 +7,10 @@ from typing import Any, Awaitable, Callable, Optional
 
 from telegram import Update
 from telegram.ext import ContextTypes
-from telegram.error import TelegramError
 from telegram.helpers import escape_markdown
 
 from config import get_settings
+from services.notifier import Notifier
 
 settings = get_settings()
 logger = settings.logger
@@ -69,18 +69,12 @@ async def _send_admin_notification(
 
     admin_message = "\n".join(message_lines)
 
-    try:
-        await context.bot.send_message(
-            chat_id=settings.ADMIN_CHAT_ID,
-            text=admin_message,
-            parse_mode="MarkdownV2",
-            disable_web_page_preview=True,
-        )
-    except TelegramError as send_error:
-        logger.error(
-            "Не удалось отправить уведомление об ошибке админу: %s",
-            send_error,
-        )
+    notifier = Notifier(context.bot)
+    await notifier.send_admin_notification(
+        admin_message,
+        parse_mode="MarkdownV2",
+        disable_web_page_preview=True,
+    )
 
 
 async def _notify_user(update: Optional[Update], context: Optional[ContextTypes.DEFAULT_TYPE]) -> None:
@@ -92,19 +86,14 @@ async def _notify_user(update: Optional[Update], context: Optional[ContextTypes.
     if not chat:
         return
 
-    try:
-        await context.bot.send_message(
-            chat_id=chat.id,
-            text=(
-                "Произошла непредвиденная ошибка. Мы уже работаем над её "
-                "устранением. Пожалуйста, попробуйте позже."
-            ),
-        )
-    except TelegramError as user_error:
-        logger.warning(
-            "Не удалось отправить уведомление пользователю об ошибке: %s",
-            user_error,
-        )
+    notifier = Notifier(context.bot)
+    await notifier.send_message(
+        chat_id=chat.id,
+        text=(
+            "Произошла непредвиденная ошибка. Мы уже работаем над её устранением. "
+            "Пожалуйста, попробуйте позже."
+        ),
+    )
 
 
 async def _process_exception(
