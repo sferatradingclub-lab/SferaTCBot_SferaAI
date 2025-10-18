@@ -18,13 +18,21 @@ logger = logging.getLogger(__name__)
 
 def get_user(db: Session, user_id: int):
     """Получает пользователя по его Telegram ID."""
-    return db.query(User).filter(User.user_id == user_id).first()
+    logger.info(f"Ищем пользователя с user_id={user_id}")
+    user = db.query(User).filter(User.user_id == user_id).first()
+    if user:
+        logger.info(f"Пользователь {user_id} найден в БД.")
+    else:
+        logger.info(f"Пользователь {user_id} НЕ найден в БД.")
+    return user
 
 
 def create_user(db: Session, user_data: dict):
     """Создает нового пользователя в базе данных."""
+    user_id_to_create = user_data['id']
+    logger.info(f"Попытка создать пользователя {user_id_to_create}...")
     new_user = User(
-        user_id=user_data['id'],
+        user_id=user_id_to_create,
         username=user_data.get('username'),
         full_name=user_data.get('full_name'),
         first_seen=datetime.now(),
@@ -33,9 +41,21 @@ def create_user(db: Session, user_data: dict):
         is_banned=False,
         awaiting_verification=False
     )
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
+    try:
+        db.add(new_user)
+        logger.info(f"Вызываю db.commit для создания пользователя {user_id_to_create}...")
+        db.commit()
+        logger.info(f"Создание пользователя {user_id_to_create} успешно подтверждено (commit).")
+        logger.info(f"Вызываю db.refresh для пользователя {user_id_to_create}...")
+        db.refresh(new_user)
+        logger.info(f"Пользователь {user_id_to_create} успешно обновлен (refresh).")
+    except Exception as e:
+        logger.error(
+            f"!!! ОШИБКА подтверждения (commit/refresh) создания для пользователя {user_id_to_create}: {e}",
+            exc_info=True,
+        )
+        db.rollback()
+        raise
     return new_user
 
 
