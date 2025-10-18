@@ -128,6 +128,11 @@ async def admin_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await query.edit_message_text(
             "Режим создания рассылки. Пришлите следующее сообщение, и я подготовлю его к отправке.",
         )
+    elif command == "admin_delete_user":
+        state_manager.set_admin_state(AdminState.USERS_AWAITING_ID)
+        await query.edit_message_text(
+            "Режим удаления. Отправьте User ID или @username пользователя для удаления.",
+        )
     elif command == "admin_users":
         state_manager.set_admin_state(AdminState.USERS_AWAITING_ID)
         await query.edit_message_text(
