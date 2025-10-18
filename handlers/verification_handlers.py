@@ -18,8 +18,13 @@ from .admin_handlers import display_user_card
 from .states import AdminState, UserState
 from db_session import get_db
 from models.crud import (
-    get_user, set_awaiting_verification, approve_user_in_db,
-    reject_user_in_db, revoke_user_in_db, ban_user_in_db
+    get_user,
+    set_awaiting_verification,
+    approve_user_in_db,
+    reject_user_in_db,
+    revoke_user_in_db,
+    ban_user_in_db,
+    delete_user_in_db,
 )
 
 @handle_errors
@@ -190,7 +195,47 @@ async def user_actions_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             logger.info(f"Админ ({query.from_user.id}) разблокировал {user_id}")
             await query.answer("Пользователь разблокирован.", show_alert=True)
 
-    if action not in ["approve", "reject", "reply", "message", "block"]:
+        elif action == "delete":
+            confirmation_keyboard = InlineKeyboardMarkup(
+                [
+                    [InlineKeyboardButton("ДА, удалить", callback_data=f"user_deleteconfirm_{user_id}")],
+                    [InlineKeyboardButton("Отмена", callback_data=f"user_showcard_{user_id}")],
+                ]
+            )
+            await query.edit_message_text(
+                f"Вы уверены, что хотите НАВСЕГДА удалить пользователя {display_name}?",
+                reply_markup=confirmation_keyboard,
+            )
+
+        elif action == "deleteconfirm":
+            was_deleted = delete_user_in_db(db, user_id)
+            if was_deleted:
+                logger.info(
+                    "Админ (%s) удалил пользователя %s", query.from_user.id, user_id
+                )
+                await query.edit_message_text(
+                    f"✅ Пользователь с ID {user_id} был успешно удален.",
+                    reply_markup=InlineKeyboardMarkup(
+                        [[InlineKeyboardButton("⬅️ В админку", callback_data="admin_main")]]
+                    ),
+                )
+            else:
+                await query.edit_message_text(
+                    "⚠️ Пользователь не найден или уже удален.",
+                    reply_markup=InlineKeyboardMarkup(
+                        [[InlineKeyboardButton("⬅️ В админку", callback_data="admin_main")]]
+                    ),
+                )
+
+    if action not in [
+        "approve",
+        "reject",
+        "reply",
+        "message",
+        "block",
+        "delete",
+        "deleteconfirm",
+    ]:
         await display_user_card(update, context, user_id)
 
 @handle_errors

@@ -184,6 +184,13 @@ async def display_user_card(
         f"*Активность:* {escape_markdown(last_seen_str, version=2)}"
     )
 
+    try:
+        admin_chat_id = int(settings.ADMIN_CHAT_ID)
+    except (TypeError, ValueError):
+        admin_chat_id = None
+
+    allow_sensitive_actions = admin_chat_id is None or user_id != admin_chat_id
+
     action_buttons = []
     if db_user.awaiting_verification:
         action_buttons.append(
@@ -194,7 +201,7 @@ async def display_user_card(
             InlineKeyboardButton("❌ Отозвать", callback_data=f"user_revoke_{user_id}")
         )
 
-    if user_id != int(settings.ADMIN_CHAT_ID):
+    if allow_sensitive_actions:
         if db_user.is_banned:
             action_buttons.append(
                 InlineKeyboardButton("✅ Разблок", callback_data=f"user_unblock_{user_id}")
@@ -203,6 +210,10 @@ async def display_user_card(
             action_buttons.append(
                 InlineKeyboardButton("🚫 Заблок", callback_data=f"user_block_{user_id}")
             )
+
+        action_buttons.append(
+            InlineKeyboardButton("Удалить 🧨", callback_data=f"user_delete_{user_id}")
+        )
 
     keyboard = [action_buttons] if action_buttons else []
     keyboard.append(

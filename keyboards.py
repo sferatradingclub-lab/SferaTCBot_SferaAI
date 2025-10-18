@@ -70,6 +70,7 @@ def get_admin_panel_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton("Статус", callback_data='admin_status')],
         [InlineKeyboardButton("📊 Статистика", callback_data='admin_stats')],
         [InlineKeyboardButton("📤 Сделать рассылку", callback_data='admin_broadcast')],
+        [InlineKeyboardButton("🗑️ Удалить пользователя", callback_data='admin_delete_user')],
         [InlineKeyboardButton("👤 Управление пользователями", callback_data='admin_users')]
     ]
     return InlineKeyboardMarkup(keyboard)

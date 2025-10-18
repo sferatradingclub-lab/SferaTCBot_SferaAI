@@ -99,6 +99,16 @@ def ban_user_in_db(db: Session, user_id: int, ban_status: bool) -> bool:
     return bool(updated_rows)
 
 
+def delete_user_in_db(db: Session, user_id: int) -> bool:
+    """Удаляет пользователя из базы данных."""
+    user = db.query(User).filter(User.user_id == user_id).first()
+    if user is None:
+        return False
+    db.delete(user)
+    db.commit()
+    return True
+
+
 def iter_broadcast_targets(db: Session, *, chunk_size: int = 500) -> Iterator[int]:
     """Итератор ID пользователей для рассылки без загрузки всей таблицы."""
     admin_id: Optional[int] = None
