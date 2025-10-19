@@ -16,7 +16,7 @@ def run_application():
         
         # Добавляем обработчики startup и shutdown
         @asgi_app.on_event("startup")
-        async def on_startup():
+        async def on_startup() -> None:
             """Выполняется при старте сервера."""
             from src.app.web.routes import _ensure_started
             await _ensure_started()
@@ -31,7 +31,7 @@ def run_application():
             )
 
         @asgi_app.on_event("shutdown")
-        async def on_shutdown():
+        async def on_shutdown() -> None:
             """Выполняется при остановке сервера."""
             from src.app.web.routes import _ensure_shutdown
             await _ensure_shutdown()

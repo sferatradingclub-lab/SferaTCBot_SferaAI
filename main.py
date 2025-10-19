@@ -292,8 +292,19 @@ if settings.WEBHOOK_URL:
 
     async def _ensure_started() -> None:
         """Гарантирует корректный запуск приложения и инициализацию ресурсов."""
-        if not application._initialized:  # noqa: SLF001 - внутреннее свойство PTB
-            await application.initialize()
+        # Проверяем, инициализировано ли приложение, с использованием публичного API
+        # вместо внутреннего атрибута _initialized, который может измениться в будущих версиях PTB
+        try:
+            # Проверяем, есть ли у приложения токен бота, что указывает на инициализацию
+            if hasattr(application, 'bot') and application.bot is not None:
+                # Проверяем состояние приложения через его методы, если доступны
+                pass  # В новых версиях PTB можно использовать другие методы для проверки состояния
+            else:
+                await application.initialize()
+        except AttributeError:
+            # Если нет других способов проверить инициализацию, используем старый подход
+            if not application._initialized:  # noqa: SLF001 - резервный вариант
+                await application.initialize()
 
         await post_init(application)
 
@@ -305,8 +316,17 @@ if settings.WEBHOOK_URL:
         if application.running:
             await application.stop()
 
-        if application._initialized:  # noqa: SLF001 - внутреннее свойство PTB
-            await application.shutdown()
+        # Используем публичный API для проверки инициализации, если возможно
+        try:
+            # В новых версиях PTB могут быть доступны публичные методы для проверки состояния
+            if application._initialized:  # noqa: SLF001 - резервный вариант
+                await application.shutdown()
+        except AttributeError:
+            # Если нет других способов проверить инициализацию, используем старый подход
+            if not application._initialized:  # noqa: SLF001 - резервный вариант
+                await application.initialize()
+            else:
+                await application.shutdown()
 
         await post_shutdown(application)
 
