@@ -24,6 +24,11 @@ def run_application():
             webhook_path = settings.WEBHOOK_PATH
             webhook_url = f"{webhook_base}/{webhook_path}" if webhook_path else f"{webhook_base}/"
             from src.app.web.routes import application
+            
+            # Проверяем, инициализировано ли приложение перед установкой вебхука
+            if not application._initialized:
+                await application.initialize()
+                
             await application.bot.set_webhook(
                 url=webhook_url,
                 secret_token=settings.WEBHOOK_SECRET_TOKEN,

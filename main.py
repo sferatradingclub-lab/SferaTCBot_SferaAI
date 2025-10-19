@@ -296,10 +296,7 @@ if settings.WEBHOOK_URL:
         # вместо внутреннего атрибута _initialized, который может измениться в будущих версиях PTB
         try:
             # Проверяем, есть ли у приложения токен бота, что указывает на инициализацию
-            if hasattr(application, 'bot') and application.bot is not None:
-                # Проверяем состояние приложения через его методы, если доступны
-                pass  # В новых версиях PTB можно использовать другие методы для проверки состояния
-            else:
+            if not hasattr(application, '_initialized') or not application._initialized:
                 await application.initialize()
         except AttributeError:
             # Если нет других способов проверить инициализацию, используем старый подход
@@ -323,7 +320,7 @@ if settings.WEBHOOK_URL:
                 await application.shutdown()
         except AttributeError:
             # Если нет других способов проверить инициализацию, используем старый подход
-            if not application._initialized:  # noqa: SLF001 - резервный вариант
+            if not application._initialized:  # noqa: SLF01 - резервный вариант
                 await application.initialize()
             else:
                 await application.shutdown()
