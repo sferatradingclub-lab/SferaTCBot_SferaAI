@@ -383,11 +383,12 @@ class Settings:
                 parsed_ttl = int(raw_ttl)
                 if parsed_ttl <= 0:
                     raise ValueError("Время жизни кеша должно быть положительным")
-            except ValueError:
+            except (ValueError, TypeError) as e:
                 self.logger.warning(
-                    "Некорректное значение CACHE_TTL_MINUTES='%s'. Использую %s.",
+                    "Некорректное значение CACHE_TTL_MINUTES='%s'. Использую %s. Ошибка: %s",
                     raw_ttl,
                     default_ttl,
+                    e
                 )
             else:
                 ttl_value = parsed_ttl
@@ -400,11 +401,12 @@ class Settings:
                 parsed_max_size = int(raw_max_size)
                 if parsed_max_size <= 0:
                     raise ValueError("Максимальный размер кеша должен быть положительным")
-            except ValueError:
+            except (ValueError, TypeError) as e:
                 self.logger.warning(
-                    "Некорректное значение MAX_CACHE_SIZE='%s'. Использую %s.",
+                    "Некорректное значение MAX_CACHE_SIZE='%s'. Использую %s. Ошибка: %s",
                     raw_max_size,
                     default_max_size,
+                    e
                 )
             else:
                 max_size_value = parsed_max_size

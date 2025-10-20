@@ -104,10 +104,24 @@ class ChatGPTCache:
     @staticmethod
     def _generate_chatgpt_key(messages: list, model: str) -> str:
         """Генерирует уникальный ключ для кеша на основе сообщений и модели."""
-        # Создаем хеш от последних N сообщений для уникальности
-        messages_str = json.dumps([msg for msg in messages[-5:]], sort_keys=True, default=str)  # последние 5 сообщений
-        key_input = f"{messages_str}_{model}"
-        return hashlib.sha256(key_input.encode()).hexdigest()
+        try:
+            # Создаем хеш от последних N сообщений для уникальности
+            # ИСПРАВЛЕНО: добавлена обработка сообщений, которые не поддерживают JSON
+            safe_messages = []
+            for msg in messages[-5:]:  # последние 5 сообщений
+                try:
+                    json.dumps(msg, default=str)  # проверяем сериализуемость
+                    safe_messages.append(msg)
+                except (TypeError, ValueError):
+                    # Если сообщение не сериализуется, используем строковое представление
+                    safe_messages.append(str(msg))
+            
+            messages_str = json.dumps(safe_messages, sort_keys=True, default=str)
+            key_input = f"{messages_str}_{model}"
+            return hashlib.sha256(key_input.encode()).hexdigest()
+        except Exception:
+            # Если всё же произошла ошибка, генерируем ключ на основе длины сообщений
+            return hashlib.sha256(f"{len(messages)}_{model}".encode()).hexdigest()
     
     @classmethod
     def get_cached_response(cls, messages: list, model: str) -> Optional[str]:

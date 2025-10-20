@@ -75,7 +75,9 @@ class DatabaseOptimizer:
             query = query.filter(User.user_id != admin_id)
         
         # Используем индекс и ограничиваем количество результатов
-        return query.order_by(User.user_id).limit(limit).all()
+        # ИСПРАВЛЕНО: извлекаем значения user_id из кортежей
+        results = query.order_by(User.user_id).limit(limit).all()
+        return [row[0] for row in results]  # Извлекаем user_id из кортежа
     
     @staticmethod
     def upsert_user(db: Session, user_data: Dict[str, Any]) -> User:
