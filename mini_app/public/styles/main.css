@@ -122,6 +122,18 @@ body::before {
   align-items: center;
 }
 
+#main-menu {
+  margin-block: auto;
+  margin-top: auto;
+  margin-bottom: auto;
+}
+
+#app.app-section-open #main-menu {
+  margin-block: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
 .neon-card::before {
   content: '';
   position: absolute;
