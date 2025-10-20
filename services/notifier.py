@@ -40,12 +40,12 @@ class Notifier:
 
     async def send_admin_notification(self, text: str, **kwargs) -> Optional[Message]:
         """Sends a notification to the configured administrator chat."""
-
+        
         admin_chat_id = self._settings.ADMIN_CHAT_ID
         if not admin_chat_id:
             self._logger.error("ADMIN_CHAT_ID не настроен. Невозможно отправить уведомление админу.")
             return None
-
+        
         try:
             resolved_chat_id = int(admin_chat_id)
             self._logger.info(f"Попытка отправить админ-уведомление в чат {resolved_chat_id}")
@@ -54,16 +54,36 @@ class Notifier:
                 f"ADMIN_CHAT_ID имеет некорректный формат: {admin_chat_id}. Ошибка: {e}"
             )
             return None
-
-        self._logger.info(f"Вызов send_message для админ-уведомления в чат {resolved_chat_id}")
-        result = await self.send_message(resolved_chat_id, text, **kwargs)
         
-        if result is None:
-            self._logger.error(f"send_message вернул None для админ-уведомления в чат {resolved_chat_id}")
-        else:
-            self._logger.info(f"Админ-уведомление успешно отправлено в чат {resolved_chat_id}, Message ID: {result.message_id}")
+        # Ограничиваем длину сообщения для Telegram
+        max_length = 4000  # Оставляем запас от лимита 4096
+        if len(text) > max_length:
+            # Разбиваем длинное сообщение на части
+            text_parts = [text[i:i+max_length] for i in range(0, len(text), max_length)]
+            self._logger.info(f"Сообщение разбито на {len(text_parts)} частей")
             
-        return result
+            for i, part in enumerate(text_parts):
+                part_text = f"Часть {i+1}/{len(text_parts)}:\n{part}"
+                self._logger.info(f"Вызов send_message для админ-уведомления в чат {resolved_chat_id}, часть {i+1}")
+                result = await self.send_message(resolved_chat_id, part_text, **kwargs)
+                
+                if result is None:
+                    self._logger.error(f"send_message вернул None для админ-уведомления в чат {resolved_chat_id}, часть {i+1}")
+                else:
+                    self._logger.info(f"Админ-уведомление успешно отправлено в чат {resolved_chat_id}, часть {i+1}, Message ID: {result.message_id}")
+            
+            return result  # Возвращаем результат последней отправки
+        else:
+            # Обычная отправка короткого сообщения
+            self._logger.info(f"Вызов send_message для админ-уведомления в чат {resolved_chat_id}")
+            result = await self.send_message(resolved_chat_id, text, **kwargs)
+            
+            if result is None:
+                self._logger.error(f"send_message вернул None для админ-уведомления в чат {resolved_chat_id}")
+            else:
+                self._logger.info(f"Админ-уведомление успешно отправлено в чат {resolved_chat_id}, Message ID: {result.message_id}")
+                
+            return result
 
 
 __all__ = ["Notifier"]

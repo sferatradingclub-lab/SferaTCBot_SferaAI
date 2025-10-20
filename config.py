@@ -147,7 +147,7 @@ class Settings:
         if not token or len(token) < 35:
             return False
         # Формат: 123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11
-        pattern = r'^\d+:[A-Za-z0-9_-]{35}$'
+        pattern = r'^\d+:[A-Za-z0-9_-]{35,}$'
         return bool(re.match(pattern, token))
 
     @staticmethod

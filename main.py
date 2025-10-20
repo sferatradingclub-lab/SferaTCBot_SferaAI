@@ -104,9 +104,9 @@ def _sanitize_code_block(text: str) -> str:
 
 async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Глобальный обработчик ошибок PTB на случай неперехваченных исключений."""
-
+    
     error = getattr(context, "error", None)
-
+    
     if isinstance(error, Exception):
         logger.error("Неперехваченное исключение в PTB: %s", error, exc_info=True)
         captured_error = error
@@ -116,17 +116,20 @@ async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYP
     else:
         logger.error("Неперехваченное исключение в PTB без объекта ошибки")
         captured_error = Exception("Неизвестная ошибка")
-
+    
     if isinstance(update, Update):
         try:
             update_repr = pformat(update.to_dict())
+            # Ограничиваем длину представления обновления
+            if len(update_repr) > 2000:
+                update_repr = update_repr[:2000] + "..."
         except Exception:  # noqa: BLE001
             update_repr = repr(update)
     else:
         update_repr = repr(update)
-
+    
     update_block = _sanitize_code_block(update_repr or "None")
-
+    
     traceback_lines = traceback.format_exception(
         type(captured_error),
         captured_error,
@@ -134,23 +137,28 @@ async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYP
     )
     traceback_text = "".join(traceback_lines)
     traceback_block = _sanitize_code_block(traceback_text or "Нет данных")
-
-    admin_message = (
+    
+    # Ограничиваем длину сообщения об ошибке
+    error_message = (
         "🔴 *Глобальная ошибка в боте* 🔴\n\n"
         "*Update:*\n"
         f"```\n{update_block}\n```\n\n"
         "*Traceback:*\n"
         f"```traceback\n{traceback_block}\n```"
     )
-
+    
+    # Ограничиваем общую длину сообщения
+    if len(error_message) > 4000:
+        error_message = error_message[:3950] + "...```\n\n*Сообщение обрезано*"
+    
     bot = getattr(context, "bot", None)
     if not bot:
         return
-
+    
     notifier = Notifier(bot)
     try:
         await notifier.send_admin_notification(
-            admin_message,
+            error_message,
             parse_mode="MarkdownV2",
             disable_web_page_preview=True,
         )

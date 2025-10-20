@@ -149,23 +149,27 @@ class EnhancedErrorHandler:
             
             notifier = Notifier(context.bot)
             
-            message = (
+            # Сокращаем сообщение для избежания превышения лимита
+            error_summary = (
                 "🚨 Критическая ошибка в боте\n\n"
-                f"ID ошибки: {error_info['error_id']}\n"
                 f"Тип: {error_info['error_type']}\n"
                 f"Класс: {error_info['error_class']}\n"
-                f"Сообщение: {error_info['error_message']}\n"
                 f"Время: {error_info['timestamp']}\n"
             )
             
+            if len(error_info['error_message']) > 500:
+                error_summary += f"Сообщение: {error_info['error_message'][:500]}...\n"
+            else:
+                error_summary += f"Сообщение: {error_info['error_message']}\n"
+            
             if error_info.get("update_info", {}).get("user"):
                 user = error_info["update_info"]["user"]
-                message += f"Пользователь: {user['full_name']} (@{user['username']}) ID: {user['id']}\n"
+                error_summary += f"Пользователь: {user['full_name']} (@{user['username']}) ID: {user['id']}\n"
             
-            message += f"\nОбщее количество ошибок: {self.error_count}"
+            error_summary += f"\nОбщее количество ошибок: {self.error_count}"
             
             await notifier.send_admin_notification(
-                message,
+                error_summary,
                 parse_mode="HTML",
                 disable_web_page_preview=True
             )
