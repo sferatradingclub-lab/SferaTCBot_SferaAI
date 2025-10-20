@@ -75,6 +75,10 @@ body::before {
   width: min(420px, 92vw);
   padding: 32px 24px 36px;
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
 }
 
 /* Анимации для плавных переходов */
