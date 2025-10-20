@@ -26,6 +26,7 @@ const resolveTelegramWebApp = () => {
 };
 
 const initializeMiniApp = () => {
+  const appContainer = document.getElementById('app');
   const mainMenu = document.getElementById('main-menu');
   const sectionsWrapper = document.getElementById('sections');
   const sectionElements = Array.from(document.querySelectorAll('.section'));
@@ -67,6 +68,14 @@ const initializeMiniApp = () => {
     }
   };
 
+  const toggleLayoutMode = (mode) => {
+    if (!appContainer) {
+      return;
+    }
+
+    appContainer.classList.toggle('app-section-open', mode === 'section');
+  };
+
   applyEnvironmentState(telegramWebApp);
 
   if (!telegramWebApp) {
@@ -92,6 +101,7 @@ const initializeMiniApp = () => {
 
   const showMainMenu = () => {
     hideAllSections();
+    toggleLayoutMode('menu');
     if (mainMenu) {
       mainMenu.classList.remove('hidden');
     }
@@ -106,6 +116,7 @@ const initializeMiniApp = () => {
     }
 
     hideAllSections();
+    toggleLayoutMode('section');
     if (mainMenu) {
       mainMenu.classList.add('hidden');
     }
