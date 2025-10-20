@@ -23,4 +23,7 @@ class User(Base):
 
     __table_args__ = (
         Index("ix_user_username_lower", func.lower(username), unique=False),
+        Index("ix_user_last_seen_active", "last_seen", "is_approved"),
+        Index("ix_user_verification_status", "awaiting_verification", "is_approved"),
+        Index("ix_user_banned_status", "is_banned"),
     )

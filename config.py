@@ -66,6 +66,10 @@ class Settings:
 
     STREAM_EDIT_INTERVAL_SECONDS: float = field(init=False)
     STREAM_BUFFER_SIZE_WORDS: int = field(init=False)
+    
+    # Параметры кеширования
+    CACHE_TTL_MINUTES: int = field(init=False)
+    MAX_CACHE_SIZE: int = field(init=False)
 
     TRAINING_BOT_URL: str = field(
         default="https://chatgpt.com/g/g-68d9b0f1d07c8191bba533ecfb9d1689-sferatc-lessons",
@@ -111,6 +115,7 @@ class Settings:
         self._load_tools_settings()
         self._load_support_settings()
         self._load_streaming_settings()
+        self._load_cache_settings()
         self._emit_warnings()
 
     def _validate_core_settings(self) -> None:
@@ -368,6 +373,45 @@ class Settings:
         self.STREAM_EDIT_INTERVAL_SECONDS = interval_value
         self.STREAM_BUFFER_SIZE_WORDS = buffer_size_value
 
+    def _load_cache_settings(self) -> None:
+        """Загрузка настроек кеширования."""
+        default_ttl = 60
+        raw_ttl = os.getenv("CACHE_TTL_MINUTES")
+        ttl_value = default_ttl
+        if raw_ttl is not None and raw_ttl.strip():
+            try:
+                parsed_ttl = int(raw_ttl)
+                if parsed_ttl <= 0:
+                    raise ValueError("Время жизни кеша должно быть положительным")
+            except ValueError:
+                self.logger.warning(
+                    "Некорректное значение CACHE_TTL_MINUTES='%s'. Использую %s.",
+                    raw_ttl,
+                    default_ttl,
+                )
+            else:
+                ttl_value = parsed_ttl
+
+        default_max_size = 1000
+        raw_max_size = os.getenv("MAX_CACHE_SIZE")
+        max_size_value = default_max_size
+        if raw_max_size is not None and raw_max_size.strip():
+            try:
+                parsed_max_size = int(raw_max_size)
+                if parsed_max_size <= 0:
+                    raise ValueError("Максимальный размер кеша должен быть положительным")
+            except ValueError:
+                self.logger.warning(
+                    "Некорректное значение MAX_CACHE_SIZE='%s'. Использую %s.",
+                    raw_max_size,
+                    default_max_size,
+                )
+            else:
+                max_size_value = parsed_max_size
+
+        self.CACHE_TTL_MINUTES = ttl_value
+        self.MAX_CACHE_SIZE = max_size_value
+
     def _emit_warnings(self) -> None:
         if self.DISCARDED_PAID_MODELS:
             self.logger.warning(
@@ -391,6 +435,12 @@ class Settings:
             self.logger.warning(
                 "Некорректный WEBHOOK_URL в конфигурации: %s", self.WEBHOOK_URL
             )
+            
+        # Предупреждения о настройках кеширования
+        if self.CACHE_TTL_MINUTES < 1:
+            self.logger.warning("CACHE_TTL_MINUTES должен быть положительным числом, установлено значение по умолчанию: 60")
+        if self.MAX_CACHE_SIZE < 1:
+            self.logger.warning("MAX_CACHE_SIZE должен быть положительным числом, установлено значение по умолчанию: 1000")
 
     @staticmethod
     def _validate_database_url(url: str) -> bool:
