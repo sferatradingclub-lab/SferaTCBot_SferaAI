@@ -6,6 +6,25 @@
     <meta name="color-scheme" content="dark light">
     <title>SferaTC Mini App</title>
     <link rel="stylesheet" href="css/style.css">
+    <!-- Резервные стили для Telegram Mini App -->
+    <link rel="stylesheet" href="css/fallback.css" media="not all and (min-resolution:.001dpcm)">
+    <script>
+      // Проверяем, загрузились ли основные стили, и если нет, подключаем резервные
+      window.addEventListener('load', function() {
+        try {
+          // Проверяем, доступны ли CSS переменные
+          const hasCSSVars = window.CSS && window.CSS.supports && window.CSS.supports('--bg-color', '#050b1a');
+          
+          // Если CSS переменные не поддерживаются или основные стили не загрузились, применяем fallback
+          if (!hasCSSVars) {
+            document.documentElement.classList.add('fallback-mode');
+          }
+        } catch(e) {
+          // В случае ошибки также применяем fallback
+          document.documentElement.classList.add('fallback-mode');
+        }
+      });
+    </script>
 </head>
 <body>
     <div id="app" class="app">

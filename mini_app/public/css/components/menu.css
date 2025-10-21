@@ -5,12 +5,12 @@
   max-width: 420px;
   padding: clamp(24px, 5vw, 36px) clamp(20px, 4vw, 28px) clamp(32px, 6vw, 40px);
   border-radius: 28px;
- background: var(--card-bg);
-  backdrop-filter: blur(var(--blur));
-  -webkit-backdrop-filter: blur(var(--blur));
-  box-shadow: var(--shadow-primary);
- display: flex;
- flex-direction: column;
+  background: var(--card-bg, rgba(5, 12, 32, 0.7)); /* Добавляем fallback значение */
+  backdrop-filter: blur(var(--blur, 12px)); /* Добавляем fallback значение */
+  -webkit-backdrop-filter: blur(var(--blur, 12px)); /* Добавляем fallback значение */
+  box-shadow: var(--shadow-primary, 0 32px 68px rgba(0, 0, 0, 0.55)); /* Добавляем fallback значение */
+  display: flex;
+  flex-direction: column;
   align-items: center;
   animation: fadeInUp 0.6s ease-out;
   z-index: 1;
@@ -37,14 +37,14 @@
 .menu::before {
   content: '';
   position: absolute;
- inset: 0;
+  inset: 0;
   padding: 2px;
   border-radius: inherit;
-  background: conic-gradient(from 0deg, var(--cyan), var(--magenta), var(--cyan), var(--violet), var(--cyan));
+  background: conic-gradient(from 0deg, var(--cyan, #00ffff), var(--magenta, #ff00ff), var(--cyan, #00ffff), var(--violet, #873cff), var(--cyan, #00ffff)); /* Добавляем fallback значения */
   animation: spin 12s linear infinite;
-  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
- -webkit-mask: linear-gradient(#000 0) content-box, linear-gradient(#000 0 0);
- mask-composite: exclude;
+  mask: linear-gradient(#000 0) content-box, linear-gradient(#000 0);
+  -webkit-mask: linear-gradient(#000 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
   -webkit-mask-composite: xor;
 }
 
@@ -62,8 +62,8 @@
 }
 
 .menu__navigation {
- display: flex;
- flex-direction: column;
+  display: flex;
+  flex-direction: column;
   gap: clamp(16px, 3vh, 18px);
   width: 100%;
   max-width: 300px;
