@@ -29,6 +29,8 @@ class SectionsModule {
         // Показываем главное меню
         DOMUtils.show(this.elements.mainMenu);
         DOMUtils.addClass(this.elements.mainMenu, 'active');
+        // Убираем класс active у контейнера секций
+        DOMUtils.removeClass(this.elements.sectionsContainer, 'active');
       });
       
       this.isInitialized = true;
@@ -97,11 +99,7 @@ class SectionsModule {
     // Скрываем все активные секции
     this.elements.sections.forEach((section, key) => {
       DOMUtils.removeClass(section, 'active');
-      setTimeout(() => {
-        if(DOMUtils.hasClass(section, 'active')) {
-          DOMUtils.hide(section);
-        }
-      }, appConfig.ui.animationDuration); // Скрываем после завершения анимации
+      DOMUtils.hide(section);
     });
     
     // Выполняем тактильную отдачу

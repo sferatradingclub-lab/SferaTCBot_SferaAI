@@ -100,6 +100,8 @@ class MenuModule {
     // Также напрямую показываем главное меню
     DOMUtils.show(this.elements.mainMenu);
     DOMUtils.addClass(this.elements.mainMenu, 'active');
+    // Убираем класс active у контейнера секций
+    DOMUtils.removeClass(this.elements.sectionsContainer, 'active');
   }
   
   // Проверка, инициализирован ли модуль
