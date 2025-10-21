@@ -81,7 +81,11 @@ class SferaTCMiniApp {
 
 // Инициализация приложения
 const app = new SferaTCMiniApp();
-await app.init();
 
-// Экспорт для возможного использования в других скриптах
-window.SferaTCApp = app;
+// Используем IIFE (Immediately Invoked Function Expression) для использования await
+(async () => {
+  await app.init();
+  
+  // Экспорт для возможного использования в других скриптах
+  window.SferaTCApp = app;
+})();
