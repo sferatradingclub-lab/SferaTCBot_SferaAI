@@ -96,6 +96,10 @@ class MenuModule {
     
     // Уведомляем другие модули о возврате к главному меню
     this.eventSystem.emit('section:back', {});
+    
+    // Также напрямую показываем главное меню
+    DOMUtils.show(this.elements.mainMenu);
+    DOMUtils.addClass(this.elements.mainMenu, 'active');
   }
   
   // Проверка, инициализирован ли модуль

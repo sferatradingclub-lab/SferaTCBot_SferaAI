@@ -26,6 +26,9 @@ class SectionsModule {
       
       this.eventSystem.subscribe('section:back', () => {
         this.showMainMenu();
+        // Показываем главное меню
+        DOMUtils.show(this.elements.mainMenu);
+        DOMUtils.addClass(this.elements.mainMenu, 'active');
       });
       
       this.isInitialized = true;
