@@ -45,7 +45,7 @@ class SferaTCMiniApp {
     this.menuModule = new MenuModule(this.stateManager, this.eventSystem);
     this.menuModule.init();
     
-    this.sectionsModule = new SectionsModule(this.stateManager, this.eventSystem, this.telegramModule);
+    this.sectionsModule = new SectionsModule(this.stateManager, this.eventSystem, this.telegramModule, this.menuModule);
     this.sectionsModule.init();
     
     // Подписываемся на изменения состояния для отладки (если включен debug)

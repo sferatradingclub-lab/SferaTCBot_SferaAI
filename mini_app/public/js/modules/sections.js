@@ -4,10 +4,11 @@ import appConfig from '../config.js';
 
 // Модуль управления секциями
 class SectionsModule {
-  constructor(stateManager, eventSystem, telegramModule) {
+  constructor(stateManager, eventSystem, telegramModule, menuModule) {
     this.stateManager = stateManager;
     this.eventSystem = eventSystem;
     this.telegramModule = telegramModule;
+    this.menuModule = menuModule;
     this.elements = {};
     this.isInitialized = false;
  }
@@ -53,11 +54,11 @@ class SectionsModule {
     });
   }
   
-  setupEventListeners() {
+ setupEventListeners() {
     // Обработчики для кнопок "Назад"
     this.elements.backButtons.forEach(button => {
       DOMUtils.addEventListener(button, 'click', () => {
-        this.showMainMenu();
+        this.menuModule.showMainMenu();
       });
     });
  }
