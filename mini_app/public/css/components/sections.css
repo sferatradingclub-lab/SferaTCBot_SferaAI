@@ -1,0 +1,50 @@
+/* Стили для секций */
+.sections-container {
+  display: none;
+  width: 100%;
+  max-width: 420px;
+}
+
+.sections-container.visible {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.section {
+  display: none;
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity var(--animation-duration) ease-out, transform var(--animation-duration) ease-out;
+  width: 100%;
+  padding: clamp(24px, 5vw, 36px);
+  border-radius: 28px;
+ background: var(--card-bg);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
+  box-shadow: var(--shadow-primary);
+}
+
+.section.active {
+  display: block;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.section-content {
+  display: flex;
+ flex-direction: column;
+  align-items: center;
+  text-align: center;
+  width: 100%;
+}
+
+.section-content h2 {
+ margin-bottom: 1rem;
+  color: var(--cyan);
+}
+
+.section-content p {
+  margin-bottom: 1.5rem;
+ line-height: 1.6;
+}

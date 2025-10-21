@@ -1,0 +1,16 @@
+:root {
+  --bg-color: #050b1a;
+  --grid-color: rgba(87, 124, 255, 0.08);
+  --text-primary: #e3f3ff;
+  --text-muted: rgba(227, 243, 255, 0.64);
+  --cyan: #00ffff;
+  --magenta: #ff00ff;
+  --violet: #873cff;
+  --card-bg: rgba(5, 12, 32, 0.7);
+  --blur: 12px;
+  --transition: 220ms ease;
+  --animation-duration: 300ms;
+  --border-radius: 999px;
+  --shadow-primary: 0 32px 68px rgba(0, 0, 0.55);
+ --shadow-button: 0 0 15px rgba(0, 255, 255, 0.5);
+}

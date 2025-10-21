@@ -1,0 +1,41 @@
+/* Стили для кнопок */
+.button {
+  position: relative;
+  padding: 16px 24px;
+  border-radius: var(--border-radius);
+  border: 1px solid rgba(0, 255, 255, 0.3);
+  background: rgba(4, 14, 36, 0.65);
+  color: var(--text-primary);
+ letter-spacing: 0.2em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all var(--transition);
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  touch-action: manipulation;
+  outline: none;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.95rem;
+  width: 100%;
+  max-width: 250px;
+}
+
+.button:hover,
+.button:active,
+.button:focus-visible {
+  background: rgba(0, 255, 255, 0.1);
+  border-color: var(--cyan);
+  box-shadow: var(--shadow-button);
+  transform: translateY(-2px);
+}
+
+.button--menu {
+  margin: 0 auto;
+}
+
+.button--back {
+  margin-top: 20px;
+  max-width: 150px;
+  padding: 12px 20px;
+  font-size: 0.9rem;
+}
