@@ -21,9 +21,11 @@ def get_main_menu_keyboard(user_id: int) -> ReplyKeyboardMarkup:
     current_menu = [row[:] for row in main_menu_keyboard_layout]
     webhook_url = settings.WEBHOOK_URL
     if webhook_url:
+        # Используем URL для Mini App, добавляя путь /mini-app/
+        mini_app_url = f"{webhook_url}/mini-app/"
         current_menu[0][0] = KeyboardButton(
             text="🚀 Открыть приложение 🚀",
-            web_app=WebAppInfo(url=webhook_url),
+            web_app=WebAppInfo(url=mini_app_url),
         )
     if str(user_id) == settings.ADMIN_CHAT_ID:
         current_menu.append(["👑 Админка"])
