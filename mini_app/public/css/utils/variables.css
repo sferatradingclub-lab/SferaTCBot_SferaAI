@@ -11,6 +11,6 @@
   --transition: 220ms ease;
   --animation-duration: 300ms;
   --border-radius: 999px;
-  --shadow-primary: 0 32px 68px rgba(0, 0, 0.55);
- --shadow-button: 0 0 15px rgba(0, 255, 255, 0.5);
+  --shadow-primary: 0 32px 68px rgba(0, 0, 0, 0.55);
+  --shadow-button: 0 0 15px rgba(0, 255, 255, 0.5);
 }

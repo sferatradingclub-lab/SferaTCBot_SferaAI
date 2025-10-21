@@ -16,7 +16,7 @@
   background: var(--bg-color);
   background-image:
     radial-gradient(circle at 20% -10%, rgba(0, 255, 255, 0.12), transparent 55%),
-    radial-gradient(circle at 80% 10%, rgba(25, 0, 255, 0.12), transparent 58%),
+    radial-gradient(circle at 80% 10%, rgba(255, 0, 255, 0.12), transparent 58%),
     linear-gradient(135deg, rgba(0, 12, 36, 0.8), rgba(24, 0, 42, 0.7));
   color: var(--text-primary);
  overflow-x: hidden;

@@ -60,14 +60,16 @@ class TelegramModule {
   }
   
   // Установка темы
-  setTheme() {
-    if (this.webApp) {
-      const theme = this.webApp.themeParams;
-      if (theme?.bg_color) {
-        document.documentElement.style.setProperty('--bg-color', theme.bg_color);
-      }
-    }
-  }
+ setTheme() {
+   if (this.webApp) {
+     const theme = this.webApp.themeParams;
+     // Не изменяем CSS переменную --bg-color, чтобы не конфликтовать с основным стилем
+     // Вместо этого, можно установить цвет фона напрямую, если тема отличается
+     if (theme?.bg_color && appConfig.debug) {
+       console.log('Тема Telegram:', theme);
+     }
+   }
+ }
   
   // Настройка вьюпорта
   setupViewport() {

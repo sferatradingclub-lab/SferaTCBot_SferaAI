@@ -40,7 +40,7 @@
  inset: 0;
   padding: 2px;
   border-radius: inherit;
-  background: conic-gradient(from 0deg, var(--cyan), var(--magenta), #8cfff9, var(--violet), var(--cyan));
+  background: conic-gradient(from 0deg, var(--cyan), var(--magenta), var(--cyan), var(--violet), var(--cyan));
   animation: spin 12s linear infinite;
   mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
  -webkit-mask: linear-gradient(#000 0) content-box, linear-gradient(#000 0 0);

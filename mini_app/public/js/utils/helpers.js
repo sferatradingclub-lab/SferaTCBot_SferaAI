@@ -28,18 +28,23 @@ class Helpers {
   }
   
   // Проверка поддержки функций
-  static supportsFeature(feature) {
-    switch(feature) {
-      case 'backdrop-filter':
-        return CSS.supports('backdrop-filter', 'blur(1px)');
-      case 'conic-gradient':
-        return CSS.supports('background', 'conic-gradient(from 0deg, red, blue)');
-      case 'dvh':
-        return CSS.supports('height', '100dvh');
-      default:
-        return false;
-    }
-  }
+ static supportsFeature(feature) {
+   // Проверяем, доступен ли CSS.supports
+   if (typeof CSS !== 'undefined' && CSS.supports) {
+     switch(feature) {
+       case 'backdrop-filter':
+         return CSS.supports('backdrop-filter', 'blur(1px)');
+       case 'conic-gradient':
+         return CSS.supports('background', 'conic-gradient(from 0deg, red, blue)');
+       case 'dvh':
+         return CSS.supports('height', '100dvh');
+       default:
+         return false;
+     }
+   }
+   // Если CSS.supports недоступен, предполагаем, что функция не поддерживается
+   return false;
+ }
   
   // Задержка (для асинхронных операций)
   static async delay(ms) {
