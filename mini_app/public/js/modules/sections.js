@@ -25,12 +25,18 @@ class SectionsModule {
       });
       
       this.eventSystem.subscribe('section:back', () => {
-        this.showMainMenu();
+        // Скрываем все активные секции
+        this.elements.sections.forEach((section, key) => {
+          DOMUtils.removeClass(section, 'active');
+          DOMUtils.hide(section);
+        });
         // Показываем главное меню
         DOMUtils.show(this.elements.mainMenu);
         DOMUtils.addClass(this.elements.mainMenu, 'active');
         // Убираем класс active у контейнера секций
         DOMUtils.removeClass(this.elements.sectionsContainer, 'active');
+        // Выполняем тактильную отдачу
+        this.telegramModule.hapticFeedback('light');
       });
       
       this.isInitialized = true;
