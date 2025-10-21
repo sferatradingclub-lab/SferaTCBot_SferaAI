@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест CSS - SferaTC Mini App</title>
+    <link rel="stylesheet" href="./css/style.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #050b1a;
+            color: #e3f3ff;
+        }
+        
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #00ffff;
+            border-radius: 8px;
+        }
+        
+        .test-button {
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Тест CSS компонентов</h1>
+    
+    <div class="test-section">
+        <h2>Тест меню</h2>
+        <div class="menu">
+            <header class="menu__header">
+                <h1 class="logo">SFERATC</h1>
+                <p class="tagline">SFERA TRADING CLUB</p>
+            </header>
+            <nav class="menu__navigation">
+                <button class="button button--menu">
+                    <span class="sr-only">Открыть AI Screener</span>
+                    AI Screener
+                </button>
+                <button class="button button--menu">
+                    <span class="sr-only">Открыть AI News</span>
+                    AI News
+                </button>
+            </nav>
+        </div>
+    
+    <div class="test-section">
+        <h2>Тест кнопок</h2>
+        <button class="button test-button">Обычная кнопка</button>
+        <button class="button button--menu test-button">Кнопка меню</button>
+        <button class="button button--back test-button">Кнопка назад</button>
+    </div>
+    
+    <div class="test-section">
+        <h2>Тест секций</h2>
+        <div class="section">
+            <div class="section-content">
+                <h2>Тестовая секция</h2>
+                <p>Это тестовое содержимое секции.</p>
+                <button class="button button--back">Назад</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Проверка наличия CSS переменных
+        window.addEventListener('load', function() {
+            try {
+                const hasCSSVars = window.CSS && window.CSS.supports && window.CSS.supports('--bg-color', '#050b1a');
+                console.log('CSS переменные доступны:', hasCSSVars);
+                
+                if (hasCSSVars) {
+                    document.body.style.backgroundColor = 'var(--bg-color)';
+                    console.log('Цвет фона установлен через CSS переменную');
+                }
+            } catch(e) {
+                console.error('Ошибка проверки CSS переменных:', e);
+            }
+        });
+    </script>
+</body>
+</html>

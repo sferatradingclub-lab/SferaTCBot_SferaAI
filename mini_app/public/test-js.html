@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест JavaScript - SferaTC Mini App</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #050b1a;
+            color: #e3f3ff;
+        }
+        
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #00ffff;
+            border-radius: 8px;
+        }
+        
+        .log {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <h1>Тест JavaScript модулей</h1>
+    
+    <div class="test-section">
+        <h2>Статус загрузки модулей</h2>
+        <div id="module-status" class="log">Ожидание загрузки модулей...</div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Тест отдельных модулей</h2>
+        <div id="individual-modules" class="log">Ожидание тестирования модулей...</div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Логи консоли</h2>
+        <div id="console-log" class="log">Логи появятся здесь...</div>
+    </div>
+    
+    <script>
+        // Перехватываем console.log для отображения в интерфейсе
+        const originalLog = console.log;
+        const originalError = console.error;
+        const consoleLogDiv = document.getElementById('console-log');
+        
+        console.log = function(...args) {
+            originalLog.apply(console, args);
+            consoleLogDiv.innerHTML += args.join(' ') + '\n';
+            consoleLogDiv.scrollTop = consoleLogDiv.scrollHeight;
+        };
+        
+        console.error = function(...args) {
+            originalError.apply(console, args);
+            consoleLogDiv.innerHTML += '[ERROR] ' + args.join(' ') + '\n';
+            consoleLogDiv.scrollTop = consoleLogDiv.scrollHeight;
+        };
+        
+        // Тест загрузки модулей
+        const moduleStatusDiv = document.getElementById('module-status');
+        const individualModulesDiv = document.getElementById('individual-modules');
+        
+        async function testModules() {
+            try {
+                moduleStatusDiv.innerHTML = 'Начало загрузки модулей...\n';
+                
+                // Тест импорта основного приложения
+                moduleStatusDiv.innerHTML += 'Загрузка app.js...\n';
+                const appModule = await import('./js/app.js');
+                moduleStatusDiv.innerHTML += '✓ app.js загружен успешно\n';
+                
+                // Тест импорта отдельных модулей
+                individualModulesDiv.innerHTML = 'Тестирование отдельных модулей...\n';
+                
+                // Тест StateManager
+                try {
+                    const stateModule = await import('./js/modules/state.js');
+                    individualModulesDiv.innerHTML += '✓ state.js загружен успешно\n';
+                    const stateManager = new stateModule.default();
+                    individualModulesDiv.innerHTML += '✓ StateManager создан\n';
+                } catch(e) {
+                    individualModulesDiv.innerHTML += '✗ Ошибка загрузки state.js: ' + e.message + '\n';
+                }
+                
+                // Тест EventSystem
+                try {
+                    const eventModule = await import('./js/modules/eventSystem.js');
+                    individualModulesDiv.innerHTML += '✓ eventSystem.js загружен успешно\n';
+                    const eventSystem = new eventModule.default();
+                    individualModulesDiv.innerHTML += '✓ EventSystem создан\n';
+                } catch(e) {
+                    individualModulesDiv.innerHTML += '✗ Ошибка загрузки eventSystem.js: ' + e.message + '\n';
+                }
+                
+                // Тест TelegramModule
+                try {
+                    const telegramModule = await import('./js/modules/telegram.js');
+                    individualModulesDiv.innerHTML += '✓ telegram.js загружен успешно\n';
+                } catch(e) {
+                    individualModulesDiv.innerHTML += '✗ Ошибка загрузки telegram.js: ' + e.message + '\n';
+                }
+                
+                // Тест MenuModule
+                try {
+                    const menuModule = await import('./js/modules/menu.js');
+                    individualModulesDiv.innerHTML += '✓ menu.js загружен успешно\n';
+                } catch(e) {
+                    individualModulesDiv.innerHTML += '✗ Ошибка загрузки menu.js: ' + e.message + '\n';
+                }
+                
+                // Тест SectionsModule
+                try {
+                    const sectionsModule = await import('./js/modules/sections.js');
+                    individualModulesDiv.innerHTML += '✓ sections.js загружен успешно\n';
+                } catch(e) {
+                    individualModulesDiv.innerHTML += '✗ Ошибка загрузки sections.js: ' + e.message + '\n';
+                }
+                
+                // Тест Helpers
+                try {
+                    const helpersModule = await import('./js/utils/helpers.js');
+                    individualModulesDiv.innerHTML += '✓ helpers.js загружен успешно\n';
+                } catch(e) {
+                    individualModulesDiv.innerHTML += '✗ Ошибка загрузки helpers.js: ' + e.message + '\n';
+                }
+                
+                // Тест DOMUtils
+                try {
+                    const domModule = await import('./js/utils/dom.js');
+                    individualModulesDiv.innerHTML += '✓ dom.js загружен успешно\n';
+                } catch(e) {
+                    individualModulesDiv.innerHTML += '✗ Ошибка загрузки dom.js: ' + e.message + '\n';
+                }
+                
+                moduleStatusDiv.innerHTML += '\n✓ Все модули протестированы\n';
+                
+            } catch(e) {
+                moduleStatusDiv.innerHTML += '✗ Ошибка загрузки модулей: ' + e.message + '\n';
+                console.error('Ошибка тестирования модулей:', e);
+            }
+        }
+        
+        // Запуск тестов
+        testModules();
+    </script>
+</body>
+</html>
