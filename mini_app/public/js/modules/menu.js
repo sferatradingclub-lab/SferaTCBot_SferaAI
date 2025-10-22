@@ -4,9 +4,10 @@ import appConfig from '../config.js';
 
 // Модуль управления меню
 class MenuModule {
-  constructor(stateManager, eventSystem) {
+  constructor(stateManager, eventSystem, sectionsModule = null) {
     this.stateManager = stateManager;
     this.eventSystem = eventSystem;
+    this.sectionsModule = sectionsModule;
     this.elements = {};
     this.isInitialized = false;
  }
@@ -100,6 +101,11 @@ class MenuModule {
     
     // Уведомляем другие модули о возврате к главному меню
     this.eventSystem.emit('section:back', {});
+    
+    // Если доступен модуль секций, вызываем его метод для переключения интерфейса
+    if (this.sectionsModule && typeof this.sectionsModule.showMainMenu === 'function') {
+      this.sectionsModule.showMainMenu();
+    }
  }
   
   // Проверка, инициализирован ли модуль

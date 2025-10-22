@@ -42,11 +42,11 @@ class SferaTCMiniApp {
     await this.telegramModule.init();
     
     // Инициализируем модули в правильном порядке
-    this.menuModule = new MenuModule(this.stateManager, this.eventSystem);
-    this.menuModule.init();
-    
-    this.sectionsModule = new SectionsModule(this.stateManager, this.eventSystem, this.telegramModule, this.menuModule);
+    this.sectionsModule = new SectionsModule(this.stateManager, this.eventSystem, this.telegramModule, null);
     this.sectionsModule.init();
+    
+    this.menuModule = new MenuModule(this.stateManager, this.eventSystem, this.sectionsModule);
+    this.menuModule.init();
     
     // Подписываемся на изменения состояния для отладки (если включен debug)
     if(appConfig.debug) {
