@@ -58,11 +58,8 @@ class NavigationModule {
   }
   
   setupInitialState() {
-    // Изначально скрываем контейнер секций и показываем главное меню
-    DOMUtils.hide(this.elements.sectionsContainer);
-    DOMUtils.removeClass(this.elements.sectionsContainer, 'visible');
-    DOMUtils.show(this.elements.mainMenu);
-    DOMUtils.addClass(this.elements.mainMenu, 'active');
+    // Изначально показываем главное меню, убираем класс app-section-open
+    DOMUtils.removeClass(this.elements.app, 'app-section-open');
   }
   
   setupAccessibility() {
@@ -86,111 +83,52 @@ class NavigationModule {
     });
   }
   
- showMainMenu() {
-   console.log('🔍 Вызван метод showMainMenu');
-   
-   // Обновляем состояние
-   this.stateManager.updateState({
-     currentSection: null,
-     isSectionOpen: false
-   });
-   
-   // Скрываем все секции
-   const sections = DOMUtils.getElements('.section');
-   console.log(`📊 Найдено секций: ${sections.length}`);
-   sections.forEach(section => {
-     DOMUtils.removeClass(section, 'active');
-     DOMUtils.hide(section);
-     console.log(`📋 Скрыта секция: ${section.id}`);
-   });
-   
-   // Скрываем контейнер секций
-   DOMUtils.hide(this.elements.sectionsContainer);
-   DOMUtils.removeClass(this.elements.sectionsContainer, 'visible');
-   console.log('📦 Контейнер секций скрыт');
-   
-   // Показываем главное меню
-   DOMUtils.show(this.elements.mainMenu);
-   DOMUtils.addClass(this.elements.mainMenu, 'active');
-   console.log('🏠 Главное меню показано');
-   
-   // Убираем класс состояния приложения
-   DOMUtils.removeClass(this.elements.app, 'app-section-open');
-   
-   console.log('🏠 Возврат к главному меню завершен');
-   
-   // Выполняем тактильную отдачу
-   if (this.telegramModule) {
-     this.telegramModule.hapticFeedback('light');
-   }
-   
-   // Уведомляем другие модули о возврате к главному меню
-   this.eventSystem.emit('section:back', {});
- }
-  
- showSection(sectionKey) {
-   console.log(`🔍 Вызван метод showSection для раздела: ${sectionKey}`);
-   
-   // Проверяем, существует ли такой раздел
-   if (!appConfig.navigation.sections.includes(sectionKey)) {
-     console.warn(`Раздел ${sectionKey} не найден`);
-     return;
-   }
-   
-   // Обновляем состояние
-   this.stateManager.updateState({
-     currentSection: sectionKey,
-     isSectionOpen: true
-   });
-   
-   // Скрываем главное меню
-   DOMUtils.hide(this.elements.mainMenu);
-   DOMUtils.removeClass(this.elements.mainMenu, 'active');
-   console.log('🏠 Главное меню скрыто');
-   
-   // Скрываем все секции
-   const sections = DOMUtils.getElements('.section');
-   console.log(`📊 Найдено секций: ${sections.length}`);
-   sections.forEach(section => {
-     DOMUtils.removeClass(section, 'active');
-     DOMUtils.hide(section);
-     console.log(`📋 Скрыта секция: ${section.id}`);
-   });
-   
-   // Показываем выбранную секцию
-   const targetSection = DOMUtils.getElement(`section-${sectionKey}`);
-   if (targetSection) {
-     DOMUtils.show(targetSection);
-     console.log(`📋 Показана целевая секция: ${targetSection.id}`);
-     setTimeout(() => {
-       DOMUtils.addClass(targetSection, 'active');
-       console.log(`✅ Добавлен класс active для секции: ${targetSection.id}`);
-     }, 10); // Небольшая задержка для срабатывания анимации
-   } else {
-     console.error(`❌ Не найдена секция с ID: section-${sectionKey}`);
-   }
-   
-   // Показываем контейнер секций
-   DOMUtils.show(this.elements.sectionsContainer);
-   DOMUtils.addClass(this.elements.sectionsContainer, 'visible');
-   console.log('📦 Контейнер секций показан');
-   
-   // Добавляем класс для состояния приложения
-   DOMUtils.addClass(this.elements.app, 'app-section-open');
-   
-   console.log(`🔄 Переход к разделу: ${sectionKey} завершен`);
-   
-   // Выполняем тактильную отдачу
-   if (this.telegramModule) {
-     this.telegramModule.hapticFeedback('light');
-   }
-   
-   // Уведомляем другие модули о смене раздела
-   this.eventSystem.emit('section:change', { section: sectionKey });
- }
-  
-  // Проверка, инициализирован ли модуль
- isInitialized() {
+  showMainMenu() {
+    // Обновляем состояние
+    this.stateManager.updateState({
+      currentSection: null,
+      isSectionOpen: false
+    });
+    
+    // Убираем класс состояния приложения - это скроет меню через CSS
+    DOMUtils.removeClass(this.elements.app, 'app-section-open');
+    
+    // Выполняем тактильную отдачу
+    if (this.telegramModule) {
+      this.telegramModule.hapticFeedback('light');
+    }
+    
+    // Уведомляем другие модули о возврате к главному меню
+    this.eventSystem.emit('section:back', {});
+  }
+ 
+  showSection(sectionKey) {
+    // Проверяем, существует ли такой раздел
+    if (!appConfig.navigation.sections.includes(sectionKey)) {
+      console.warn(`Раздел ${sectionKey} не найден`);
+      return;
+    }
+    
+    // Обновляем состояние
+    this.stateManager.updateState({
+      currentSection: sectionKey,
+      isSectionOpen: true
+    });
+    
+    // Добавляем класс для состояния приложения - это скроет меню и покажет секции через CSS
+    DOMUtils.addClass(this.elements.app, 'app-section-open');
+    
+    // Выполняем тактильную отдачу
+    if (this.telegramModule) {
+      this.telegramModule.hapticFeedback('light');
+    }
+    
+    // Уведомляем другие модули о смене раздела
+    this.eventSystem.emit('section:change', { section: sectionKey });
+  }
+ 
+   // Проверка, инициализирован ли модуль
+  isInitialized() {
     return this.isInitialized;
   }
 }
