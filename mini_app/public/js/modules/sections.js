@@ -108,6 +108,14 @@ class SectionsModule {
       DOMUtils.hide(section);
     });
     
+    // Показываем главное меню
+    DOMUtils.show(this.elements.mainMenu);
+    DOMUtils.addClass(this.elements.mainMenu, 'active');
+    
+    // Скрываем контейнер секций и убираем класс active
+    DOMUtils.hide(this.elements.sectionsContainer);
+    DOMUtils.removeClass(this.elements.sectionsContainer, 'active');
+    
     // Выполняем тактильную отдачу
     this.telegramModule.hapticFeedback('light');
   }
