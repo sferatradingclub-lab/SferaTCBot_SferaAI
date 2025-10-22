@@ -2,7 +2,7 @@ import DOMUtils from '../utils/dom.js';
 import EventSystem from './eventSystem.js';
 import appConfig from '../config.js';
 
-// Централизованный модуль навигации
+// Простой модуль навигации
 class NavigationModule {
   constructor(stateManager, eventSystem, telegramModule) {
     this.stateManager = stateManager;
@@ -34,7 +34,8 @@ class NavigationModule {
       menuButtons: DOMUtils.getElements('.button--menu'),
       sectionsContainer: DOMUtils.getElement('sections-container'),
       app: DOMUtils.getElement('app'),
-      backButtons: DOMUtils.getElements('.button--back')
+      backButtons: DOMUtils.getElements('.button--back'),
+      sections: DOMUtils.getElements('.section')
     };
   }
   
@@ -58,7 +59,12 @@ class NavigationModule {
   }
   
   setupInitialState() {
-    // Изначально показываем главное меню, убираем класс app-section-open
+    // Изначально скрываем контейнер секций, показываем главное меню и убираем класс состояния
+    DOMUtils.hide(this.elements.sectionsContainer);
+    this.elements.sections.forEach(section => {
+      DOMUtils.hide(section);
+    });
+    DOMUtils.show(this.elements.mainMenu);
     DOMUtils.removeClass(this.elements.app, 'app-section-open');
   }
   
@@ -90,8 +96,19 @@ class NavigationModule {
       isSectionOpen: false
     });
     
-    // Убираем класс состояния приложения - это скроет меню через CSS
+    // Убираем класс состояния приложения - это скроет меню и секции через CSS
     DOMUtils.removeClass(this.elements.app, 'app-section-open');
+    
+    // Показываем главное меню (оно будет видимым, когда у .app нет класса app-section-open)
+    DOMUtils.show(this.elements.mainMenu);
+    
+    // Скрываем все секции
+    this.elements.sections.forEach(section => {
+      DOMUtils.hide(section);
+    });
+    
+    // Скрываем контейнер секций
+    DOMUtils.hide(this.elements.sectionsContainer);
     
     // Выполняем тактильную отдачу
     if (this.telegramModule) {
@@ -100,7 +117,7 @@ class NavigationModule {
     
     // Уведомляем другие модули о возврате к главному меню
     this.eventSystem.emit('section:back', {});
-  }
+ }
  
   showSection(sectionKey) {
     // Проверяем, существует ли такой раздел
@@ -109,14 +126,31 @@ class NavigationModule {
       return;
     }
     
+    // Добавляем класс для состояния приложения - это скроет меню и покажет секции через CSS
+    DOMUtils.addClass(this.elements.app, 'app-section-open');
+    
     // Обновляем состояние
     this.stateManager.updateState({
       currentSection: sectionKey,
       isSectionOpen: true
     });
     
-    // Добавляем класс для состояния приложения - это скроет меню и покажет секции через CSS
-    DOMUtils.addClass(this.elements.app, 'app-section-open');
+    // Скрываем главное меню (оно будет скрыто, когда у .app есть класс app-section-open)
+    DOMUtils.hide(this.elements.mainMenu);
+    
+    // Скрываем все секции
+    this.elements.sections.forEach(section => {
+      DOMUtils.hide(section);
+    });
+    
+    // Показываем выбранную секцию
+    const targetSection = DOMUtils.getElement(`section-${sectionKey}`);
+    if (targetSection) {
+      DOMUtils.show(targetSection);
+    }
+    
+    // Показываем контейнер секций
+    DOMUtils.show(this.elements.sectionsContainer);
     
     // Выполняем тактильную отдачу
     if (this.telegramModule) {
@@ -128,7 +162,7 @@ class NavigationModule {
   }
  
    // Проверка, инициализирован ли модуль
-  isInitialized() {
+ isInitialized() {
     return this.isInitialized;
   }
 }
