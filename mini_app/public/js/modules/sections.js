@@ -33,8 +33,11 @@ class SectionsModule {
         // Показываем главное меню
         DOMUtils.show(this.elements.mainMenu);
         DOMUtils.addClass(this.elements.mainMenu, 'active');
-        // Убираем класс active у контейнера секций
+        // Скрываем контейнер секций и убираем класс active
+        DOMUtils.hide(this.elements.sectionsContainer);
         DOMUtils.removeClass(this.elements.sectionsContainer, 'active');
+        // Убираем класс состояния приложения
+        DOMUtils.removeClass(this.elements.app, 'app-section-open');
         // Выполняем тактильную отдачу
         this.telegramModule.hapticFeedback('light');
       });
@@ -53,7 +56,8 @@ class SectionsModule {
       sections: new Map(),
       backButtons: DOMUtils.getElements('.button--back'),
       sectionsContainer: DOMUtils.getElement('sections-container'),
-      mainMenu: DOMUtils.getElement('main-menu')
+      mainMenu: DOMUtils.getElement('main-menu'),
+      app: DOMUtils.getElement('app')
     };
     
     // Инициализируем карту секций
@@ -96,6 +100,13 @@ class SectionsModule {
         DOMUtils.addClass(targetSection, 'active');
       }, 10); // Небольшая задержка для срабатывания анимации
       
+      // Показываем контейнер секций
+      DOMUtils.show(this.elements.sectionsContainer);
+      DOMUtils.addClass(this.elements.sectionsContainer, 'active');
+      
+      // Добавляем класс состояния приложения
+      DOMUtils.addClass(this.elements.app, 'app-section-open');
+      
       // Выполняем тактильную отдачу
       this.telegramModule.hapticFeedback('light');
     }
@@ -115,6 +126,9 @@ class SectionsModule {
     // Скрываем контейнер секций и убираем класс active
     DOMUtils.hide(this.elements.sectionsContainer);
     DOMUtils.removeClass(this.elements.sectionsContainer, 'active');
+    
+    // Убираем класс состояния приложения
+    DOMUtils.removeClass(this.elements.app, 'app-section-open');
     
     // Выполняем тактильную отдачу
     this.telegramModule.hapticFeedback('light');

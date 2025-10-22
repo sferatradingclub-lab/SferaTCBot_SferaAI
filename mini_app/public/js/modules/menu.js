@@ -73,6 +73,10 @@ class MenuModule {
       isSectionOpen: true
     });
     
+    // Скрываем главное меню
+    DOMUtils.hide(this.elements.mainMenu);
+    DOMUtils.removeClass(this.elements.mainMenu, 'active');
+    
     // Добавляем класс для состояния приложения
     DOMUtils.addClass(this.elements.app, 'app-section-open');
     
@@ -96,13 +100,6 @@ class MenuModule {
     
     // Уведомляем другие модули о возврате к главному меню
     this.eventSystem.emit('section:back', {});
-    
-    // Также напрямую показываем главное меню
-    DOMUtils.show(this.elements.mainMenu);
-    DOMUtils.addClass(this.elements.mainMenu, 'active');
-    // Скрываем контейнер секций и убираем класс active
-    DOMUtils.hide(this.elements.sectionsContainer);
-    DOMUtils.removeClass(this.elements.sectionsContainer, 'active');
  }
   
   // Проверка, инициализирован ли модуль
