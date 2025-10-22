@@ -1,8 +1,7 @@
 import StateManager from './modules/state.js';
 import EventSystem from './modules/eventSystem.js';
 import TelegramModule from './modules/telegram.js';
-import MenuModule from './modules/menu.js';
-import SectionsModule from './modules/sections.js';
+import NavigationModule from './modules/navigation.js';
 import Helpers from './utils/helpers.js';
 import appConfig from './config.js';
 
@@ -41,12 +40,9 @@ class SferaTCMiniApp {
     this.telegramModule = new TelegramModule(this.stateManager);
     await this.telegramModule.init();
     
-    // Инициализируем модули в правильном порядке
-    this.sectionsModule = new SectionsModule(this.stateManager, this.eventSystem, this.telegramModule, null);
-    this.sectionsModule.init();
-    
-    this.menuModule = new MenuModule(this.stateManager, this.eventSystem, this.sectionsModule);
-    this.menuModule.init();
+    // Инициализируем модуль навигации
+    this.navigationModule = new NavigationModule(this.stateManager, this.eventSystem, this.telegramModule);
+    this.navigationModule.init();
     
     // Подписываемся на изменения состояния для отладки (если включен debug)
     if(appConfig.debug) {
@@ -57,12 +53,8 @@ class SferaTCMiniApp {
   }
   
   // Методы для получения модулей (если нужно извне)
-  getMenuModule() {
-    return this.menuModule;
-  }
-  
-  getSectionsModule() {
-    return this.sectionsModule;
+  getNavigationModule() {
+    return this.navigationModule;
   }
   
   getTelegramModule() {
