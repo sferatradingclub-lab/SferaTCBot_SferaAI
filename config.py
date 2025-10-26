@@ -674,7 +674,13 @@ async def send_video_or_photo_fallback(
         if video_url and query.message and query.message.photo:
             try:
                 from telegram.error import TelegramError
-                media = InputMediaVideo(media=video_url, caption=caption, parse_mode=kwargs.get('parse_mode'))
+                media = InputMediaVideo(
+                    media=video_url,
+                    caption=caption,
+                    parse_mode=kwargs.get('parse_mode'),
+                    width=kwargs.get('width', 640),
+                    height=kwargs.get('height', 360)
+                )
                 return await query.edit_message_media(media=media, reply_markup=reply_markup)
             except TelegramError as e:
                 settings.logger.warning(f"Не удалось отправить видео в inline режиме: {e}. Пробуем изображение.")
@@ -731,6 +737,8 @@ async def send_video_or_photo_fallback(
                 # Добавим стандартные параметры для видео без звука
                 video_kwargs = {
                     'supports_streaming': True,
+                    'width': kwargs.get('width', 640),  # Установим стандартную ширину
+                    'height': kwargs.get('height', 360), # Установим стандартную высоту
                     **kwargs
                 }
                 return await message.reply_video(
