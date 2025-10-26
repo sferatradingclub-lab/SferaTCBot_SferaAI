@@ -9,7 +9,7 @@ from telegram import Update
 from telegram.error import TelegramError
 from telegram.ext import ContextTypes
 
-from config import get_safe_url, get_settings
+from config import get_safe_url, get_settings, send_video_or_photo_fallback
 from keyboards import (
     get_main_menu_keyboard,
     get_support_llm_keyboard,
@@ -75,18 +75,16 @@ async def show_support_menu(
         "Я — ИИ-поддержка SferaTC и готов помочь. Опишите проблему текстом, а если понадобится человек, "
         f"нажмите кнопку «{settings.SUPPORT_ESCALATION_BUTTON_TEXT}»."
     )
+    support_video_url = get_safe_url(settings.SUPPORT_IMAGE_URL, "support_image")
     support_photo_url = get_safe_url(settings.SUPPORT_IMAGE_URL, "support_image")
-    if support_photo_url:
-        await update.message.reply_photo(
-            photo=support_photo_url,
-            caption=support_caption,
-            reply_markup=get_support_llm_keyboard(),
-        )
-    else:
-        await update.message.reply_text(
-            support_caption,
-            reply_markup=get_support_llm_keyboard(),
-        )
+    
+    await send_video_or_photo_fallback(
+        message=update.message,
+        video_url=support_video_url,
+        photo_url=support_photo_url,
+        caption=support_caption,
+        reply_markup=get_support_llm_keyboard()
+    )
 
 
 @handle_errors

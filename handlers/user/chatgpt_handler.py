@@ -11,7 +11,7 @@ from telegram import Update
 from telegram.error import RetryAfter, TelegramError
 from telegram.ext import ContextTypes
 
-from config import get_settings
+from config import get_safe_url, get_safe_video_url, get_settings, send_video_or_photo_fallback
 from keyboards import get_chatgpt_keyboard, get_main_menu_keyboard
 from services.chatgpt_service import get_chatgpt_response
 from services.notifier import Notifier
@@ -130,10 +130,21 @@ async def show_chatgpt_menu(
     if update.message is None:
         return
 
-    await update.message.reply_text(
+    chatgpt_caption = (
         "Вы начали диалог с ИИ-ассистентом. Просто отправьте ваше сообщение. "
-        "Чтобы закончить, нажмите кнопку ниже или введите /stop_chat.",
-        reply_markup=get_chatgpt_keyboard(),
+        "Чтобы закончить, нажмите кнопку ниже или введите /stop_chat."
+    )
+    # Для тестирования будем использовать CHATGPT_IMAGE_URL как для видео, так и для изображения
+    # В будущем можно будет использовать отдельное поле для видео URL
+    chatgpt_video_url = get_safe_video_url(settings.CHATGPT_IMAGE_URL, "chatgpt_image")
+    chatgpt_photo_url = get_safe_url(settings.CHATGPT_IMAGE_URL, "chatgpt_image")
+    
+    await send_video_or_photo_fallback(
+        message=update.message,
+        video_url=chatgpt_video_url,
+        photo_url=chatgpt_photo_url,
+        caption=chatgpt_caption,
+        reply_markup=get_chatgpt_keyboard()
     )
 
 

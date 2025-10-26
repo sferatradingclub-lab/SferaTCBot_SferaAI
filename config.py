@@ -596,3 +596,136 @@ def get_safe_url(url: Optional[str], context_name: str) -> Optional[str]:
         context_name,
     )
     return None
+
+
+def get_safe_video_url(url: Optional[str], context_name: str) -> Optional[str]:
+    """Возвращает URL видео, если он задан, иначе логирует предупреждение."""
+    
+    if url:
+        return url
+    
+    settings = get_settings()
+    settings.logger.warning(
+        "Отсутствует URL видео для '%s'. Будет использован текстовый fallback.",
+        context_name,
+    )
+    return None
+
+
+async def send_video_or_photo_fallback(
+    message=None,
+    query=None,
+    video_url: Optional[str] = None,
+    photo_url: Optional[str] = None,
+    caption: str = "",
+    reply_markup=None,
+    **kwargs
+):
+    """
+    Универсальная функция для отправки видео с fallback к изображению или тексту.
+    
+    Args:
+        message: Объект сообщения Telegram (для reply)
+        query: Объект callback_query (для inline режима)
+        video_url: URL видео для отправки
+        photo_url: URL изображения для fallback
+        caption: Текст сопроводительного сообщения
+        reply_markup: Клавиатура для сообщения
+        **kwargs: Дополнительные параметры для отправки видео
+    """
+    from telegram import InputMediaVideo, InputMediaPhoto
+    settings = get_settings()
+    
+    # Если используется inline режим (callback query)
+    if query:
+        # Попробуем сначала отправить видео, если в сообщении было фото
+        if video_url and query.message and query.message.photo:
+            try:
+                from telegram.error import TelegramError
+                media = InputMediaVideo(media=video_url, caption=caption, parse_mode=kwargs.get('parse_mode'))
+                return await query.edit_message_media(media=media, reply_markup=reply_markup)
+            except TelegramError as e:
+                settings.logger.warning(f"Не удалось отправить видео в inline режиме: {e}. Пробуем изображение.")
+                # Если видео не удалось, пробуем изображение
+                if photo_url:
+                    try:
+                        media = InputMediaPhoto(media=photo_url, caption=caption, parse_mode=kwargs.get('parse_mode'))
+                        return await query.edit_message_media(media=media, reply_markup=reply_markup)
+                    except TelegramError as e2:
+                        settings.logger.warning(f"Не удалось отправить изображение в inline режиме: {e2}. Редактируем только текст.")
+                
+                # Если и изображение не удалось, редактируем только текст
+                try:
+                    if query.message and query.message.photo:
+                        return await query.edit_message_caption(
+                            caption=caption,
+                            reply_markup=reply_markup,
+                            parse_mode=kwargs.get('parse_mode')
+                        )
+                    else:
+                        return await query.edit_message_text(
+                            text=caption,
+                            reply_markup=reply_markup,
+                            parse_mode=kwargs.get('parse_mode')
+                        )
+                except TelegramError as e3:
+                    settings.logger.warning(f"Не удалось отредактировать сообщение: {e3}")
+                    await query.answer("Не удалось обновить сообщение.")
+        
+        # Если в сообщении не было фото или видео/изображение не удалось, редактируем текст
+        else:
+            try:
+                if query.message and query.message.photo:
+                    return await query.edit_message_caption(
+                        caption=caption,
+                        reply_markup=reply_markup,
+                        parse_mode=kwargs.get('parse_mode')
+                    )
+                else:
+                    return await query.edit_message_text(
+                        text=caption,
+                        reply_markup=reply_markup,
+                        parse_mode=kwargs.get('parse_mode')
+                    )
+            except TelegramError as e:
+                settings.logger.warning(f"Не удалось отредактировать сообщение: {e}")
+                await query.answer("Не удалось обновить сообщение.")
+    
+    # Если используется обычный режим (message reply)
+    elif message:
+        # Попробуем сначала отправить видео
+        if video_url:
+            try:
+                # Добавим стандартные параметры для видео без звука
+                video_kwargs = {
+                    'supports_streaming': True,
+                    **kwargs
+                }
+                return await message.reply_video(
+                    video=video_url,
+                    caption=caption,
+                    reply_markup=reply_markup,
+                    **video_kwargs
+                )
+            except Exception as e:
+                settings.logger.warning(f"Не удалось отправить видео: {e}. Пробуем отправить изображение или текст.")
+        
+        # Если видео не удалось, пробуем изображение
+        if photo_url:
+            try:
+                return await message.reply_photo(
+                    photo=photo_url,
+                    caption=caption,
+                    reply_markup=reply_markup
+                )
+            except Exception as e:
+                settings.logger.warning(f"Не удалось отправить изображение: {e}. Отправляем текст.")
+        
+        # Если и изображение не удалось, отправляем только текст
+        return await message.reply_text(
+            text=caption,
+            reply_markup=reply_markup
+        )
+    
+    else:
+        raise ValueError("Должен быть указан либо message, либо query")

@@ -2,7 +2,7 @@ from telegram import Update, InputMediaPhoto, InlineKeyboardButton, InlineKeyboa
 from telegram.ext import ContextTypes
 from telegram.error import TelegramError
 
-from config import get_safe_url, get_settings
+from config import get_safe_url, get_settings, send_video_or_photo_fallback
 from keyboards import get_tools_categories_keyboard
 
 settings = get_settings()
@@ -19,20 +19,17 @@ async def show_tools_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     if not update.message:
         return
 
+    tools_video_url = get_safe_url(settings.TOOLS_IMAGE_URL, "TOOLS_IMAGE_URL")
     tools_image_url = get_safe_url(settings.TOOLS_IMAGE_URL, "TOOLS_IMAGE_URL")
     keyboard = get_tools_categories_keyboard()
 
-    if tools_image_url:
-        await update.message.reply_photo(
-            photo=tools_image_url,
-            caption=TOOLS_MENU_TEXT,
-            reply_markup=keyboard,
-        )
-    else:
-        await update.message.reply_text(
-            text=TOOLS_MENU_TEXT,
-            reply_markup=keyboard,
-        )
+    await send_video_or_photo_fallback(
+        message=update.message,
+        video_url=tools_video_url,
+        photo_url=tools_image_url,
+        caption=TOOLS_MENU_TEXT,
+        reply_markup=keyboard
+    )
 
 
 @handle_errors
@@ -43,25 +40,14 @@ async def tools_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     query_data = query.data
 
     if query_data == 'tools_main':
-        keyboard = get_tools_categories_keyboard()
-        tools_image_url = get_safe_url(settings.TOOLS_IMAGE_URL, "TOOLS_IMAGE_URL")
-
-        if tools_image_url and query.message and query.message.photo:
-            media = InputMediaPhoto(media=tools_image_url, caption=TOOLS_MENU_TEXT)
-            try:
-                await query.edit_message_media(media=media, reply_markup=keyboard)
-            except TelegramError as e:
-                if "Message is not modified" not in e.message:
-                    logger.warning(f"Error in tools_main: {e}")
-        else:
-            try:
-                if query.message and query.message.photo:
-                    await query.edit_message_caption(caption=TOOLS_MENU_TEXT, reply_markup=keyboard)
-                else:
-                    await query.edit_message_text(text=TOOLS_MENU_TEXT, reply_markup=keyboard)
-            except TelegramError as e:
-                if "Message is not modified" not in e.message:
-                    logger.warning(f"Error editing tools main text: {e}")
+        # Используем универсальную функцию для обработки inline-редактирования
+        await send_video_or_photo_fallback(
+            query=query,
+            video_url=get_safe_url(settings.TOOLS_IMAGE_URL, "TOOLS_IMAGE_URL"),
+            photo_url=get_safe_url(settings.TOOLS_IMAGE_URL, "TOOLS_IMAGE_URL"),
+            caption=TOOLS_MENU_TEXT,
+            reply_markup=keyboard
+        )
         return
 
     if query_data.startswith('tools_'):
@@ -102,30 +88,14 @@ async def tools_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 ],
                 [InlineKeyboardButton("⬅️ Назад к списку", callback_data=parent_category_callback)]
             ]
-            tool_image_url = get_safe_url(selected_tool.get('image_url'), selected_tool['name'])
             reply_markup = InlineKeyboardMarkup(keyboard_buttons)
 
-            if tool_image_url and query.message and query.message.photo:
-                media = InputMediaPhoto(media=tool_image_url, caption=caption, parse_mode='Markdown')
-                try:
-                    await query.edit_message_media(media=media, reply_markup=reply_markup)
-                except TelegramError as e:
-                    if "Message is not modified" not in e.message:
-                        logger.warning(f"Error editing tool media: {e}")
-            else:
-                try:
-                    if query.message and query.message.photo:
-                        await query.edit_message_caption(
-                            caption=caption,
-                            reply_markup=reply_markup,
-                            parse_mode='Markdown',
-                        )
-                    else:
-                        await query.edit_message_text(
-                            text=caption,
-                            reply_markup=reply_markup,
-                            parse_mode='Markdown',
-                        )
-                except TelegramError as e:
-                    if "Message is not modified" not in e.message:
-                        logger.warning(f"Error editing tool text: {e}")
+            # Используем универсальную функцию для обработки inline-редактирования
+            await send_video_or_photo_fallback(
+                query=query,
+                video_url=get_safe_url(selected_tool.get('image_url'), selected_tool['name']),
+                photo_url=get_safe_url(selected_tool.get('image_url'), selected_tool['name']),
+                caption=caption,
+                reply_markup=reply_markup,
+                parse_mode='Markdown'
+            )
