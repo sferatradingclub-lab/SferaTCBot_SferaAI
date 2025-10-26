@@ -82,7 +82,7 @@ video_url, photo_url = get_video_or_photo_urls(settings, "CHATGPT")
 
 ## Поддерживаемые сценарии
 
-1. **reply_video/reply_photo** - отправка нового сообщения с видео/изображением
+1. **reply_animation/reply_photo** - отправка нового сообщения с анимацией/изображением
 2. **edit_message_media** - замена медиа в inline-режиме
 3. **edit_message_caption/edit_message_text** - редактирование только текста при ошибках
 

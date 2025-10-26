@@ -665,7 +665,7 @@ async def send_video_or_photo_fallback(
         reply_markup: Клавиатура для сообщения
         **kwargs: Дополнительные параметры для отправки видео
     """
-    from telegram import InputMediaVideo, InputMediaPhoto
+    from telegram import InputMediaAnimation, InputMediaPhoto
     settings = get_settings()
     
     # Если используется inline режим (callback query)
@@ -674,7 +674,7 @@ async def send_video_or_photo_fallback(
         if video_url and query.message and query.message.photo:
             try:
                 from telegram.error import TelegramError
-                media = InputMediaVideo(
+                media = InputMediaAnimation(
                     media=video_url,
                     caption=caption,
                     parse_mode=kwargs.get('parse_mode'),
@@ -683,7 +683,7 @@ async def send_video_or_photo_fallback(
                 )
                 return await query.edit_message_media(media=media, reply_markup=reply_markup)
             except TelegramError as e:
-                settings.logger.warning(f"Не удалось отправить видео в inline режиме: {e}. Пробуем изображение.")
+                settings.logger.warning(f"Не удалось отправить анимацию в inline режиме: {e}. Пробуем изображение.")
                 # Если видео не удалось, пробуем изображение
                 if photo_url:
                     try:
@@ -734,21 +734,21 @@ async def send_video_or_photo_fallback(
         # Попробуем сначала отправить видео
         if video_url:
             try:
-                # Добавим стандартные параметры для видео без звука
-                video_kwargs = {
+                # Добавим стандартные параметры для анимации без звука
+                animation_kwargs = {
                     'supports_streaming': True,
                     'width': kwargs.get('width', 640),  # Установим стандартную ширину
                     'height': kwargs.get('height', 360), # Установим стандартную высоту
                     **kwargs
                 }
-                return await message.reply_video(
-                    video=video_url,
+                return await message.reply_animation(
+                    animation=video_url,
                     caption=caption,
                     reply_markup=reply_markup,
-                    **video_kwargs
+                    **animation_kwargs
                 )
             except Exception as e:
-                settings.logger.warning(f"Не удалось отправить видео: {e}. Пробуем отправить изображение или текст.")
+                settings.logger.warning(f"Не удалось отправить анимацию: {e}. Пробуем отправить изображение или текст.")
         
         # Если видео не удалось, пробуем изображение
         if photo_url:
