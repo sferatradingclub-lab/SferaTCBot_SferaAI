@@ -735,8 +735,8 @@ async def send_video_or_photo_fallback(
         if video_url:
             try:
                 # Добавим стандартные параметры для анимации без звука
+                # Убираем supports_streaming, так как он не поддерживается в reply_animation
                 animation_kwargs = {
-                    'supports_streaming': True,
                     'width': kwargs.get('width', 640),  # Установим стандартную ширину
                     'height': kwargs.get('height', 360), # Установим стандартную высоту
                     **kwargs
