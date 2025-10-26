@@ -749,23 +749,23 @@ async def send_video_or_photo_fallback(
                 )
             except Exception as e:
                 settings.logger.warning(f"Не удалось отправить анимацию: {e}. Пробуем отправить изображение или текст.")
-        
-        # Если видео не удалось, пробуем изображение
-        if photo_url:
-            try:
-                return await message.reply_photo(
-                    photo=photo_url,
-                    caption=caption,
-                    reply_markup=reply_markup
-                )
-            except Exception as e:
-                settings.logger.warning(f"Не удалось отправить изображение: {e}. Отправляем текст.")
-        
-        # Если и изображение не удалось, отправляем только текст
-        return await message.reply_text(
-            text=caption,
-            reply_markup=reply_markup
-        )
+            
+            # Если анимация не удалась, пробуем изображение
+            if photo_url:
+                try:
+                    return await message.reply_photo(
+                        photo=photo_url,
+                        caption=caption,
+                        reply_markup=reply_markup
+                    )
+                except Exception as e:
+                    settings.logger.warning(f"Не удалось отправить изображение: {e}. Отправляем текст.")
+            
+            # Если и изображение не удалось, отправляем только текст
+            return await message.reply_text(
+                text=caption,
+                reply_markup=reply_markup
+            )
     
     else:
         raise ValueError("Должен быть указан либо message, либо query")

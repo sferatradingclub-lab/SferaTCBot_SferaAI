@@ -58,20 +58,18 @@ async def start(
     welcome_caption = (
         f"Привет, {user.first_name}!\n\n"
         "Добро пожаловать в экосистему SferaTC. Здесь ты найдешь все для успешного старта в трейдинге.\n\n"
-        "Чтобы быть в курсе всех обновлений, подпишись на наш основной канал!"
+        "Чтобы быть в курсе всех обновлений, подпишись наш основной канал!"
     )
-    welcome_photo_url = get_safe_url(settings.WELCOME_IMAGE_URL, "welcome_image")
-    if welcome_photo_url:
-        await update.message.reply_photo(
-            photo=welcome_photo_url,
-            caption=welcome_caption,
-            reply_markup=get_channel_keyboard(),
-        )
-    else:
-        await update.message.reply_text(
-            welcome_caption,
-            reply_markup=get_channel_keyboard(),
-        )
+    # Используем отдельные переменные для видео и изображения
+    welcome_video_url, welcome_photo_url = get_video_or_photo_urls(settings, "WELCOME")
+    
+    await send_video_or_photo_fallback(
+        message=update.message,
+        video_url=welcome_video_url,
+        photo_url=welcome_photo_url,
+        caption=welcome_caption,
+        reply_markup=get_channel_keyboard()
+    )
     await update.message.reply_text(
         FRIENDLY_MAIN_MENU_REMINDER,
         reply_markup=get_main_menu_keyboard(user.id),

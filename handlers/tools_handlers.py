@@ -40,6 +40,7 @@ async def tools_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     query_data = query.data
 
     if query_data == 'tools_main':
+        keyboard = get_tools_categories_keyboard()
         # Используем универсальную функцию для обработки inline-редактирования
         # Используем отдельные переменные для видео и изображения
         tools_video_url, tools_photo_url = get_video_or_photo_urls(settings, "TOOLS")
@@ -93,13 +94,13 @@ async def tools_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
             reply_markup = InlineKeyboardMarkup(keyboard_buttons)
 
             # Используем универсальную функцию для обработки inline-редактирования
-            # Для отдельных инструментов используем поле image_url из настроек
-            tool_image_url = get_safe_url(selected_tool.get('image_url'), selected_tool['name'])
-            # В будущем можно добавить поддержку отдельных видео URL для инструментов
+            # Для отдельных инструментов используем поле image_url из настроек как фото
+            tool_photo_url = get_safe_url(selected_tool.get('image_url'), selected_tool['name'])
+            # Пока используем то же значение для видео, но в будущем можно добавить отдельное поле для видео
             await send_video_or_photo_fallback(
                 query=query,
-                video_url=tool_image_url,  # Пока используем одно и то же значение
-                photo_url=tool_image_url,
+                video_url=tool_photo_url,  # Используем то же значение, что и для фото
+                photo_url=tool_photo_url,
                 caption=caption,
                 reply_markup=reply_markup,
                 parse_mode='Markdown'
