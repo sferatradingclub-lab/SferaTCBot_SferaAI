@@ -665,7 +665,7 @@ async def send_video_or_photo_fallback(
         reply_markup: Клавиатура для сообщения
         **kwargs: Дополнительные параметры для отправки видео
     """
-    from telegram import InputMediaAnimation, InputMediaPhoto
+    from telegram import InputMediaAnimation, InputMediaPhoto, InputMediaVideo
     settings = get_settings()
     
     # Если используется inline режим (callback query)
@@ -694,7 +694,7 @@ async def send_video_or_photo_fallback(
                 
                 # Если и изображение не удалось, редактируем только текст
                 try:
-                    if query.message and query.message.photo:
+                    if query.message and (query.message.photo or query.message.animation or query.message.video):
                         return await query.edit_message_caption(
                             caption=caption,
                             reply_markup=reply_markup,
@@ -713,7 +713,7 @@ async def send_video_or_photo_fallback(
         # Если в сообщении не было фото или видео/изображение не удалось, редактируем текст
         else:
             try:
-                if query.message and query.message.photo:
+                if query.message and (query.message.photo or query.message.animation or query.message.video):
                     return await query.edit_message_caption(
                         caption=caption,
                         reply_markup=reply_markup,

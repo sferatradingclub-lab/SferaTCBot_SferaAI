@@ -66,7 +66,7 @@ async def tools_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
             buttons.append([InlineKeyboardButton("⬅️ Назад к разделам", callback_data='tools_main')])
             keyboard = InlineKeyboardMarkup(buttons)
 
-        if query.message and query.message.photo:
+        if query.message and (query.message.photo or query.message.animation or query.message.video):
             await query.edit_message_caption(caption=text, reply_markup=keyboard)
         else:
             await query.edit_message_text(text=text, reply_markup=keyboard)
