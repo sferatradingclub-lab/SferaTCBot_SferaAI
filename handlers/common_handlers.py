@@ -7,7 +7,7 @@ from typing import Optional
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from config import get_safe_url, get_settings, send_video_or_photo_fallback
+from config import get_safe_url, get_settings, send_video_or_photo_fallback, get_video_or_photo_urls
 from keyboards import (
     get_channel_keyboard,
     get_main_menu_keyboard,
@@ -100,8 +100,8 @@ async def show_training_menu(
             reply_markup=get_training_keyboard(is_approved),
         )
     else:
-        training_video_url = get_safe_url(settings.TRAINING_IMAGE_URL, "training_image")
-        training_photo_url = get_safe_url(settings.TRAINING_IMAGE_URL, "training_image")
+        # Используем отдельные переменные для видео и изображения
+        training_video_url, training_photo_url = get_video_or_photo_urls(settings, "TRAINING")
         
         await send_video_or_photo_fallback(
             message=update.message,
@@ -124,8 +124,8 @@ async def show_psychologist_menu(
         return
 
     caption = "Наш ИИ-психолог поможет справиться со стрессом в трейдинге."
-    psychologist_video_url = get_safe_url(settings.PSYCHOLOGIST_IMAGE_URL, "psychologist_image")
-    psychologist_photo_url = get_safe_url(settings.PSYCHOLOGIST_IMAGE_URL, "psychologist_image")
+    # Используем отдельные переменные для видео и изображения
+    psychologist_video_url, psychologist_photo_url = get_video_or_photo_urls(settings, "PSYCHOLOGIST")
     
     await send_video_or_photo_fallback(
         message=update.message,

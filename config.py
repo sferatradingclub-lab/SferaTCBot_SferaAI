@@ -91,6 +91,14 @@ class Settings:
     CHATGPT_IMAGE_URL: Optional[str] = field(init=False)
     SUPPORT_IMAGE_URL: Optional[str] = field(init=False)
     TOOLS_IMAGE_URL: Optional[str] = field(init=False)
+    
+    # URL для видео
+    WELCOME_VIDEO_URL: Optional[str] = field(init=False)
+    TRAINING_VIDEO_URL: Optional[str] = field(init=False)
+    PSYCHOLOGIST_VIDEO_URL: Optional[str] = field(init=False)
+    CHATGPT_VIDEO_URL: Optional[str] = field(init=False)
+    SUPPORT_VIDEO_URL: Optional[str] = field(init=False)
+    TOOLS_VIDEO_URL: Optional[str] = field(init=False)
 
     BOT_KNOWLEDGE_BASE: str = field(init=False)
     SUPPORT_LLM_SYSTEM_PROMPT: str = field(init=False)
@@ -236,8 +244,8 @@ class Settings:
         self._OPENROUTER_API_KEY = self._read_optional("OPENROUTER_API_KEY")
 
     def _load_image_urls(self) -> None:
-        """Загрузка URL изображений с валидацией."""
-        urls = {
+        """Загрузка URL изображений и видео с валидацией."""
+        image_urls = {
             "WELCOME_IMAGE_URL": os.getenv("WELCOME_IMAGE_URL"),
             "TRAINING_IMAGE_URL": os.getenv("TRAINING_IMAGE_URL"),
             "PSYCHOLOGIST_IMAGE_URL": os.getenv("PSYCHOLOGIST_IMAGE_URL"),
@@ -246,16 +254,40 @@ class Settings:
             "TOOLS_IMAGE_URL": os.getenv("TOOLS_IMAGE_URL"),
         }
         
-        for name, url in urls.items():
+        video_urls = {
+            "WELCOME_VIDEO_URL": os.getenv("WELCOME_VIDEO_URL"),
+            "TRAINING_VIDEO_URL": os.getenv("TRAINING_VIDEO_URL"),
+            "PSYCHOLOGIST_VIDEO_URL": os.getenv("PSYCHOLOGIST_VIDEO_URL"),
+            "CHATGPT_VIDEO_URL": os.getenv("CHATGPT_VIDEO_URL"),
+            "SUPPORT_VIDEO_URL": os.getenv("SUPPORT_VIDEO_URL"),
+            "TOOLS_VIDEO_URL": os.getenv("TOOLS_VIDEO_URL"),
+        }
+        
+        # Валидация URL изображений
+        for name, url in image_urls.items():
             if url and not self._validate_url(url):
                 raise ValueError(f"Некорректный {name}: {url}")
         
-        self.WELCOME_IMAGE_URL = urls["WELCOME_IMAGE_URL"]
-        self.TRAINING_IMAGE_URL = urls["TRAINING_IMAGE_URL"]
-        self.PSYCHOLOGIST_IMAGE_URL = urls["PSYCHOLOGIST_IMAGE_URL"]
-        self.CHATGPT_IMAGE_URL = urls["CHATGPT_IMAGE_URL"]
-        self.SUPPORT_IMAGE_URL = urls["SUPPORT_IMAGE_URL"]
-        self.TOOLS_IMAGE_URL = urls["TOOLS_IMAGE_URL"]
+        # Валидация URL видео
+        for name, url in video_urls.items():
+            if url and not self._validate_url(url):
+                raise ValueError(f"Некорректный {name}: {url}")
+        
+        # Сохраняем изображения
+        self.WELCOME_IMAGE_URL = image_urls["WELCOME_IMAGE_URL"]
+        self.TRAINING_IMAGE_URL = image_urls["TRAINING_IMAGE_URL"]
+        self.PSYCHOLOGIST_IMAGE_URL = image_urls["PSYCHOLOGIST_IMAGE_URL"]
+        self.CHATGPT_IMAGE_URL = image_urls["CHATGPT_IMAGE_URL"]
+        self.SUPPORT_IMAGE_URL = image_urls["SUPPORT_IMAGE_URL"]
+        self.TOOLS_IMAGE_URL = image_urls["TOOLS_IMAGE_URL"]
+        
+        # Сохраняем видео
+        self.WELCOME_VIDEO_URL = video_urls["WELCOME_VIDEO_URL"]
+        self.TRAINING_VIDEO_URL = video_urls["TRAINING_VIDEO_URL"]
+        self.PSYCHOLOGIST_VIDEO_URL = video_urls["PSYCHOLOGIST_VIDEO_URL"]
+        self.CHATGPT_VIDEO_URL = video_urls["CHATGPT_VIDEO_URL"]
+        self.SUPPORT_VIDEO_URL = video_urls["SUPPORT_VIDEO_URL"]
+        self.TOOLS_VIDEO_URL = video_urls["TOOLS_VIDEO_URL"]
 
     def _load_tools_settings(self) -> None:
         self.TOOLS_DATA = {
@@ -729,3 +761,19 @@ async def send_video_or_photo_fallback(
     
     else:
         raise ValueError("Должен быть указан либо message, либо query")
+
+
+def get_video_or_photo_urls(settings, base_name: str):
+    """
+    Вспомогательная функция для получения URL видео и фото по базовому имени.
+    
+    Args:
+        settings: Объект настроек
+        base_name: Базовое имя (например, 'WELCOME', 'CHATGPT')
+    
+    Returns:
+        tuple: (video_url, photo_url)
+    """
+    video_url = getattr(settings, f"{base_name}_VIDEO_URL", None)
+    photo_url = getattr(settings, f"{base_name}_IMAGE_URL", None)
+    return video_url, photo_url

@@ -2,7 +2,7 @@ from telegram import Update, InputMediaPhoto, InlineKeyboardButton, InlineKeyboa
 from telegram.ext import ContextTypes
 from telegram.error import TelegramError
 
-from config import get_safe_url, get_settings, send_video_or_photo_fallback
+from config import get_safe_url, get_settings, send_video_or_photo_fallback, get_video_or_photo_urls
 from keyboards import get_tools_categories_keyboard
 
 settings = get_settings()
@@ -19,14 +19,14 @@ async def show_tools_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     if not update.message:
         return
 
-    tools_video_url = get_safe_url(settings.TOOLS_IMAGE_URL, "TOOLS_IMAGE_URL")
-    tools_image_url = get_safe_url(settings.TOOLS_IMAGE_URL, "TOOLS_IMAGE_URL")
+    # Используем отдельные переменные для видео и изображения
+    tools_video_url, tools_photo_url = get_video_or_photo_urls(settings, "TOOLS")
     keyboard = get_tools_categories_keyboard()
 
     await send_video_or_photo_fallback(
         message=update.message,
         video_url=tools_video_url,
-        photo_url=tools_image_url,
+        photo_url=tools_photo_url,
         caption=TOOLS_MENU_TEXT,
         reply_markup=keyboard
     )
@@ -41,10 +41,12 @@ async def tools_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     if query_data == 'tools_main':
         # Используем универсальную функцию для обработки inline-редактирования
+        # Используем отдельные переменные для видео и изображения
+        tools_video_url, tools_photo_url = get_video_or_photo_urls(settings, "TOOLS")
         await send_video_or_photo_fallback(
             query=query,
-            video_url=get_safe_url(settings.TOOLS_IMAGE_URL, "TOOLS_IMAGE_URL"),
-            photo_url=get_safe_url(settings.TOOLS_IMAGE_URL, "TOOLS_IMAGE_URL"),
+            video_url=tools_video_url,
+            photo_url=tools_photo_url,
             caption=TOOLS_MENU_TEXT,
             reply_markup=keyboard
         )
@@ -91,10 +93,13 @@ async def tools_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
             reply_markup = InlineKeyboardMarkup(keyboard_buttons)
 
             # Используем универсальную функцию для обработки inline-редактирования
+            # Для отдельных инструментов используем поле image_url из настроек
+            tool_image_url = get_safe_url(selected_tool.get('image_url'), selected_tool['name'])
+            # В будущем можно добавить поддержку отдельных видео URL для инструментов
             await send_video_or_photo_fallback(
                 query=query,
-                video_url=get_safe_url(selected_tool.get('image_url'), selected_tool['name']),
-                photo_url=get_safe_url(selected_tool.get('image_url'), selected_tool['name']),
+                video_url=tool_image_url,  # Пока используем одно и то же значение
+                photo_url=tool_image_url,
                 caption=caption,
                 reply_markup=reply_markup,
                 parse_mode='Markdown'
