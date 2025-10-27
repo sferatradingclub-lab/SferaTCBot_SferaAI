@@ -616,31 +616,33 @@ def get_settings() -> Settings:
     return Settings()
 
 
-def get_safe_url(url: Optional[str], context_name: str) -> Optional[str]:
-    """Возвращает URL, если он задан, иначе логирует предупреждение."""
+def get_safe_url(url: Optional[str], context_name: str, warn_if_missing: bool = True) -> Optional[str]:
+    """Возвращает URL, если он задан, иначе логирует предупреждение (если warn_if_missing=True)."""
 
     if url:
         return url
 
-    settings = get_settings()
-    settings.logger.warning(
-        "Отсутствует URL для '%s'. Будет использован текстовый fallback.",
-        context_name,
-    )
+    if warn_if_missing:
+        settings = get_settings()
+        settings.logger.warning(
+            "Отсутствует URL для '%s'. Будет использован текстовый fallback.",
+            context_name,
+        )
     return None
 
 
-def get_safe_video_url(url: Optional[str], context_name: str) -> Optional[str]:
-    """Возвращает URL видео, если он задан, иначе логирует предупреждение."""
+def get_safe_video_url(url: Optional[str], context_name: str, warn_if_missing: bool = True) -> Optional[str]:
+    """Возвращает URL видео, если он задан, иначе логирует предупреждение (если warn_if_missing=True)."""
     
     if url:
         return url
     
-    settings = get_settings()
-    settings.logger.warning(
-        "Отсутствует URL видео для '%s'. Будет использован текстовый fallback.",
-        context_name,
-    )
+    if warn_if_missing:
+        settings = get_settings()
+        settings.logger.warning(
+            "Отсутствует URL видео для '%s'. Будет использован текстовый fallback.",
+            context_name,
+        )
     return None
 
 

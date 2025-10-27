@@ -95,7 +95,8 @@ async def tools_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
             # Используем универсальную функцию для обработки inline-редактирования
             # Для отдельных инструментов используем поле image_url из настроек как фото
-            tool_photo_url = get_safe_url(selected_tool.get('image_url'), selected_tool['name'])
+            # Не выводим предупреждение, если image_url отсутствует, так как это допустимо
+            tool_photo_url = get_safe_url(selected_tool.get('image_url'), selected_tool['name'], warn_if_missing=False)
             # Пока используем то же значение для видео, но в будущем можно добавить отдельное поле для видео
             # Если image_url нет, то используем только текст
             if tool_photo_url:
