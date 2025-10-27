@@ -308,7 +308,7 @@ class Settings:
                         ),
                         "image_url": self._read_optional("TIGER_IMAGE_URL"),
                         "site_url": "https://account.tiger.com/signup?referral=sferatc",
-                        "video_url": "https://www.youtube.com/@sferaTC",
+                        "video_url": self._read_optional("TIGER_VIDEO_URL"),
                     },
                     {
                         "name": "Крипто Брокер Vataga Crypto",
@@ -319,7 +319,7 @@ class Settings:
                         ),
                         "image_url": self._read_optional("VATAGA_IMAGE_URL"),
                         "site_url": "https://app.vataga.trading/register",
-                        "video_url": "https://www.youtube.com/@sferaTC",
+                        "video_url": self._read_optional("VATAGA_VIDEO_URL"),
                     },
                     {
                         "name": "Крипто Брокер Whitelist",
@@ -330,7 +330,7 @@ class Settings:
                         ),
                         "image_url": self._read_optional("WHITELIST_IMAGE_URL"),
                         "site_url": "https://passport.whitelist.capital/signup/?ref=sferatc",
-                        "video_url": "https://www.youtube.com/@sferaTC",
+                        "video_url": self._read_optional("WHITELIST_VIDEO_URL"),
                     },
                 ],
             },
