@@ -97,11 +97,27 @@ async def tools_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
             # Для отдельных инструментов используем поле image_url из настроек как фото
             tool_photo_url = get_safe_url(selected_tool.get('image_url'), selected_tool['name'])
             # Пока используем то же значение для видео, но в будущем можно добавить отдельное поле для видео
-            await send_video_or_photo_fallback(
-                query=query,
-                video_url=tool_photo_url,  # Используем то же значение, что и для фото
-                photo_url=tool_photo_url,
-                caption=caption,
-                reply_markup=reply_markup,
-                parse_mode='Markdown'
-            )
+            # Если image_url нет, то используем только текст
+            if tool_photo_url:
+                await send_video_or_photo_fallback(
+                    query=query,
+                    video_url=tool_photo_url,  # Используем то же значение, что и для фото
+                    photo_url=tool_photo_url,
+                    caption=caption,
+                    reply_markup=reply_markup,
+                    parse_mode='Markdown'
+                )
+            else:
+                # Если нет URL изображения/видео, просто редактируем текст
+                if query.message and (query.message.photo or query.message.animation or query.message.video):
+                    await query.edit_message_caption(
+                        caption=caption,
+                        reply_markup=reply_markup,
+                        parse_mode='Markdown'
+                    )
+                else:
+                    await query.edit_message_text(
+                        text=caption,
+                        reply_markup=reply_markup,
+                        parse_mode='Markdown'
+                    )
