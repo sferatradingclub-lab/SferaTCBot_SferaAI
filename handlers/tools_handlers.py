@@ -94,15 +94,18 @@ async def tools_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
             reply_markup = InlineKeyboardMarkup(keyboard_buttons)
 
             # Используем универсальную функцию для обработки inline-редактирования
-            # Для отдельных инструментов используем поле image_url из настроек как фото
+            # Для отдельных инструментов используем отдельные поля для видео и изображения
             # Не выводим предупреждение, если image_url отсутствует, так как это допустимо
             tool_photo_url = get_safe_url(selected_tool.get('image_url'), selected_tool['name'], warn_if_missing=False)
-            # Пока используем то же значение для видео, но в будущем можно добавить отдельное поле для видео
-            # Если image_url нет, то используем только текст
-            if tool_photo_url:
+            # Используем отдельное поле video_url для видео
+            tool_video_url = get_safe_url(selected_tool.get('video_url'), selected_tool['name'], warn_if_missing=False)
+            # Если есть отдельное видео, используем его, иначе используем фото как fallback
+            video_to_use = tool_video_url or tool_photo_url
+            # Если есть изображение или видео, показываем медиа
+            if tool_photo_url or tool_video_url:
                 await send_video_or_photo_fallback(
                     query=query,
-                    video_url=tool_photo_url,  # Используем то же значение, что и для фото
+                    video_url=video_to_use,
                     photo_url=tool_photo_url,
                     caption=caption,
                     reply_markup=reply_markup,
