@@ -110,14 +110,24 @@ async def tools_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 )
             else:
                 # Если нет URL изображения/видео, просто редактируем текст
-                if query.message and (query.message.photo or query.message.animation or query.message.video):
-                    await query.edit_message_caption(
-                        caption=caption,
-                        reply_markup=reply_markup,
-                        parse_mode='Markdown'
-                    )
-                else:
-                    await query.edit_message_text(
+                try:
+                    if query.message and (query.message.photo or query.message.animation or query.message.video):
+                        await query.edit_message_caption(
+                            caption=caption,
+                            reply_markup=reply_markup,
+                            parse_mode='Markdown'
+                        )
+                    else:
+                        await query.edit_message_text(
+                            text=caption,
+                            reply_markup=reply_markup,
+                            parse_mode='Markdown'
+                        )
+                except Exception as e:
+                    # Если не удалось отредактировать сообщение, отправляем новое
+                    settings.logger.warning(f"Не удалось отредактировать сообщение: {e}. Отправляем новое сообщение.")
+                    await query.answer("Обновляем информацию...")
+                    await query.message.reply_text(
                         text=caption,
                         reply_markup=reply_markup,
                         parse_mode='Markdown'
