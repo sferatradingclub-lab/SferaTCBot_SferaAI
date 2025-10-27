@@ -672,8 +672,8 @@ async def send_video_or_photo_fallback(
     
     # Если используется inline режим (callback query)
     if query:
-        # Попробуем сначала отправить видео, если в сообщении было фото
-        if video_url and query.message and query.message.photo:
+        # Попробуем сначала отправить видео, если в сообщении было фото или видео
+        if video_url and query.message and (query.message.photo or query.message.animation or query.message.video):
             try:
                 from telegram.error import TelegramError
                 media = InputMediaAnimation(
