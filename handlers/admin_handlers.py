@@ -26,6 +26,8 @@ from models.crud import (
 )
 from services.state_manager import StateManager
 
+logger = settings.logger
+
 from .admin.broadcast import (
     broadcast_confirmation_handler,
     prepare_broadcast_message,
@@ -103,13 +105,19 @@ async def handle_admin_message(update: Update, context: ContextTypes.DEFAULT_TYP
 @handle_errors
 async def admin_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
+    if query is None:
+        logger.warning("Получен update.callback_query равный None")
+        return
+        
     await query.answer()
     command = query.data
+    logger.info(f"Получена команда в admin_menu_handler: {command}")
 
     state_manager = StateManager(context)
 
     # Обработка команд календаря и планирования рассылки
     if command.startswith("calendar_"):
+        logger.info(f"Передача команды {command} в handle_calendar_callback")
         await handle_calendar_callback(update, context)
         return
 

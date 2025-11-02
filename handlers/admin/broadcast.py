@@ -279,47 +279,73 @@ async def handle_calendar_callback(update: Update, context: ContextTypes.DEFAULT
     """Обработчик callback-запросов от календаря."""
     query = update.callback_query
     if query is None:
+        logger.warning("Получен callback_query равный None")
         return
 
     await query.answer()
     command = query.data
+    logger.info(f"Получена календарная команда: {command}")
 
     # Проверяем, что пользователь находится в состоянии планирования рассылки
     state_manager = StateManager(context)
     current_state = state_manager.get_admin_state()
+    logger.info(f"Текущее состояние пользователя: {current_state}")
     if current_state != AdminState.BROADCAST_SCHEDULE_AWAITING_DATE:
+        # Вместо просто return, логируем проблему
+        logger.warning(f"Календарная команда {command} получена в состоянии {current_state}, ожидалось BROADCAST_SCHEDULE_AWAITING_DATE")
         return
 
-    if command.startswith("calendar_select_"):
-        # Выбрана дата, теперь нужно ввести время
-        selected_date_str = command.replace("calendar_select_", "")
-        context.user_data["scheduled_broadcast_date"] = selected_date_str
+    logger.info(f"Обработка команды {command} в состоянии BROADCAST_SCHEDULE_AWAITING_DATE")
+    try:
+        if command.startswith("calendar_select_"):
+            # Выбрана дата, теперь нужно ввести время
+            selected_date_str = command.replace("calendar_select_", "")
+            context.user_data["scheduled_broadcast_date"] = selected_date_str
 
-        state_manager.set_admin_state(AdminState.BROADCAST_SCHEDULE_AWAITING_TIME)
-        await query.edit_message_text(f"Вы выбрали дату: {selected_date_str}\n\nТеперь введите время в формате ЧЧ:ММ (24-часовой формат):")
+            state_manager.set_admin_state(AdminState.BROADCAST_SCHEDULE_AWAITING_TIME)
+            await query.edit_message_text(f"Вы выбрали дату: {selected_date_str}\n\nТеперь введите время в формате ЧЧ:ММ (24-часовой формат):")
 
-    elif command.startswith("calendar_prev_month_") or command.startswith("calendar_next_month_"):
-        # Навигация по месяцам
-        if command.startswith("calendar_prev_month_"):
-            date_str = command.replace("calendar_prev_month_", "")
-        else:
-            date_str = command.replace("calendar_next_month_", "")
-        
-        try:
-            year, month = map(int, date_str.split("-"))
+        elif command.startswith("calendar_prev_month_") or command.startswith("calendar_next_month_"):
+            # Навигация по месяцам
+            if command.startswith("calendar_prev_month_"):
+                date_str = command.replace("calendar_prev_month_", "")
+            else:
+                date_str = command.replace("calendar_next_month_", "")
+            
+            try:
+                year, month = map(int, date_str.split("-"))
+                from datetime import date
+                target_date = date(year, month, 1)
+                new_keyboard = create_calendar_keyboard(target_date)
+                await query.edit_message_reply_markup(reply_markup=new_keyboard)
+            except ValueError:
+                await query.edit_message_text("Ошибка при обработке даты.")
+
+        elif command == "calendar_expand":
+            logger.info("Обработка команды calendar_expand")
+            # Развернуть полный календарь
             from datetime import date
-            target_date = date(year, month, 1)
-            new_keyboard = create_calendar_keyboard(target_date)
-            await query.edit_message_reply_markup(reply_markup=new_keyboard)
-        except ValueError:
-            await query.edit_message_text("Ошибка при обработке даты.")
-
-    elif command == "calendar_expand":
-        # Развернуть полный календарь
-        from datetime import date
-        current_date = date.today()
-        calendar_keyboard = create_calendar_keyboard(current_date)
-        await query.edit_message_text("Выберите дату:", reply_markup=calendar_keyboard)
+            current_date = date.today()
+            calendar_keyboard = create_calendar_keyboard(current_date)
+            logger.info(f"Создана клавиатура календаря для даты {current_date}")
+            try:
+                await query.edit_message_text("Выберите дату:", reply_markup=calendar_keyboard)
+                logger.info("Сообщение с календарем успешно отредактировано")
+            except Exception as e:
+                logger.error(f"Ошибка при редактировании сообщения для calendar_expand: {e}", exc_info=True)
+                # Если не удалось отредактировать сообщение, отправляем новое
+                try:
+                    await query.message.reply_text("Выберите дату:", reply_markup=calendar_keyboard)
+                    logger.info("Новое сообщение с календарем успешно отправлено")
+                except Exception as e2:
+                    logger.error(f"Ошибка при отправке нового сообщения для calendar_expand: {e2}", exc_info=True)
+    except Exception as e:
+        logger.error(f"Ошибка в обработке календарного события {command}: {e}", exc_info=True)
+        try:
+            await query.edit_message_text("Произошла ошибка при обработке календаря. Попробуйте снова.")
+        except Exception:
+            # Если не удалось отредактировать сообщение, просто пропускаем
+            pass
 
 
 async def handle_scheduled_broadcast_date_selection(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
