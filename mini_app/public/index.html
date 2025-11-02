@@ -3,209 +3,95 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebRTC Тест для SferaAI</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 20px;
-            background-color: #0a192f;
-            color: white;
+    <meta name="color-scheme" content="dark light">
+    <title>SferaTC Mini App</title>
+    <link rel="stylesheet" href="./css/style.css">
+    <!-- Резервные стили для Telegram Mini App -->
+    <link rel="stylesheet" href="./css/fallback.css" media="not all and (min-resolution:.001dpcm)">
+    <script>
+      // Проверяем, загрузились ли основные стили, и если нет, подключаем резервные
+      window.addEventListener('load', function() {
+        try {
+          // Проверяем, доступны ли CSS переменные
+          const hasCSSVars = window.CSS && window.CSS.supports && window.CSS.supports('--bg-color', '#050b1a');
+          
+          // Если CSS переменные не поддерживаются или основные стили не загрузились, применяем fallback
+          if (!hasCSSVars) {
+            document.documentElement.classList.add('fallback-mode');
+          }
+        } catch(e) {
+          // В случае ошибки также применяем fallback
+          document.documentElement.classList.add('fallback-mode');
         }
-        .container {
-            background: rgba(255,255,255,0.1);
-            padding: 20px;
-            border-radius: 10px;
-            margin: 10px 0;
-        }
-        button {
-            background: #0ffff;
-            color: #0a192f;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 5px;
-            cursor: pointer;
-            margin: 5px;
-        }
-        button:hover {
-            background: #00e0e0;
-        }
-        button:disabled {
-            background: #66;
-            cursor: not-allowed;
-        }
-        .status {
-            margin: 10px 0;
-            padding: 10px;
-            border-radius: 5px;
-        }
-        .success { background: rgba(0,255,0,0.2); }
-        .error { background: rgba(25,0,0,0.2); }
-        .info { background: rgba(255,255,0,0.2); color: black; }
-    </style>
+      });
+    </script>
 </head>
 <body>
-    <h1>Тест WebRTC функциональности</h1>
-    
-    <div class="container">
-        <h3>Проверка условий</h3>
-        <div id="httpsCheck" class="status">Проверка HTTPS: ...</div>
-        <div id="webrtcSupport" class="status">Поддержка WebRTC: ...</div>
-        <div id="getUserMedia" class="status">Поддержка getUserMedia: ...</div>
+    <div id="app" class="app">
+        <main id="main-content" class="main-content">
+            <!-- Центрированное главное меню -->
+            <div id="main-menu" class="menu menu--centered">
+                <header class="menu__header">
+                    <h1 class="logo">SFERATC</h1>
+                    <p class="tagline">SFERA TRADING CLUB</p>
+                </header>
+                <nav class="menu__navigation">
+                    <button class="button button--menu" data-section="screener">
+                        <span class="sr-only">Открыть AI Screener</span>
+                        AI Screener
+                    </button>
+                    <button class="button button--menu" data-section="news">
+                        <span class="sr-only">Открыть AI News</span>
+                        AI News
+                    </button>
+                    <button class="button button--menu" data-section="analyst">
+                        <span class="sr-only">Открыть AI Analyst</span>
+                        AI Analyst
+                    </button>
+                    <button class="button button--menu" data-section="game">
+                        <span class="sr-only">Открыть Game</span>
+                        Game
+                    </button>
+                </nav>
+            </div>
+            
+            <!-- Контейнер для секций (скрыт по умолчанию) -->
+            <div id="sections-container" class="sections-container">
+                <div id="section-screener" class="section" data-section="screener">
+                    <div class="section-content">
+                        <h2 class="sr-only">AI Screener</h2>
+                        <p>Данный раздел в разработке. Следите за новостями и обновлениями в нашем SferaTC Bot.</p>
+                        <button class="button button--back" data-action="back">Закрыть</button>
+                    </div>
+                </div>
+                
+                <div id="section-news" class="section" data-section="news">
+                    <div class="section-content">
+                        <h2 class="sr-only">AI News</h2>
+                        <p>Данный раздел в разработке. Следите за новостями и обновлениями в нашем SferaTC Bot.</p>
+                        <button class="button button--back" data-action="back">Закрыть</button>
+                    </div>
+                </div>
+                
+                <div id="section-analyst" class="section" data-section="analyst">
+                    <div class="section-content">
+                        <h2 class="sr-only">AI Analyst</h2>
+                        <p>Данный раздел в разработке. Следите за новостями и обновлениями в нашем SferaTC Bot.</p>
+                        <button class="button button--back" data-action="back">Закрыть</button>
+                    </div>
+                </div>
+                
+                <div id="section-game" class="section" data-section="game">
+                    <div class="section-content">
+                        <h2 class="sr-only">Game</h2>
+                        <p>Данный раздел в разработке. Следите за новостями и обновлениями в нашем SferaTC Bot.</p>
+                        <button class="button button--back" data-action="back">Закрыть</button>
+                    </div>
+                </div>
+            </div>
+        </main>
     </div>
     
-    <div class="container">
-        <h3>Тест микрофона</h3>
-        <button id="testMicBtn">Запросить доступ к микрофону</button>
-        <button id="stopMicBtn" disabled>Остановить запись</button>
-        <div id="micStatus" class="status">Статус микрофона: Не проверено</div>
-        <div id="audioInfo" class="status" style="display:none;"></div>
-    </div>
-    
-    <div class="container">
-        <h3>Дополнительная информация</h3>
-        <div id="browserInfo"></div>
-        <div id="constraintsInfo"></div>
-    </div>
-
-    <script>
-        // Проверка условий
-        function checkConditions() {
-            // Проверка HTTPS
-            const httpsCheck = document.getElementById('httpsCheck');
-            if (window.location.protocol === 'https:') {
-                httpsCheck.textContent = 'Проверка HTTPS: ✅ Поддерживается';
-                httpsCheck.className = 'status success';
-            } else {
-                httpsCheck.textContent = 'Проверка HTTPS: ❌ Не поддерживается (обязательно для микрофона)';
-                httpsCheck.className = 'status error';
-            }
-            
-            // Проверка WebRTC поддержки
-            const webrtcSupport = document.getElementById('webrtcSupport');
-            if (window.RTCPeerConnection) {
-                webrtcSupport.textContent = 'Поддержка WebRTC: ✅ Поддерживается';
-                webrtcSupport.className = 'status success';
-            } else {
-                webrtcSupport.textContent = 'Поддержка WebRTC: ❌ Не поддерживается';
-                webrtcSupport.className = 'status error';
-            }
-            
-            // Проверка getUserMedia
-            const getUserMedia = document.getElementById('getUserMedia');
-            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-                getUserMedia.textContent = 'Поддержка getUserMedia: ✅ Поддерживается';
-                getUserMedia.className = 'status success';
-            } else {
-                getUserMedia.textContent = 'Поддержка getUserMedia: ❌ Не поддерживается';
-                getUserMedia.className = 'status error';
-            }
-        }
-        
-        // Отображение информации о браузере
-        function showBrowserInfo() {
-            const infoDiv = document.getElementById('browserInfo');
-            infoDiv.innerHTML = `
-                <strong>Платформа:</strong> ${navigator.platform}<br>
-                <strong>Браузер:</strong> ${navigator.userAgent}<br>
-                <strong>Telegram Web App:</strong> ${typeof window.Telegram !== 'undefined' ? 'Да' : 'Нет'}<br>
-            `;
-        }
-        
-        // Тест микрофона
-        let audioStream = null;
-        
-        document.getElementById('testMicBtn').addEventListener('click', async () => {
-            const statusDiv = document.getElementById('micStatus');
-            const audioInfoDiv = document.getElementById('audioInfo');
-            
-            try {
-                statusDiv.textContent = 'Запрос доступа к микрофону...';
-                statusDiv.className = 'status info';
-                
-                // Запрос доступа к микрофону
-                audioStream = await navigator.mediaDevices.getUserMedia({
-                    audio: {
-                        echoCancellation: true,
-                        noiseSuppression: true,
-                        autoGainControl: true
-                    }
-                });
-                
-                statusDiv.textContent = '✅ Микрофон успешно подключен!';
-                statusDiv.className = 'status success';
-                
-                // Отображение информации о аудио дорожке
-                const track = audioStream.getAudioTracks()[0];
-                const settings = track.getSettings();
-                
-                audioInfoDiv.innerHTML = `
-                    <strong>Устройство:</strong> ${track.label || 'Неизвестно'}<br>
-                    <strong>Активен:</strong> ${track.enabled}<br>
-                    <strong>Готовность:</strong> ${track.readyState}<br>
-                    <strong>Настройки:</strong> ${JSON.stringify(settings, null, 2)}
-                `;
-                audioInfoDiv.style.display = 'block';
-                
-                // Включить кнопку остановки
-                document.getElementById('stopMicBtn').disabled = false;
-                
-            } catch (error) {
-                console.error('Ошибка доступа к микрофону:', error);
-                statusDiv.textContent = `❌ Ошибка доступа к микрофону: ${error.message}`;
-                statusDiv.className = 'status error';
-                
-                // Попытка fallback
-                tryFallback();
-            }
-        });
-        
-        document.getElementById('stopMicBtn').addEventListener('click', () => {
-            if (audioStream) {
-                audioStream.getTracks().forEach(track => track.stop());
-                audioStream = null;
-                
-                document.getElementById('micStatus').textContent = 'Микрофон остановлен';
-                document.getElementById('micStatus').className = 'status';
-                document.getElementById('audioInfo').style.display = 'none';
-                document.getElementById('stopMicBtn').disabled = true;
-            }
-        });
-        
-        // Fallback для аудио-файлов
-        function tryFallback() {
-            const fallbackBtn = document.createElement('button');
-            fallbackBtn.textContent = 'Загрузить аудио файл';
-            fallbackBtn.onclick = () => {
-                const input = document.createElement('input');
-                input.type = 'file';
-                input.accept = 'audio/*';
-                input.capture = 'microphone';
-                input.onchange = (e) => {
-                    const file = e.target.files[0];
-                    if (file) {
-                        document.getElementById('micStatus').textContent = 
-                            `Файл загружен: ${file.name} (${(file.size/1024/1024).toFixed(2)} MB)`;
-                        document.getElementById('micStatus').className = 'status success';
-                    }
-                };
-                input.click();
-            };
-            
-            document.querySelector('.container:nth-child(2)').appendChild(fallbackBtn);
-        }
-        
-        // Инициализация
-        document.addEventListener('DOMContentLoaded', () => {
-            checkConditions();
-            showBrowserInfo();
-        });
-        
-        // Проверка, когда страница полностью загружена
-        window.addEventListener('load', () => {
-            console.log('WebRTC тест загружен');
-        });
-    </script>
+    <script type="module" src="./new_app.js"></script>
 </body>
 </html>
