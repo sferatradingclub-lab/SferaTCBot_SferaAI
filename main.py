@@ -39,6 +39,7 @@ from handlers.common_handlers import (
 from handlers.user.chatgpt_handler import show_chatgpt_menu, stop_chatgpt_session
 from handlers.user.support_handler import show_support_menu, escalate_support_to_admin
 from services.notifier import Notifier
+from services.broadcast_scheduler import BroadcastSchedulerService
 from handlers.admin_handlers import (
     show_admin_panel,
     admin_menu_handler,
@@ -263,6 +264,15 @@ def main() -> Application:
         daily_stats_job,
         time=time(0, 0, tzinfo=ZoneInfo("Europe/Moscow")),
         name="daily_stats_report",
+    )
+    
+    # Задача для проверки и отправки запланированных рассылок (каждую минуту)
+    broadcast_scheduler = BroadcastSchedulerService(application.bot)
+    application.job_queue.run_repeating(
+        broadcast_scheduler.process_scheduled_broadcasts,
+        interval=60, # каждые 60 секунд
+        first=10,     # первое выполнение через 10 секунд после запуска
+        name="process_scheduled_broadcasts"
     )
 
     return application

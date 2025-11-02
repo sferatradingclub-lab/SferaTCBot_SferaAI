@@ -29,6 +29,10 @@ from services.state_manager import StateManager
 from .admin.broadcast import (
     broadcast_confirmation_handler,
     prepare_broadcast_message,
+    handle_calendar_callback,
+    handle_scheduled_broadcast_time_input,
+    handle_scheduled_broadcast_confirmation,
+    handle_scheduled_broadcasts_list,
     run_broadcast as broadcast_run_broadcast,
 )
 from .admin.stats import (
@@ -87,6 +91,7 @@ async def handle_admin_message(update: Update, context: ContextTypes.DEFAULT_TYP
     state = state_manager.get_admin_state()
     handlers = {
         AdminState.BROADCAST_AWAITING_MESSAGE: prepare_broadcast_message,
+        AdminState.BROADCAST_SCHEDULE_AWAITING_TIME: handle_scheduled_broadcast_time_input,
         AdminState.USERS_AWAITING_ID: _handle_user_lookup_wrapper,
         AdminState.USERS_AWAITING_DM: _handle_direct_message_wrapper,
     }
@@ -102,6 +107,24 @@ async def admin_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     command = query.data
 
     state_manager = StateManager(context)
+
+    # Обработка команд календаря и планирования рассылки
+    if command.startswith("calendar_"):
+        await handle_calendar_callback(update, context)
+        return
+
+    if command.startswith("scheduled_broadcast_"):
+        if command == "scheduled_broadcasts_list":
+            await handle_scheduled_broadcasts_list(update, context)
+            return
+        elif command.startswith("scheduled_broadcast_view_"):
+            # Пока не реализовано - в дальнейшем можно добавить просмотр конкретной рассылки
+            await query.edit_message_text("Функция просмотра отдельной рассылки будет реализована позже.")
+            return
+
+    if command in ["scheduled_broadcast_confirm", "scheduled_broadcast_change_date"]:
+        await handle_scheduled_broadcast_confirmation(update, context)
+        return
 
     if command == "admin_main":
         state_manager.reset_admin_state()
@@ -124,6 +147,7 @@ async def admin_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     elif command in ["admin_stats_today", "admin_stats_all"]:
         await show_stats(update, context, query=query, period=command.split("_")[-1])
     elif command == "admin_broadcast":
+        state_manager.reset_admin_state()  # Сбросим любое текущее состояние
         state_manager.set_admin_state(AdminState.BROADCAST_AWAITING_MESSAGE)
         await query.edit_message_text(
             "Режим создания рассылки. Пришлите следующее сообщение, и я подготовлю его к отправке.",

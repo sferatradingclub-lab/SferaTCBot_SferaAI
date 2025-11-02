@@ -11,6 +11,7 @@ from config import get_settings
 
 settings = get_settings()
 from .user import User
+from .broadcast import ScheduledBroadcast  # Добавляем импорт новой модели
 
 
 logger = logging.getLogger(__name__)
@@ -198,9 +199,11 @@ def count_approved_users(db: Session) -> int:
 
 
 
+
 def count_awaiting_verification_users(db: Session) -> int:
     """Подсчитывает количество пользователей в ожидании верификации."""
     return _count_users(db, User.awaiting_verification.is_(True))
+
 
 
 
@@ -241,3 +244,67 @@ def count_active_users_since(db: Session, since_datetime: datetime) -> int:
         User.last_seen.isnot(None),
         User.last_seen >= since_datetime,
     )
+
+
+# CRUD-операции для отложенных рассылок
+
+def create_scheduled_broadcast(db: Session, admin_id: int, message_content: str, scheduled_datetime: datetime):
+    """Создает новую отложенную рассылку."""
+    scheduled_broadcast = ScheduledBroadcast(
+        admin_id=admin_id,
+        message_content=message_content,
+        scheduled_datetime=scheduled_datetime
+    )
+    db.add(scheduled_broadcast)
+    db.commit()
+    db.refresh(scheduled_broadcast)
+    return scheduled_broadcast
+
+
+def get_scheduled_broadcast(db: Session, broadcast_id: int):
+    """Получает отложенную рассылку по ID."""
+    return db.query(ScheduledBroadcast).filter(ScheduledBroadcast.id == broadcast_id).first()
+
+
+def get_scheduled_broadcasts_by_admin(db: Session, admin_id: int):
+    """Получает все отложенные рассылки для конкретного администратора."""
+    return db.query(ScheduledBroadcast).filter(
+        ScheduledBroadcast.admin_id == admin_id,
+        ScheduledBroadcast.is_sent == False  # noqa: E712
+    ).order_by(ScheduledBroadcast.scheduled_datetime).all()
+
+
+def get_pending_scheduled_broadcasts(db: Session):
+    """Получает все неотправленные отложенные рассылки."""
+    from datetime import datetime
+    return db.query(ScheduledBroadcast).filter(
+        ScheduledBroadcast.is_sent == False,  # noqa: E712
+        ScheduledBroadcast.scheduled_datetime <= datetime.now()
+    ).order_by(ScheduledBroadcast.scheduled_datetime).all()
+
+
+def update_scheduled_broadcast(db: Session, broadcast_id: int, **kwargs):
+    """Обновляет данные отложенной рассылки."""
+    updated_rows = db.query(ScheduledBroadcast).filter(ScheduledBroadcast.id == broadcast_id).update(kwargs)
+    db.commit()
+    return bool(updated_rows)
+
+
+def mark_broadcast_as_sent(db: Session, broadcast_id: int):
+    """Отмечает рассылку как отправленную."""
+    updated_rows = db.query(ScheduledBroadcast).filter(ScheduledBroadcast.id == broadcast_id).update({
+        ScheduledBroadcast.is_sent: True,
+        ScheduledBroadcast.sent_at: datetime.now()
+    })
+    db.commit()
+    return bool(updated_rows)
+
+
+def delete_scheduled_broadcast(db: Session, broadcast_id: int):
+    """Удаляет отложенную рассылку."""
+    scheduled_broadcast = db.query(ScheduledBroadcast).filter(ScheduledBroadcast.id == broadcast_id).first()
+    if scheduled_broadcast:
+        db.delete(scheduled_broadcast)
+        db.commit()
+        return True
+    return False

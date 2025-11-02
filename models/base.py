@@ -20,4 +20,7 @@ else:
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
+# Импортируем все модели, чтобы они были зарегистрированы в Base
+from . import *  # noqa: F401, F403
+
 __all__ = ["Base", "SessionLocal", "engine"]

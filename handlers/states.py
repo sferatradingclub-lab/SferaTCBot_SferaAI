@@ -21,5 +21,9 @@ class AdminState(Enum):
     DEFAULT = auto()
     BROADCAST_AWAITING_MESSAGE = auto()
     BROADCAST_AWAITING_CONFIRMATION = auto()
+    BROADCAST_SCHEDULE_AWAITING_DATE = auto()  # Ожидание выбора даты
+    BROADCAST_SCHEDULE_AWAITING_TIME = auto()  # Ожидание ввода времени
+    BROADCAST_SCHEDULE_CONFIRMATION = auto()   # Подтверждение даты/времени
+    BROADCAST_MANAGE_SCHEDULED = auto()        # Управление запланированными рассылками
     USERS_AWAITING_ID = auto()
     USERS_AWAITING_DM = auto()
