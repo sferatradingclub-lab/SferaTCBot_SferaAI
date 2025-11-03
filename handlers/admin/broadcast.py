@@ -5,6 +5,12 @@ from __future__ import annotations
 import asyncio
 import json
 from datetime import datetime, timedelta
+
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:
+    from backports.zoneinfo import ZoneInfo  # для старых версий Python
+
 from typing import AsyncGenerator, Optional
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -341,7 +347,7 @@ async def handle_calendar_callback(update: Update, context: ContextTypes.DEFAULT
             logger.info("Обработка команды calendar_expand")
             # Развернуть полный календарь
             from datetime import date
-            current_date = date.today()
+            current_date = datetime.now(ZoneInfo("Europe/Minsk")).date()
             calendar_keyboard = create_calendar_keyboard(current_date)
             logger.info(f"Создана клавиатура календаря для даты {current_date}")
             try:
@@ -477,10 +483,9 @@ async def handle_scheduled_broadcast_confirmation(update: Update, context: Conte
     state_manager = StateManager(context)
     current_state = state_manager.get_admin_state()
     
+    # Вместо возврата с ошибкой, просто логируем неожиданное состояние и продолжаем
     if current_state != AdminState.BROADCAST_SCHEDULE_CONFIRMATION:
         logger.warning(f"Получена команда {command} в состоянии {current_state}, ожидалось BROADCAST_SCHEDULE_CONFIRMATION")
-        await query.edit_message_text("Ошибка: некорректное состояние для подтверждения рассылки.")
-        return
 
     if command == "scheduled_broadcast_confirm":
         # Создаем отложенную рассылку в базе данных
@@ -570,7 +575,7 @@ async def handle_scheduled_broadcast_confirmation(update: Update, context: Conte
         
         # Показываем календарь для выбора новой даты
         from datetime import date
-        current_date = date.today()
+        current_date = datetime.now(ZoneInfo("Europe/Minsk")).date()
         calendar_keyboard = create_calendar_keyboard(current_date)
         await query.edit_message_text("Выберите новую дату для отправки рассылки:", reply_markup=calendar_keyboard)
 

@@ -2,6 +2,11 @@ from datetime import datetime, date, timedelta
 from typing import List
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:
+    from backports.zoneinfo import ZoneInfo  # для старых версий Python
+
 
 def create_calendar_keyboard(target_date: date = None) -> InlineKeyboardMarkup:
     """
@@ -14,7 +19,7 @@ def create_calendar_keyboard(target_date: date = None) -> InlineKeyboardMarkup:
         InlineKeyboardMarkup: Клавиатура с календарем
     """
     if target_date is None:
-        target_date = date.today()
+        target_date = datetime.now(ZoneInfo("Europe/Minsk")).date()
     
     # Получаем первый день месяца и день недели
     first_day = date(target_date.year, target_date.month, 1)
@@ -78,8 +83,8 @@ def create_calendar_keyboard(target_date: date = None) -> InlineKeyboardMarkup:
         current_date = date(target_date.year, target_date.month, day)
         
         # Проверяем, является ли дата прошедшей
-        is_past = current_date < date.today()
-        is_today = current_date == date.today()
+        is_past = current_date < datetime.now(ZoneInfo("Europe/Minsk")).date()
+        is_today = current_date == datetime.now(ZoneInfo("Europe/Minsk")).date()
         
         if is_past:
             # Для прошедших дат используем серую кнопку
@@ -118,7 +123,7 @@ def create_date_quick_select_keyboard() -> InlineKeyboardMarkup:
         InlineKeyboardMarkup: Клавиатура с кнопками быстрого выбора
     """
     from datetime import timedelta
-    today = date.today()
+    today = datetime.now(ZoneInfo("Europe/Minsk")).date()
     tomorrow = today + timedelta(days=1)  # 1 день
     day_after_tomorrow = today + timedelta(days=2)
     
