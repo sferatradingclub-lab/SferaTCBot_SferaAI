@@ -126,6 +126,10 @@ async def admin_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await handle_calendar_callback(update, context)
         return
 
+    if command in ["scheduled_broadcast_confirm", "scheduled_broadcast_change_date"]:
+        await handle_scheduled_broadcast_confirmation(update, context)
+        return
+
     if command.startswith("scheduled_broadcast_"):
         if command == "scheduled_broadcasts_list":
             await handle_scheduled_broadcasts_list(update, context)
@@ -134,10 +138,6 @@ async def admin_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
             # Пока не реализовано - в дальнейшем можно добавить просмотр конкретной рассылки
             await query.edit_message_text("Функция просмотра отдельной рассылки будет реализована позже.")
             return
-
-    if command in ["scheduled_broadcast_confirm", "scheduled_broadcast_change_date"]:
-        await handle_scheduled_broadcast_confirmation(update, context)
-        return
 
     if command == "admin_main":
         state_manager.reset_admin_state()
