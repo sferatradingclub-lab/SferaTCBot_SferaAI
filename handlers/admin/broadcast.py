@@ -305,8 +305,20 @@ async def handle_calendar_callback(update: Update, context: ContextTypes.DEFAULT
             selected_date_str = command.replace("calendar_select_", "")
             context.user_data["scheduled_broadcast_date"] = selected_date_str
 
+            # Преобразуем формат даты для отображения в русском формате
+            from datetime import datetime
+            selected_date_obj = datetime.strptime(selected_date_str, "%Y-%m-%d").date()
+            day = selected_date_obj.day
+            months_map = {
+                1: "января", 2: "февраля", 3: "марта", 4: "апреля",
+                5: "мая", 6: "июня", 7: "июля", 8: "августа",
+                9: "сентября", 10: "октября", 11: "ноября", 12: "декабря"
+            }
+            month_name = months_map.get(selected_date_obj.month, selected_date_obj.month)
+            formatted_date = f"{day} {month_name} {selected_date_obj.year}"
+
             state_manager.set_admin_state(AdminState.BROADCAST_SCHEDULE_AWAITING_TIME)
-            await query.edit_message_text(f"Вы выбрали дату: {selected_date_str}\n\nТеперь введите время в формате ЧЧ:ММ (24-часовой формат):")
+            await query.edit_message_text(f"Вы выбрали дату: {formatted_date}\n\nТеперь введите время в формате ЧЧ:ММ (24-часовой формат):")
 
         elif command.startswith("calendar_prev_month_") or command.startswith("calendar_next_month_"):
             logger.info("Обработка команды навигации по месяцам")
@@ -421,7 +433,7 @@ async def handle_scheduled_broadcast_time_input(update: Update, context: Context
     # Показываем подтверждение
     state_manager.set_admin_state(AdminState.BROADCAST_SCHEDULE_CONFIRMATION)
     
-    # Получаем день недели
+    # Получаем день недели и форматируем дату по-русски
     weekday = scheduled_datetime.strftime('%A')
     weekdays_map = {
         'Monday': 'понедельник',
@@ -434,7 +446,17 @@ async def handle_scheduled_broadcast_time_input(update: Update, context: Context
     }
     weekday_ru = weekdays_map.get(weekday, weekday)
     
-    confirmation_text = f"Запланировать рассылку в {weekday_ru} {scheduled_datetime.strftime('%d.%m.%Y')} в {selected_time_str}?"
+    # Форматируем дату в русском формате
+    day = scheduled_datetime.day
+    months_map = {
+        1: "января", 2: "февраля", 3: "марта", 4: "апреля",
+        5: "мая", 6: "июня", 7: "июля", 8: "августа",
+        9: "сентября", 10: "октября", 11: "ноября", 12: "декабря"
+    }
+    month_name = months_map.get(scheduled_datetime.month, scheduled_datetime.month)
+    formatted_date = f"{day} {month_name} {scheduled_datetime.year}"
+    
+    confirmation_text = f"Вы выбрали дату: {formatted_date} в {time_input}\n\nВсе верно?"
     keyboard = [
         [InlineKeyboardButton("✅ Да, все верно", callback_data="scheduled_broadcast_confirm")],
         [InlineKeyboardButton("📅 Изменить дату", callback_data="scheduled_broadcast_change_date")]
@@ -451,9 +473,17 @@ async def handle_scheduled_broadcast_confirmation(update: Update, context: Conte
     await query.answer()
     command = query.data
 
+    # Проверяем, что пользователь находится в состоянии подтверждения
+    state_manager = StateManager(context)
+    current_state = state_manager.get_admin_state()
+    
+    if current_state != AdminState.BROADCAST_SCHEDULE_CONFIRMATION:
+        logger.warning(f"Получена команда {command} в состоянии {current_state}, ожидалось BROADCAST_SCHEDULE_CONFIRMATION")
+        await query.edit_message_text("Ошибка: некорректное состояние для подтверждения рассылки.")
+        return
+
     if command == "scheduled_broadcast_confirm":
         # Создаем отложенную рассылку в базе данных
-        state_manager = StateManager(context)
         scheduled_datetime_str = context.user_data.get("scheduled_broadcast_datetime")
         message_id = context.user_data.get("scheduled_broadcast_message_id")
         admin_id = update.effective_user.id
@@ -515,7 +545,17 @@ async def handle_scheduled_broadcast_confirmation(update: Update, context: Conte
         }
         weekday_ru = weekdays_map.get(weekday, weekday)
 
-        await query.edit_message_text(f"Рассылка запланирована на {weekday_ru} {scheduled_datetime.strftime('%d.%m.%Y в %H:%M')}")
+        # Форматируем дату в русском формате
+        day = scheduled_datetime.day
+        months_map = {
+            1: "января", 2: "февраля", 3: "марта", 4: "апреля",
+            5: "мая", 6: "июня", 7: "июля", 8: "августа",
+            9: "сентября", 10: "октября", 11: "ноября", 12: "декабря"
+        }
+        month_name = months_map.get(scheduled_datetime.month, scheduled_datetime.month)
+        formatted_date = f"{day} {month_name} {scheduled_datetime.year}"
+        
+        await query.edit_message_text(f"Рассылка запланирована на {weekday_ru} {formatted_date} в {scheduled_datetime.strftime('%H:%M')}")
 
         # Добавляем кнопки для управления
         keyboard = [
@@ -526,10 +566,13 @@ async def handle_scheduled_broadcast_confirmation(update: Update, context: Conte
 
     elif command == "scheduled_broadcast_change_date":
         # Возвращаемся к выбору даты
-        state_manager = StateManager(context)
         state_manager.set_admin_state(AdminState.BROADCAST_SCHEDULE_AWAITING_DATE)
-        keyboard = create_date_quick_select_keyboard()
-        await query.edit_message_text("Выберите дату для отправки рассылки:", reply_markup=keyboard)
+        
+        # Показываем календарь для выбора новой даты
+        from datetime import date
+        current_date = date.today()
+        calendar_keyboard = create_calendar_keyboard(current_date)
+        await query.edit_message_text("Выберите новую дату для отправки рассылки:", reply_markup=calendar_keyboard)
 
 
 async def handle_scheduled_broadcasts_list(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

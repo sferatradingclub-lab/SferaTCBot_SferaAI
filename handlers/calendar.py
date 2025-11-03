@@ -31,16 +31,24 @@ def create_calendar_keyboard(target_date: date = None) -> InlineKeyboardMarkup:
     # Формируем клавиатуру
     keyboard = []
     
-    # Заголовок с навигацией по месяцам
+    # Месяцы на русском языке
+    months_map = {
+        1: "Январь", 2: "Февраль", 3: "Март", 4: "Апрель",
+        5: "Май", 6: "Июнь", 7: "Июль", 8: "Август",
+        9: "Сентябрь", 10: "Октябрь", 11: "Ноябрь", 12: "Декабрь"
+    }
+
+    # Заголовок с навигацией по месяцам (месяц на русском)
     prev_month = target_date.month - 1 if target_date.month > 1 else 12
     prev_year = target_date.year if target_date.month > 1 else target_date.year - 1
-    
+
     next_month = target_date.month + 1 if target_date.month < 12 else 1
     next_year = target_date.year if target_date.month < 12 else target_date.year + 1
-    
+
+    month_name = months_map.get(target_date.month, target_date.month)
     header_row = [
         InlineKeyboardButton("<<", callback_data=f"calendar_prev_month_{prev_year}-{prev_month:02d}"),
-        InlineKeyboardButton(f"{target_date.strftime('%B %Y')}", callback_data="calendar_noop"),
+        InlineKeyboardButton(f"{month_name} {target_date.year}", callback_data="calendar_noop"),
         InlineKeyboardButton(">>", callback_data=f"calendar_next_month_{next_year}-{next_month:02d}")
     ]
     keyboard.append(header_row)
@@ -71,11 +79,16 @@ def create_calendar_keyboard(target_date: date = None) -> InlineKeyboardMarkup:
         
         # Проверяем, является ли дата прошедшей
         is_past = current_date < date.today()
+        is_today = current_date == date.today()
         
         if is_past:
             # Для прошедших дат используем серую кнопку
             button_text = str(day)
             callback_data = "calendar_noop"
+        elif is_today:
+            # Для сегодняшней даты добавляем выделение
+            button_text = f"•{day}•"
+            callback_data = f"calendar_select_{current_date.strftime('%Y-%m-%d')}"
         else:
             # Для будущих дат используем обычную кнопку
             button_text = str(day)

@@ -36,13 +36,14 @@ from .admin.broadcast import (
     run_broadcast as broadcast_run_broadcast,
 )
 
-settings = get_settings()
-logger = settings.logger
 from .admin.stats import (
     daily_stats_job as stats_daily_stats_job,
     show_stats as stats_show_stats,
     show_status as stats_show_status,
 )
+
+settings = get_settings()
+logger = settings.logger
 from .admin.user_management import (
     approve_user,
     display_user_card,
