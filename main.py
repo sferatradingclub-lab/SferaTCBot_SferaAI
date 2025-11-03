@@ -206,6 +206,7 @@ def main() -> Application:
     application.add_handler(CallbackQueryHandler(admin_menu_handler, pattern='^admin_'))
     application.add_handler(CallbackQueryHandler(broadcast_confirmation_handler, pattern='^broadcast_'))
     application.add_handler(CallbackQueryHandler(admin_menu_handler, pattern='^calendar_'))  # Для календарных команд
+    application.add_handler(CallbackQueryHandler(admin_menu_handler, pattern='^scheduled_broadcast_'))  # Для команд запланированной рассылки
     application.add_handler(CallbackQueryHandler(tools_menu_handler, pattern='^tool'))
     application.add_handler(CallbackQueryHandler(user_actions_handler, pattern='^user_'))
     application.add_handler(CallbackQueryHandler(support_rejection_handler, pattern='^support_from_rejection$'))
