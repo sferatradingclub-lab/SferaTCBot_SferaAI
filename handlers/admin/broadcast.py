@@ -476,18 +476,16 @@ async def handle_scheduled_broadcast_confirmation(update: Update, context: Conte
     if query is None:
         return
 
-    await query.answer()
     command = query.data
 
     # Проверяем, что пользователь находится в состоянии подтверждения
     state_manager = StateManager(context)
     current_state = state_manager.get_admin_state()
     
-    # Вместо возврата с ошибкой, просто логируем неожиданное состояние и продолжаем
-    # Это позволит обработать команды даже если состояние изменилось
     if current_state != AdminState.BROADCAST_SCHEDULE_CONFIRMATION:
         logger.warning(f"Получена команда {command} в состоянии {current_state}, ожидалось BROADCAST_SCHEDULE_CONFIRMATION")
-        # Продолжаем выполнение, так как данные для обработки есть в context.user_data
+        await query.edit_message_text("Ошибка: некорректное состояние для подтверждения рассылки.")
+        return
 
     if command == "scheduled_broadcast_confirm":
         # Создаем отложенную рассылку в базе данных
