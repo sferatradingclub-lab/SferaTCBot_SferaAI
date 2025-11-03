@@ -26,6 +26,7 @@ from models.crud import (
 )
 from services.state_manager import StateManager
 
+settings = get_settings()
 logger = settings.logger
 
 from .admin.broadcast import (
