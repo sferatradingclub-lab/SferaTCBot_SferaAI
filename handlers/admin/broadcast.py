@@ -21,6 +21,7 @@ from telegram.helpers import escape_markdown
 from config import get_settings
 from db_session import get_db
 from models.crud import iter_broadcast_targets, create_scheduled_broadcast, get_scheduled_broadcasts_by_admin
+from models.user import User  # Добавляем импорт модели User
 from services.notifier import Notifier
 from services.state_manager import StateManager
 from handlers.states import AdminState
@@ -312,8 +313,8 @@ async def handle_calendar_callback(update: Update, context: ContextTypes.DEFAULT
             context.user_data["scheduled_broadcast_date"] = selected_date_str
 
             # Преобразуем формат даты для отображения в русском формате
-            from datetime import datetime
-            selected_date_obj = datetime.strptime(selected_date_str, "%Y-%m-%d").date()
+            from datetime import datetime as dt
+            selected_date_obj = dt.strptime(selected_date_str, "%Y-%m-%d").date()
             day = selected_date_obj.day
             months_map = {
                 1: "января", 2: "февраля", 3: "марта", 4: "апреля",
@@ -336,8 +337,8 @@ async def handle_calendar_callback(update: Update, context: ContextTypes.DEFAULT
             
             try:
                 year, month = map(int, date_str.split("-"))
-                from datetime import date
-                target_date = date(year, month, 1)
+                from datetime import date as dt_date
+                target_date = dt_date(year, month, 1)
                 new_keyboard = create_calendar_keyboard(target_date)
                 await query.edit_message_reply_markup(reply_markup=new_keyboard)
             except ValueError:
@@ -346,7 +347,6 @@ async def handle_calendar_callback(update: Update, context: ContextTypes.DEFAULT
         elif command == "calendar_expand":
             logger.info("Обработка команды calendar_expand")
             # Развернуть полный календарь
-            from datetime import date
             current_date = datetime.now(ZoneInfo("Europe/Minsk")).date()
             calendar_keyboard = create_calendar_keyboard(current_date)
             logger.info(f"Создана клавиатура календаря для даты {current_date}")
@@ -358,8 +358,8 @@ async def handle_calendar_callback(update: Update, context: ContextTypes.DEFAULT
                 # Если не удалось отредактировать сообщение, отправляем новое
                 try:
                     # Пересоздаем календарь, так как в предыдущем блоке могла быть ошибка
-                    from datetime import date
-                    current_date = date.today()
+                    from datetime import date as dt_date
+                    current_date = dt_date.today()
                     calendar_keyboard = create_calendar_keyboard(current_date)
                     await query.message.reply_text("Выберите дату:", reply_markup=calendar_keyboard)
                     logger.info("Новое сообщение с календарем успешно отправлено")
@@ -415,12 +415,12 @@ async def handle_scheduled_broadcast_time_input(update: Update, context: Context
         state_manager.reset_admin_state()
         return
 
-    from datetime import datetime
+    from datetime import datetime as dt
     try:
         # Объединяем выбранную дату и время
         selected_datetime_str = f"{selected_date_str} {selected_time_str}"
-        scheduled_datetime = datetime.strptime(selected_datetime_str, "%Y-%m-%d %H:%M")
-        current_datetime = datetime.now()
+        scheduled_datetime = dt.strptime(selected_datetime_str, "%Y-%m-%d %H:%M")
+        current_datetime = dt.now()
         if scheduled_datetime <= current_datetime:
             await message.reply_text("Ошибка: нельзя запланировать рассылку на прошедшее время. Пожалуйста, выберите будущую дату и время.")
             # Сбрасываем состояние и возвращаем к выбору даты
@@ -498,9 +498,9 @@ async def handle_scheduled_broadcast_confirmation(update: Update, context: Conte
             state_manager.reset_admin_state()
             return
 
-        from datetime import datetime
+        from datetime import datetime as dt
         try:
-            scheduled_datetime = datetime.fromisoformat(scheduled_datetime_str)
+            scheduled_datetime = dt.fromisoformat(scheduled_datetime_str)
         except ValueError:
             await query.edit_message_text("Ошибка при обработке даты и времени.")
             state_manager.reset_admin_state()
@@ -574,7 +574,7 @@ async def handle_scheduled_broadcast_confirmation(update: Update, context: Conte
         state_manager.set_admin_state(AdminState.BROADCAST_SCHEDULE_AWAITING_DATE)
         
         # Показываем календарь для выбора новой даты
-        from datetime import date
+        from datetime import date as dt_date
         current_date = datetime.now(ZoneInfo("Europe/Minsk")).date()
         calendar_keyboard = create_calendar_keyboard(current_date)
         await query.edit_message_text("Выберите новую дату для отправки рассылки:", reply_markup=calendar_keyboard)
