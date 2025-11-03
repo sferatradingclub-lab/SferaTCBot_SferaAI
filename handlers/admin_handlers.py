@@ -130,7 +130,7 @@ async def admin_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await handle_scheduled_broadcast_confirmation(update, context)
         return
 
-    if command.startswith("scheduled_broadcast_"):
+    if command.startswith("scheduled_broadcast_") or command == "scheduled_broadcasts_list":
         if command == "scheduled_broadcasts_list":
             await handle_scheduled_broadcasts_list(update, context)
             return
