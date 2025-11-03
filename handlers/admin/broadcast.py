@@ -474,35 +474,55 @@ async def handle_scheduled_broadcast_confirmation(update: Update, context: Conte
     """Обработка подтверждения отложенной рассылки."""
     query = update.callback_query
     if query is None:
+        logger.error("handle_scheduled_broadcast_confirmation: query is None")
         return
 
     command = query.data
+    logger.info(f"handle_scheduled_broadcast_confirmation: получена команда {command}")
 
     # Проверяем, что пользователь находится в состоянии подтверждения
     state_manager = StateManager(context)
     current_state = state_manager.get_admin_state()
+    logger.info(f"handle_scheduled_broadcast_confirmation: текущее состояние {current_state}, ожидалось {AdminState.BROADCAST_SCHEDULE_CONFIRMATION}")
     
     if current_state != AdminState.BROADCAST_SCHEDULE_CONFIRMATION:
         logger.warning(f"Получена команда {command} в состоянии {current_state}, ожидалось BROADCAST_SCHEDULE_CONFIRMATION")
-        await query.edit_message_text("Ошибка: некорректное состояние для подтверждения рассылки.")
+        try:
+            await query.edit_message_text("Ошибка: некорректное состояние для подтверждения рассылки.")
+        except Exception as e:
+            logger.error(f"Ошибка при редактировании сообщения: {e}")
         return
 
+    logger.info(f"handle_scheduled_broadcast_confirmation: обработка команды {command}")
+    
     if command == "scheduled_broadcast_confirm":
+        logger.info("handle_scheduled_broadcast_confirmation: обработка подтверждения рассылки")
         # Создаем отложенную рассылку в базе данных
         scheduled_datetime_str = context.user_data.get("scheduled_broadcast_datetime")
         message_id = context.user_data.get("scheduled_broadcast_message_id")
         admin_id = update.effective_user.id
 
+        logger.info(f"handle_scheduled_broadcast_confirmation: данные для рассылки - datetime: {scheduled_datetime_str}, message_id: {message_id}, admin_id: {admin_id}")
+
         if not all([scheduled_datetime_str, message_id, admin_id]):
-            await query.edit_message_text("Ошибка: необходимые данные для создания рассылки отсутствуют.")
+            logger.warning(f"Недостаточно данных для создания рассылки: scheduled_datetime_str={bool(scheduled_datetime_str)}, message_id={bool(message_id)}, admin_id={bool(admin_id)}")
+            try:
+                await query.edit_message_text("Ошибка: необходимые данные для создания рассылки отсутствуют.")
+            except Exception as e:
+                logger.error(f"Ошибка при редактировании сообщения: {e}")
             state_manager.reset_admin_state()
             return
 
         from datetime import datetime as dt
         try:
             scheduled_datetime = dt.fromisoformat(scheduled_datetime_str)
-        except ValueError:
-            await query.edit_message_text("Ошибка при обработке даты и времени.")
+            logger.info(f"handle_scheduled_broadcast_confirmation: дата рассылки преобразована: {scheduled_datetime}")
+        except ValueError as e:
+            logger.error(f"Ошибка преобразования даты: {e}")
+            try:
+                await query.edit_message_text("Ошибка при обработке даты и времени.")
+            except Exception as edit_error:
+                logger.error(f"Ошибка при редактировании сообщения: {edit_error}")
             state_manager.reset_admin_state()
             return
 
@@ -516,6 +536,7 @@ async def handle_scheduled_broadcast_confirmation(update: Update, context: Conte
 
         from db_session import get_db
         try:
+            logger.info("handle_scheduled_broadcast_confirmation: сохранение отложенной рассылки в базу данных")
             with get_db() as db:
                 scheduled_broadcast = create_scheduled_broadcast(
                     db=db,
@@ -523,9 +544,13 @@ async def handle_scheduled_broadcast_confirmation(update: Update, context: Conte
                     message_content=message_content,
                     scheduled_datetime=scheduled_datetime
                 )
+            logger.info("handle_scheduled_broadcast_confirmation: отложенная рассылка успешно сохранена")
         except Exception as e:
             logger.error(f"Ошибка при создании отложенной рассылки: {e}", exc_info=True)
-            await query.edit_message_text("Ошибка при сохранении отложенной рассылки.")
+            try:
+                await query.edit_message_text("Ошибка при сохранении отложенной рассылки.")
+            except Exception as edit_error:
+                logger.error(f"Ошибка при редактировании сообщения: {edit_error}")
             state_manager.reset_admin_state()
             return
 
@@ -534,8 +559,10 @@ async def handle_scheduled_broadcast_confirmation(update: Update, context: Conte
         context.user_data.pop("scheduled_broadcast_message_id", None)
         context.user_data.pop("scheduled_broadcast_date", None)
         context.user_data.pop("scheduled_broadcast_time", None)
+        logger.info("handle_scheduled_broadcast_confirmation: данные очищены из user_data")
 
         state_manager.reset_admin_state()
+        logger.info("handle_scheduled_broadcast_confirmation: состояние сброшено")
 
         # Формируем сообщение с днем недели
         weekday = scheduled_datetime.strftime('%A')
@@ -560,23 +587,43 @@ async def handle_scheduled_broadcast_confirmation(update: Update, context: Conte
         month_name = months_map.get(scheduled_datetime.month, scheduled_datetime.month)
         formatted_date = f"{day} {month_name} {scheduled_datetime.year}"
         
-        await query.edit_message_text(f"Рассылка запланирована на {weekday_ru} {formatted_date} в {scheduled_datetime.strftime('%H:%M')}")
+        try:
+            await query.edit_message_text(f"Рассылка запланирована на {weekday_ru} {formatted_date} в {scheduled_datetime.strftime('%H:%M')}")
+            logger.info("handle_scheduled_broadcast_confirmation: сообщение о планировании рассылки отправлено")
+        except Exception as e:
+            logger.error(f"Ошибка при редактировании сообщения с подтверждением: {e}")
 
         # Добавляем кнопки для управления
         keyboard = [
             [InlineKeyboardButton("📋 Все запланированные рассылки", callback_data="scheduled_broadcasts_list")],
             [InlineKeyboardButton("➕ Новая рассылка", callback_data="admin_broadcast")]
         ]
-        await query.message.reply_text("Выберите действие:", reply_markup=InlineKeyboardMarkup(keyboard))
+        try:
+            await query.message.reply_text("Выберите действие:", reply_markup=InlineKeyboardMarkup(keyboard))
+            logger.info("handle_scheduled_broadcast_confirmation: сообщение с кнопками управления отправлено")
+        except Exception as e:
+            logger.error(f"Ошибка при отправке сообщения с кнопками управления: {e}")
 
     elif command == "scheduled_broadcast_change_date":
+        logger.info("handle_scheduled_broadcast_confirmation: обработка изменения даты")
         # Возвращаемся к выбору даты
         state_manager.set_admin_state(AdminState.BROADCAST_SCHEDULE_AWAITING_DATE)
+        logger.info("handle_scheduled_broadcast_confirmation: установлено состояние BROADCAST_SCHEDULE_AWAITING_DATE")
         
         # Показываем календарь для выбора новой даты
         current_date = datetime.now(ZoneInfo("Europe/Minsk")).date()
         calendar_keyboard = create_calendar_keyboard(current_date)
-        await query.edit_message_text("Выберите новую дату для отправки рассылки:", reply_markup=calendar_keyboard)
+        try:
+            await query.edit_message_text("Выберите новую дату для отправки рассылки:", reply_markup=calendar_keyboard)
+            logger.info("handle_scheduled_broadcast_confirmation: календарь для выбора новой даты отправлен")
+        except Exception as e:
+            logger.error(f"Ошибка при отправке календаря для изменения даты: {e}")
+            try:
+                await query.edit_message_text("Произошла ошибка при открытии календаря.")
+            except:
+                pass
+    else:
+        logger.warning(f"handle_scheduled_broadcast_confirmation: неизвестная команда {command}")
 
 
 async def handle_scheduled_broadcasts_list(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
