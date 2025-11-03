@@ -13,6 +13,7 @@ from telegram.ext import ContextTypes
 from telegram.helpers import escape_markdown
 
 from config import get_settings
+from db_session import get_db
 from models.crud import iter_broadcast_targets, create_scheduled_broadcast, get_scheduled_broadcasts_by_admin
 from services.notifier import Notifier
 from services.state_manager import StateManager
@@ -338,6 +339,10 @@ async def handle_calendar_callback(update: Update, context: ContextTypes.DEFAULT
                 logger.error(f"Ошибка при редактировании сообщения для calendar_expand: {e}", exc_info=True)
                 # Если не удалось отредактировать сообщение, отправляем новое
                 try:
+                    # Пересоздаем календарь, так как в предыдущем блоке могла быть ошибка
+                    from datetime import date
+                    current_date = date.today()
+                    calendar_keyboard = create_calendar_keyboard(current_date)
                     await query.message.reply_text("Выберите дату:", reply_markup=calendar_keyboard)
                     logger.info("Новое сообщение с календарем успешно отправлено")
                 except Exception as e2:
@@ -384,17 +389,19 @@ async def handle_scheduled_broadcast_time_input(update: Update, context: Context
 
     context.user_data["scheduled_broadcast_time"] = time_input
 
-    # Получаем выбранную дату
+    # Получаем выбранную дату и время
     selected_date_str = context.user_data.get("scheduled_broadcast_date")
-    if not selected_date_str:
-        await message.reply_text("Ошибка: дата не выбрана.")
+    selected_time_str = context.user_data.get("scheduled_broadcast_time")
+    if not selected_date_str or not selected_time_str:
+        await message.reply_text("Ошибка: дата или время не выбраны.")
         state_manager.reset_admin_state()
         return
 
-    # Формируем полную дату и время
     from datetime import datetime
     try:
-        scheduled_datetime = datetime.strptime(f"{selected_date_str} {time_input}", "%Y-%m-%d %H:%M")
+        # Объединяем выбранную дату и время
+        selected_datetime_str = f"{selected_date_str} {selected_time_str}"
+        scheduled_datetime = datetime.strptime(selected_datetime_str, "%Y-%m-%d %H:%M")
         current_datetime = datetime.now()
         if scheduled_datetime <= current_datetime:
             await message.reply_text("Ошибка: нельзя запланировать рассылку на прошедшее время. Пожалуйста, выберите будущую дату и время.")
@@ -427,7 +434,7 @@ async def handle_scheduled_broadcast_time_input(update: Update, context: Context
     }
     weekday_ru = weekdays_map.get(weekday, weekday)
     
-    confirmation_text = f"Запланировать рассылку в {weekday_ru} {scheduled_datetime.strftime('%d.%m.%Y')} в {time_input}?"
+    confirmation_text = f"Запланировать рассылку в {weekday_ru} {scheduled_datetime.strftime('%d.%m.%Y')} в {selected_time_str}?"
     keyboard = [
         [InlineKeyboardButton("✅ Да, все верно", callback_data="scheduled_broadcast_confirm")],
         [InlineKeyboardButton("📅 Изменить дату", callback_data="scheduled_broadcast_change_date")]
@@ -457,20 +464,12 @@ async def handle_scheduled_broadcast_confirmation(update: Update, context: Conte
             return
 
         from datetime import datetime
-        scheduled_datetime = datetime.fromisoformat(scheduled_datetime_str)
-
-        # Получаем оригинальное сообщение для сохранения его содержимого
         try:
-            original_message = await context.bot.copy_message(
-                chat_id=admin_id,
-                from_chat_id=admin_id,
-                message_id=message_id
-            )
-            # Удаляем копию, так как она была создана только для получения данных
-            await context.bot.delete_message(chat_id=admin_id, message_id=original_message.message_id)
-        except Exception:
-            # Если не удалось получить оригинальное сообщение, просто сохраняем ID
-            pass
+            scheduled_datetime = datetime.fromisoformat(scheduled_datetime_str)
+        except ValueError:
+            await query.edit_message_text("Ошибка при обработке даты и времени.")
+            state_manager.reset_admin_state()
+            return
 
         # Подготовим содержимое сообщения в JSON-формате
         # Для простоты в этом примере будем сохранять только ID сообщения
@@ -481,13 +480,19 @@ async def handle_scheduled_broadcast_confirmation(update: Update, context: Conte
         })
 
         from db_session import get_db
-        with get_db() as db:
-            scheduled_broadcast = create_scheduled_broadcast(
-                db=db,
-                admin_id=admin_id,
-                message_content=message_content,
-                scheduled_datetime=scheduled_datetime
-            )
+        try:
+            with get_db() as db:
+                scheduled_broadcast = create_scheduled_broadcast(
+                    db=db,
+                    admin_id=admin_id,
+                    message_content=message_content,
+                    scheduled_datetime=scheduled_datetime
+                )
+        except Exception as e:
+            logger.error(f"Ошибка при создании отложенной рассылки: {e}", exc_info=True)
+            await query.edit_message_text("Ошибка при сохранении отложенной рассылки.")
+            state_manager.reset_admin_state()
+            return
 
         # Очищаем данные
         context.user_data.pop("scheduled_broadcast_datetime", None)

@@ -26,9 +26,6 @@ from models.crud import (
 )
 from services.state_manager import StateManager
 
-settings = get_settings()
-logger = settings.logger
-
 from .admin.broadcast import (
     broadcast_confirmation_handler,
     prepare_broadcast_message,
@@ -38,6 +35,9 @@ from .admin.broadcast import (
     handle_scheduled_broadcasts_list,
     run_broadcast as broadcast_run_broadcast,
 )
+
+settings = get_settings()
+logger = settings.logger
 from .admin.stats import (
     daily_stats_job as stats_daily_stats_job,
     show_stats as stats_show_stats,
@@ -52,8 +52,6 @@ from .admin.user_management import (
 )
 from .error_handler import handle_errors
 from .states import AdminState
-
-settings = get_settings()
 
 
 async def _handle_user_lookup_wrapper(

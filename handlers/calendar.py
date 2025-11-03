@@ -1,4 +1,4 @@
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from typing import List
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
@@ -26,7 +26,7 @@ def create_calendar_keyboard(target_date: date = None) -> InlineKeyboardMarkup:
     else:
         next_month = date(target_date.year, target_date.month + 1, 1)
     
-    last_day_of_month = (next_month - date(1, 1, 1)).day  # Вычитаем 1 день от первого дня следующего месяца
+    last_day_of_month = (next_month - timedelta(days=1)).day  # Вычитаем 1 день от первого дня следующего месяца
     
     # Формируем клавиатуру
     keyboard = []
@@ -104,9 +104,10 @@ def create_date_quick_select_keyboard() -> InlineKeyboardMarkup:
     Returns:
         InlineKeyboardMarkup: Клавиатура с кнопками быстрого выбора
     """
+    from datetime import timedelta
     today = date.today()
-    tomorrow = today + date.resolution  # date.resolution = 1 день
-    day_after_tomorrow = today + date.resolution * 2
+    tomorrow = today + timedelta(days=1)  # 1 день
+    day_after_tomorrow = today + timedelta(days=2)
     
     keyboard = [
         [
