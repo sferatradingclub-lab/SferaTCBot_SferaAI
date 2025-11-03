@@ -484,8 +484,10 @@ async def handle_scheduled_broadcast_confirmation(update: Update, context: Conte
     current_state = state_manager.get_admin_state()
     
     # Вместо возврата с ошибкой, просто логируем неожиданное состояние и продолжаем
+    # Это позволит обработать команды даже если состояние изменилось
     if current_state != AdminState.BROADCAST_SCHEDULE_CONFIRMATION:
         logger.warning(f"Получена команда {command} в состоянии {current_state}, ожидалось BROADCAST_SCHEDULE_CONFIRMATION")
+        # Продолжаем выполнение, так как данные для обработки есть в context.user_data
 
     if command == "scheduled_broadcast_confirm":
         # Создаем отложенную рассылку в базе данных
@@ -494,7 +496,7 @@ async def handle_scheduled_broadcast_confirmation(update: Update, context: Conte
         admin_id = update.effective_user.id
 
         if not all([scheduled_datetime_str, message_id, admin_id]):
-            await query.edit_message_text("Ошибка при создании отложенной рассылки.")
+            await query.edit_message_text("Ошибка: необходимые данные для создания рассылки отсутствуют.")
             state_manager.reset_admin_state()
             return
 
@@ -574,7 +576,6 @@ async def handle_scheduled_broadcast_confirmation(update: Update, context: Conte
         state_manager.set_admin_state(AdminState.BROADCAST_SCHEDULE_AWAITING_DATE)
         
         # Показываем календарь для выбора новой даты
-        from datetime import date as dt_date
         current_date = datetime.now(ZoneInfo("Europe/Minsk")).date()
         calendar_keyboard = create_calendar_keyboard(current_date)
         await query.edit_message_text("Выберите новую дату для отправки рассылки:", reply_markup=calendar_keyboard)
