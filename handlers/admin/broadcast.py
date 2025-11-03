@@ -277,6 +277,7 @@ __all__ = [
 
 async def handle_calendar_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработчик callback-запросов от календаря."""
+    logger.info("Начало обработки календарного callback-запроса")
     query = update.callback_query
     if query is None:
         logger.warning("Получен callback_query равный None")
@@ -298,6 +299,7 @@ async def handle_calendar_callback(update: Update, context: ContextTypes.DEFAULT
     logger.info(f"Обработка команды {command} в состоянии BROADCAST_SCHEDULE_AWAITING_DATE")
     try:
         if command.startswith("calendar_select_"):
+            logger.info("Обработка команды calendar_select_")
             # Выбрана дата, теперь нужно ввести время
             selected_date_str = command.replace("calendar_select_", "")
             context.user_data["scheduled_broadcast_date"] = selected_date_str
@@ -306,6 +308,7 @@ async def handle_calendar_callback(update: Update, context: ContextTypes.DEFAULT
             await query.edit_message_text(f"Вы выбрали дату: {selected_date_str}\n\nТеперь введите время в формате ЧЧ:ММ (24-часовой формат):")
 
         elif command.startswith("calendar_prev_month_") or command.startswith("calendar_next_month_"):
+            logger.info("Обработка команды навигации по месяцам")
             # Навигация по месяцам
             if command.startswith("calendar_prev_month_"):
                 date_str = command.replace("calendar_prev_month_", "")
