@@ -9,7 +9,7 @@ from telegram.ext import ContextTypes
 
 from config import get_settings
 from db_session import get_db
-from models.crud import get_pending_scheduled_broadcasts, mark_broadcast_as_sent
+from models.crud import get_pending_scheduled_broadcasts, mark_broadcast_as_sent, iter_broadcast_targets
 from models.user import User
 from services.notifier import Notifier
 
@@ -87,11 +87,11 @@ class BroadcastSchedulerService:
             except Exception as e:
                 self.logger.warning(f"Ошибка при создании клавиатуры для рассылки: {e}")
         
+        success_count = 0
+        error_count = 0
+        
         if new_text:
             # Если есть обновленный текст, отправляем его напрямую
-            success_count = 0
-            error_count = 0
-            
             with get_db() as db:
                 for user_id_batch in iter_broadcast_targets(db):
                     # Отправляем сообщения в этой батч
@@ -122,9 +122,6 @@ class BroadcastSchedulerService:
             original_text = message_data.get("original_text")
             if original_text:
                 # Если есть оригинальный текст, отправляем его напрямую
-                success_count = 0
-                error_count = 0
-                
                 with get_db() as db:
                     for user_id_batch in iter_broadcast_targets(db):
                         # Отправляем сообщения в этой батч
@@ -161,9 +158,6 @@ class BroadcastSchedulerService:
                 if photo_id:
                     # Отправляем фото
                     caption = message_data.get("caption", "")
-                    success_count = 0
-                    error_count = 0
-                    
                     with get_db() as db:
                         for user_id_batch in iter_broadcast_targets(db):
                             for user_id in user_id_batch:
@@ -189,9 +183,6 @@ class BroadcastSchedulerService:
                 elif video_id:
                     # Отправляем видео
                     caption = message_data.get("caption", "")
-                    success_count = 0
-                    error_count = 0
-                    
                     with get_db() as db:
                         for user_id_batch in iter_broadcast_targets(db):
                             for user_id in user_id_batch:
@@ -217,9 +208,6 @@ class BroadcastSchedulerService:
                 elif document_id:
                     # Отправляем документ
                     caption = message_data.get("caption", "")
-                    success_count = 0
-                    error_count = 0
-                    
                     with get_db() as db:
                         for user_id_batch in iter_broadcast_targets(db):
                             for user_id in user_id_batch:
@@ -245,9 +233,6 @@ class BroadcastSchedulerService:
                 elif audio_id:
                     # Отправляем аудио
                     caption = message_data.get("caption", "")
-                    success_count = 0
-                    error_count = 0
-                    
                     with get_db() as db:
                         for user_id_batch in iter_broadcast_targets(db):
                             for user_id in user_id_batch:
@@ -272,9 +257,6 @@ class BroadcastSchedulerService:
                             await asyncio.sleep(0.05)  # 50 мс между батчами
                 elif voice_id:
                     # Отправляем голосовое сообщение
-                    success_count = 0
-                    error_count = 0
-                    
                     with get_db() as db:
                         for user_id_batch in iter_broadcast_targets(db):
                             for user_id in user_id_batch:
@@ -315,9 +297,6 @@ class BroadcastSchedulerService:
                         return
                     
                     # Итерируем по пользователям и отправляем сообщение
-                    success_count = 0
-                    error_count = 0
-                    
                     with get_db() as db:
                         for user_id_batch in iter_broadcast_targets(db):
                             # Отправляем сообщения в этой батч

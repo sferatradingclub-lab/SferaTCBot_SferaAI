@@ -148,8 +148,8 @@ def delete_user_in_db(db: Session, user_id: int) -> bool:
         return False
 
 
-def iter_broadcast_targets(db: Session, *, chunk_size: int = 500) -> Iterator[int]:
-    """Итератор ID пользователей для рассылки без загрузки всей таблицы."""
+def iter_broadcast_targets(db: Session, *, chunk_size: int = 500) -> Iterator[list[int]]:
+    """Итератор батчей ID пользователей для рассылки без загрузки всей таблицы."""
     admin_id: Optional[int] = None
     if settings.ADMIN_CHAT_ID is not None:
         try:
@@ -161,8 +161,18 @@ def iter_broadcast_targets(db: Session, *, chunk_size: int = 500) -> Iterator[in
     if admin_id is not None:
         query = query.filter(User.user_id != admin_id)
 
+    current_batch = []
     for row in query.order_by(User.user_id).yield_per(chunk_size):
-        yield getattr(row, "user_id", row[0])
+        user_id = getattr(row, "user_id", row[0])
+        current_batch.append(user_id)
+        
+        if len(current_batch) >= chunk_size:
+            yield current_batch
+            current_batch = []
+    
+    # Отправляем оставшиеся ID
+    if current_batch:
+        yield current_batch
 
 
 def get_user_by_username(db: Session, username: Optional[str]):
