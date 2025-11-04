@@ -530,7 +530,7 @@ async def handle_scheduled_broadcast_time_input(update: Update, context: Context
                 [InlineKeyboardButton("📋 К списку рассылок", callback_data="scheduled_broadcasts_list")]
             ]
             await context.bot.send_message(
-                chat_id=query.from_user.id,
+                chat_id=message.from_user.id,
                 text="Выберите действие:",
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
@@ -856,19 +856,28 @@ async def handle_scheduled_broadcast_view(update: Update, context: ContextTypes.
             await query.edit_message_text("❌ Рассылка не найдена или недоступна.")
             return
     
-    # Формируем информацию о рассылке
-    broadcast_date = broadcast.scheduled_datetime.strftime('%d.%m.%Y %H:%M')
+    # Получаем текст рассылки для отображения
     message_content = json.loads(broadcast.message_content)
-    message_id = message_content.get("message_id", "Неизвестно")
     new_text = message_content.get("new_text")
     original_text = message_content.get("original_text")
+    message_id = message_content.get("message_id", "Неизвестно")
     
+    # Отправляем первое сообщение с полным текстом поста
     if new_text:
-        info_text = f"📋 Информация о рассылке:\n\n📅 Дата и время: {broadcast_date}\n💬 Текст рассылки: {new_text}"
+        full_post_text = new_text
     elif original_text:
-        info_text = f"📋 Информация о рассылке:\n\n📅 Дата и время: {broadcast_date}\n💬 Оригинальный текст: {original_text}"
+        full_post_text = original_text
     else:
-        info_text = f"📋 Информация о рассылке:\n\n📅 Дата и время: {broadcast_date}\n💬 ID сообщения: {message_id}"
+        full_post_text = f"Текст не найден. ID сообщения: {message_id}"
+    
+    await context.bot.send_message(
+        chat_id=query.from_user.id,
+        text=full_post_text
+    )
+    
+    # Отправляем второе сообщение с датой и временем рассылки
+    broadcast_date = broadcast.scheduled_datetime.strftime('%d.%m.%Y %H:%M')
+    time_info_text = f"📅 Дата и время рассылки: {broadcast_date}"
     
     # Кнопки для управления рассылкой
     keyboard = [
@@ -878,7 +887,7 @@ async def handle_scheduled_broadcast_view(update: Update, context: ContextTypes.
         [InlineKeyboardButton("⬅️ Назад к списку", callback_data="scheduled_broadcasts_list")]
     ]
     
-    await query.edit_message_text(info_text, reply_markup=InlineKeyboardMarkup(keyboard))
+    await query.edit_message_text(time_info_text, reply_markup=InlineKeyboardMarkup(keyboard))
 
 
 async def handle_broadcast_edit_text_request(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
