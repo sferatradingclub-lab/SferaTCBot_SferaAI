@@ -937,6 +937,23 @@ async def handle_scheduled_broadcast_view(update: Update, context: ContextTypes.
     voice_id = message_content.get("voice_id")
     caption = message_content.get("caption", "")
     
+    # Отправляем первое сообщение с датой и временем рассылки и кнопками
+    broadcast_date = broadcast.scheduled_datetime.strftime('%d.%m.%Y %H:%M')
+    time_info_text = f"📅 Дата и время рассылки: {broadcast_date}"
+    
+    # Кнопки для управления рассылкой
+    keyboard = [
+        [InlineKeyboardButton("✏️ Изменить текст", callback_data=f"scheduled_broadcast_edit_text_{broadcast.id}")],
+        [InlineKeyboardButton("🖼️ Изменить медиа", callback_data=f"scheduled_broadcast_edit_media_{broadcast.id}")],
+        [InlineKeyboardButton("🔘 Изменить кнопки", callback_data=f"scheduled_broadcast_edit_buttons_{broadcast.id}")],
+        [InlineKeyboardButton("📅 Перенести дату отправки", callback_data=f"scheduled_broadcast_edit_datetime_{broadcast.id}")],
+        [InlineKeyboardButton("🗑️ Отменить рассылку", callback_data=f"scheduled_broadcast_delete_{broadcast.id}")],
+        [InlineKeyboardButton("✅ Подтвердить отправку", callback_data=f"scheduled_broadcast_confirm_send_{broadcast.id}")],
+        [InlineKeyboardButton("📋 Вернуться к списку", callback_data="scheduled_broadcasts_list")]
+    ]
+    
+    await query.edit_message_text(time_info_text, reply_markup=InlineKeyboardMarkup(keyboard))
+    
     # Проверяем, есть ли кнопки для отображения
     buttons_data = message_content.get("buttons")
     reply_markup = None
@@ -1060,23 +1077,6 @@ async def handle_scheduled_broadcast_view(update: Update, context: ContextTypes.
             text=full_post_text,
             parse_mode="HTML"
         )
-    
-    # Отправляем второе сообщение с датой и временем рассылки
-    broadcast_date = broadcast.scheduled_datetime.strftime('%d.%m.%Y %H:%M')
-    time_info_text = f"📅 Дата и время рассылки: {broadcast_date}"
-    
-    # Кнопки для управления рассылкой
-    keyboard = [
-        [InlineKeyboardButton("✏️ Изменить текст", callback_data=f"scheduled_broadcast_edit_text_{broadcast.id}")],
-        [InlineKeyboardButton("🖼️ Изменить медиа", callback_data=f"scheduled_broadcast_edit_media_{broadcast.id}")],
-        [InlineKeyboardButton("🔘 Изменить кнопки", callback_data=f"scheduled_broadcast_edit_buttons_{broadcast.id}")],
-        [InlineKeyboardButton("📅 Перенести дату отправки", callback_data=f"scheduled_broadcast_edit_datetime_{broadcast.id}")],
-        [InlineKeyboardButton("🗑️ Отменить рассылку", callback_data=f"scheduled_broadcast_delete_{broadcast.id}")],
-        [InlineKeyboardButton("✅ Подтвердить отправку", callback_data=f"scheduled_broadcast_confirm_send_{broadcast.id}")],
-        [InlineKeyboardButton("📋 Вернуться к списку", callback_data="scheduled_broadcasts_list")]
-    ]
-    
-    await query.edit_message_text(time_info_text, reply_markup=InlineKeyboardMarkup(keyboard))
 
 
 async def handle_broadcast_edit_text_request(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1250,6 +1250,121 @@ async def handle_broadcast_edit_text(update: Update, context: ContextTypes.DEFAU
     
     if success:
         await message.reply_text("✅ Текст рассылки успешно обновлен!")
+        
+        # Отправляем пользователю пост с измененным текстом
+        # Получаем обновленные данные рассылки
+        updated_broadcast = get_scheduled_broadcast(db, broadcast_id)
+        updated_message_content = json.loads(updated_broadcast.message_content)
+        
+        # Проверяем наличие медиа-контента в сообщении
+        photo_id = updated_message_content.get("photo_id")
+        video_id = updated_message_content.get("video_id")
+        document_id = updated_message_content.get("document_id")
+        audio_id = updated_message_content.get("audio_id")
+        voice_id = updated_message_content.get("voice_id")
+        caption = updated_message_content.get("caption", "")
+        
+        # Проверяем, есть ли кнопки для отображения
+        buttons_data = updated_message_content.get("buttons")
+        reply_markup = None
+        if buttons_data:
+            try:
+                keyboard = []
+                for row in buttons_data:
+                    if isinstance(row, list):
+                        keyboard_row = []
+                        for button_text in row:
+                            if isinstance(button_text, str):
+                                # Для простых кнопок создаем callback_data на основе текста
+                                keyboard_row.append(InlineKeyboardButton(button_text, callback_data=f"preview_btn_{button_text[:20]}"))
+                            elif isinstance(button_text, dict) and "text" in button_text and "callback_data" in button_text:
+                                # Для кнопок с явной callback_data
+                                keyboard_row.append(InlineKeyboardButton(
+                                    button_text["text"],
+                                    callback_data=button_text["callback_data"]
+                                ))
+                        keyboard.append(keyboard_row)
+                if keyboard:
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+            except Exception as e:
+                logger.warning(f"Ошибка при создании клавиатуры для превью: {e}")
+        
+        # Если есть медиа-контент, отправляем его с соответствующим методом
+        if photo_id:
+            # Отправляем фото с подписью
+            full_caption = new_text or updated_message_content.get("original_text") or caption or f"ID сообщения: {updated_message_content.get('message_id', 'Неизвестно')}"
+            # Ограничиваем длину подписи до 1024 символов (максимум для Telegram)
+            if len(full_caption) > 1024:
+                full_caption = full_caption[:1021] + "..."
+            await context.bot.send_photo(
+                chat_id=message.from_user.id,
+                photo=photo_id,
+                caption=full_caption,
+                reply_markup=reply_markup
+            )
+        elif video_id:
+            # Отправляем видео с подписью
+            full_caption = new_text or updated_message_content.get("original_text") or caption or f"ID сообщения: {updated_message_content.get('message_id', 'Неизвестно')}"
+            # Ограничиваем длину подписи до 1024 символов (максимум для Telegram)
+            if len(full_caption) > 1024:
+                full_caption = full_caption[:1021] + "..."
+            await context.bot.send_video(
+                chat_id=message.from_user.id,
+                video=video_id,
+                caption=full_caption,
+                reply_markup=reply_markup
+            )
+        elif document_id:
+            # Отправляем документ с подписью
+            full_caption = new_text or updated_message_content.get("original_text") or caption or f"ID сообщения: {updated_message_content.get('message_id', 'Неизвестно')}"
+            # Ограничиваем длину подписи до 1024 символов (максимум для Telegram)
+            if len(full_caption) > 1024:
+                full_caption = full_caption[:1021] + "..."
+            await context.bot.send_document(
+                chat_id=message.from_user.id,
+                document=document_id,
+                caption=full_caption,
+                reply_markup=reply_markup
+            )
+        elif audio_id:
+            # Отправляем аудио с подписью
+            full_caption = new_text or updated_message_content.get("original_text") or caption or f"ID сообщения: {updated_message_content.get('message_id', 'Неизвестно')}"
+            # Ограничиваем длину подписи до 1024 символов (максимум для Telegram)
+            if len(full_caption) > 1024:
+                full_caption = full_caption[:1021] + "..."
+            await context.bot.send_audio(
+                chat_id=message.from_user.id,
+                audio=audio_id,
+                caption=full_caption,
+                reply_markup=reply_markup
+            )
+        elif voice_id:
+            # Отправляем голосовое сообщение
+            # Для голосовых сообщений подпись не нужна, но добавим текст для идентификации
+            voice_caption = new_text or updated_message_content.get("original_text") or caption or f"ID сообщения: {updated_message_content.get('message_id', 'Неизвестно')}"
+            # Ограничиваем длину подписи до 1024 символов (максимум для Telegram)
+            if len(voice_caption) > 1024:
+                voice_caption = voice_caption[:1021] + "..."
+            # Отправляем голосовое сообщение без caption, так как Telegram не поддерживает caption для голосовых сообщений
+            await context.bot.send_voice(
+                chat_id=message.from_user.id,
+                voice=voice_id,
+                reply_markup=reply_markup
+            )
+            # Отправляем текст отдельным сообщением, только если это не стандартное сообщение об ID
+            if voice_caption != f"ID сообщения: {updated_message_content.get('message_id', 'Неизвестно')}":
+                await context.bot.send_message(
+                    chat_id=message.from_user.id,
+                    text=voice_caption
+                )
+        else:
+            # Отправляем обычное текстовое сообщение с новым текстом
+            full_post_text = new_text
+            await context.bot.send_message(
+                chat_id=message.from_user.id,
+                text=full_post_text,
+                parse_mode="HTML"
+            )
     else:
         await message.reply_text("❌ Не удалось обновить текст рассылки.")
     
@@ -1260,6 +1375,7 @@ async def handle_broadcast_edit_text(update: Update, context: ContextTypes.DEFAU
     
     # Добавляем кнопки для возврата
     keyboard = [
+        [InlineKeyboardButton("✏️ Изменить текст", callback_data=f"scheduled_broadcast_edit_text_{broadcast_id}")],
         [InlineKeyboardButton("📋 К списку рассылок", callback_data="scheduled_broadcasts_list")]
     ]
     await context.bot.send_message(
