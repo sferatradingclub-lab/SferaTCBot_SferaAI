@@ -942,7 +942,6 @@ async def handle_scheduled_broadcast_view(update: Update, context: ContextTypes.
     reply_markup = None
     if buttons_data:
         try:
-            from telegram import InlineKeyboardMarkup, InlineKeyboardButton
             keyboard = []
             for row in buttons_data:
                 if isinstance(row, list):
