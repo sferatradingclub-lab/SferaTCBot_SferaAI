@@ -82,10 +82,39 @@ async def prepare_broadcast_message(
     state_manager.set_admin_state(AdminState.BROADCAST_AWAITING_CONFIRMATION)
     context.user_data["broadcast_message_id"] = message.message_id
     
-    # Сохраняем текст сообщения, если он есть
+    # Сохраняем информацию о сообщении, включая медиа-контент
     original_text = getattr(message, 'text', None) or getattr(message, 'caption', None)
     if original_text:
         context.user_data["broadcast_original_text"] = original_text
+
+    # Проверяем наличие медиа-контента и сохраняем его данные
+    if message.photo:  # Если это фото
+        # Берем фото самого высокого качества (последний элемент в массиве)
+        photo_file_id = message.photo[-1].file_id
+        context.user_data["broadcast_photo_id"] = photo_file_id
+        # Сохраняем подпись, если она есть
+        if message.caption:
+            context.user_data["broadcast_caption"] = message.caption
+    elif message.video:  # Если это видео
+        video_file_id = message.video.file_id
+        context.user_data["broadcast_video_id"] = video_file_id
+        if message.caption:
+            context.user_data["broadcast_caption"] = message.caption
+    elif message.document:  # Если это документ
+        document_file_id = message.document.file_id
+        context.user_data["broadcast_document_id"] = document_file_id
+        if message.caption:
+            context.user_data["broadcast_caption"] = message.caption
+    elif message.audio:  # Если это аудио
+        audio_file_id = message.audio.file_id
+        context.user_data["broadcast_audio_id"] = audio_file_id
+        if message.caption:
+            context.user_data["broadcast_caption"] = message.caption
+    elif message.voice:  # Если это голосовое сообщение
+        voice_file_id = message.voice.file_id
+        context.user_data["broadcast_voice_id"] = voice_file_id
+        if message.caption:  # Для голосовых сообщений также может быть подпись
+            context.user_data["broadcast_caption"] = message.caption
 
     await context.bot.copy_message(
         chat_id=settings.ADMIN_CHAT_ID,
@@ -207,6 +236,27 @@ async def broadcast_confirmation_handler(
         original_text = context.user_data.get("broadcast_original_text")
         if original_text:
             context.user_data["scheduled_broadcast_original_text"] = original_text
+        
+        # Сохраняем медиа-данные, если они есть
+        photo_id = context.user_data.get("broadcast_photo_id")
+        if photo_id:
+            context.user_data["scheduled_broadcast_photo_id"] = photo_id
+        video_id = context.user_data.get("broadcast_video_id")
+        if video_id:
+            context.user_data["scheduled_broadcast_video_id"] = video_id
+        document_id = context.user_data.get("broadcast_document_id")
+        if document_id:
+            context.user_data["scheduled_broadcast_document_id"] = document_id
+        audio_id = context.user_data.get("broadcast_audio_id")
+        if audio_id:
+            context.user_data["scheduled_broadcast_audio_id"] = audio_id
+        voice_id = context.user_data.get("broadcast_voice_id")
+        if voice_id:
+            context.user_data["scheduled_broadcast_voice_id"] = voice_id
+        caption = context.user_data.get("broadcast_caption")
+        if caption:
+            context.user_data["scheduled_broadcast_caption"] = caption
+        
         # Показываем кнопки выбора даты
         keyboard = create_date_quick_select_keyboard()
         await query.edit_message_text("Выберите дату для отправки рассылки:", reply_markup=keyboard)
@@ -632,14 +682,21 @@ async def handle_scheduled_broadcast_confirmation(update: Update, context: Conte
         # Подготовим содержимое сообщения в JSON-формате
         # Используем сохраненный оригинальный текст, если он есть
         saved_original_text = context.user_data.get("scheduled_broadcast_original_text")
+        saved_photo_id = context.user_data.get("broadcast_photo_id")
+        saved_video_id = context.user_data.get("broadcast_video_id")
+        saved_document_id = context.user_data.get("broadcast_document_id")
+        saved_audio_id = context.user_data.get("broadcast_audio_id")
+        saved_voice_id = context.user_data.get("broadcast_voice_id")
+        saved_caption = context.user_data.get("broadcast_caption", "")
         
+        message_content_dict = {
+            "message_id": message_id,
+            "chat_id": settings.ADMIN_CHAT_ID
+        }
+        
+        # Добавляем текст, если он есть
         if saved_original_text:
-            # Сохраняем и ID сообщения, и текст
-            message_content = json.dumps({
-                "message_id": message_id,
-                "chat_id": settings.ADMIN_CHAT_ID,
-                "original_text": saved_original_text
-            })
+            message_content_dict["original_text"] = saved_original_text
         else:
             # Попробуем получить текст оригинального сообщения для сохранения
             try:
@@ -651,27 +708,31 @@ async def handle_scheduled_broadcast_confirmation(update: Update, context: Conte
                 
                 # Проверяем, есть ли текст в сообщении
                 original_text = getattr(original_message, 'text', None) or getattr(original_message, 'caption', None)
-                
                 if original_text:
-                    # Сохраняем и ID сообщения, и текст
-                    message_content = json.dumps({
-                        "message_id": message_id,
-                        "chat_id": settings.ADMIN_CHAT_ID,
-                        "original_text": original_text
-                    })
-                else:
-                    # Если текста нет, сохраняем только ID
-                    message_content = json.dumps({
-                        "message_id": message_id,
-                        "chat_id": settings.ADMIN_CHAT_ID
-                    })
+                    message_content_dict["original_text"] = original_text
             except Exception as e:
-                # Если не удалось получить текст, сохраняем только ID
-                self.logger.warning(f"Не удалось получить текст оригинального сообщения {message_id}: {e}")
-                message_content = json.dumps({
-                    "message_id": message_id,
-                    "chat_id": settings.ADMIN_CHAT_ID
-                })
+                # Если не удалось получить текст, просто продолжаем без него
+                logger.warning(f"Не удалось получить текст оригинального сообщения {message_id}: {e}")
+        
+        # Добавляем медиа-данные, если они есть
+        if saved_photo_id:
+            message_content_dict["photo_id"] = saved_photo_id
+            message_content_dict["caption"] = saved_caption
+        elif saved_video_id:
+            message_content_dict["video_id"] = saved_video_id
+            message_content_dict["caption"] = saved_caption
+        elif saved_document_id:
+            message_content_dict["document_id"] = saved_document_id
+            message_content_dict["caption"] = saved_caption
+        elif saved_audio_id:
+            message_content_dict["audio_id"] = saved_audio_id
+            message_content_dict["caption"] = saved_caption
+        elif saved_voice_id:
+            message_content_dict["voice_id"] = saved_voice_id
+            # Для голосовых сообщений caption не используется в Telegram, сохраняем отдельно для отображения
+            message_content_dict["caption"] = saved_caption
+
+        message_content = json.dumps(message_content_dict)
 
         from db_session import get_db
         try:
@@ -847,8 +908,8 @@ async def handle_scheduled_broadcast_view(update: Update, context: ContextTypes.
     broadcast_id = int(command.split("_")[-1])
     
     admin_id = update.effective_user.id
-    
     from db_session import get_db
+    from models.crud import get_scheduled_broadcast
     with get_db() as db:
         broadcast = get_scheduled_broadcast(db, broadcast_id)
         
@@ -862,18 +923,92 @@ async def handle_scheduled_broadcast_view(update: Update, context: ContextTypes.
     original_text = message_content.get("original_text")
     message_id = message_content.get("message_id", "Неизвестно")
     
-    # Отправляем первое сообщение с полным текстом поста
-    if new_text:
-        full_post_text = new_text
-    elif original_text:
-        full_post_text = original_text
-    else:
-        full_post_text = f"Текст не найден. ID сообщения: {message_id}"
+    # Проверяем наличие медиа-контента в сообщении
+    photo_id = message_content.get("photo_id")
+    video_id = message_content.get("video_id")
+    document_id = message_content.get("document_id")
+    audio_id = message_content.get("audio_id")
+    voice_id = message_content.get("voice_id")
+    caption = message_content.get("caption", "")
     
-    await context.bot.send_message(
-        chat_id=query.from_user.id,
-        text=full_post_text
-    )
+    # Если есть медиа-контент, отправляем его с соответствующим методом
+    if photo_id:
+        # Отправляем фото с подписью
+        full_caption = new_text or original_text or caption or f"ID сообщения: {message_id}"
+        # Ограничиваем длину подписи до 1024 символов (максимум для Telegram)
+        if len(full_caption) > 1024:
+            full_caption = full_caption[:1021] + "..."
+        await context.bot.send_photo(
+            chat_id=query.from_user.id,
+            photo=photo_id,
+            caption=full_caption
+        )
+    elif video_id:
+        # Отправляем видео с подписью
+        full_caption = new_text or original_text or caption or f"ID сообщения: {message_id}"
+        # Ограничиваем длину подписи до 1024 символов (максимум для Telegram)
+        if len(full_caption) > 1024:
+            full_caption = full_caption[:1021] + "..."
+        await context.bot.send_video(
+            chat_id=query.from_user.id,
+            video=video_id,
+            caption=full_caption
+        )
+    elif document_id:
+        # Отправляем документ с подписью
+        full_caption = new_text or original_text or caption or f"ID сообщения: {message_id}"
+        # Ограничиваем длину подписи до 1024 символов (максимум для Telegram)
+        if len(full_caption) > 1024:
+            full_caption = full_caption[:1021] + "..."
+        await context.bot.send_document(
+            chat_id=query.from_user.id,
+            document=document_id,
+            caption=full_caption
+        )
+    elif audio_id:
+        # Отправляем аудио с подписью
+        full_caption = new_text or original_text or caption or f"ID сообщения: {message_id}"
+        # Ограничиваем длину подписи до 1024 символов (максимум для Telegram)
+        if len(full_caption) > 1024:
+            full_caption = full_caption[:1021] + "..."
+        await context.bot.send_audio(
+            chat_id=query.from_user.id,
+            audio=audio_id,
+            caption=full_caption
+        )
+    elif voice_id:
+        # Отправляем голосовое сообщение
+        # Для голосовых сообщений подпись не нужна, но добавим текст для идентификации
+        voice_caption = new_text or original_text or caption or f"ID сообщения: {message_id}"
+        # Ограничиваем длину подписи до 1024 символов (максимум для Telegram)
+        if len(voice_caption) > 1024:
+            voice_caption = voice_caption[:1021] + "..."
+        # Отправляем голосовое сообщение без caption, так как Telegram не поддерживает caption для голосовых сообщений
+        await context.bot.send_voice(
+            chat_id=query.from_user.id,
+            voice=voice_id
+        )
+        # Отправляем текст отдельным сообщением, только если это не стандартное сообщение об ID
+        if voice_caption != f"ID сообщения: {message_id}":
+            await context.bot.send_message(
+                chat_id=query.from_user.id,
+                text=voice_caption
+            )
+    else:
+        # Отправляем обычное текстовое сообщение
+        if new_text:
+            full_post_text = new_text
+        elif original_text:
+            full_post_text = original_text
+        elif caption:
+            full_post_text = caption
+        else:
+            full_post_text = f"Текст не найден. ID сообщения: {message_id}"
+        
+        await context.bot.send_message(
+            chat_id=query.from_user.id,
+            text=full_post_text
+        )
     
     # Отправляем второе сообщение с датой и временем рассылки
     broadcast_date = broadcast.scheduled_datetime.strftime('%d.%m.%Y %H:%M')
@@ -1074,7 +1209,7 @@ async def handle_broadcast_edit_text(update: Update, context: ContextTypes.DEFAU
         [InlineKeyboardButton("📋 К списку рассылок", callback_data="scheduled_broadcasts_list")]
     ]
     await context.bot.send_message(
-        chat_id=query.from_user.id,
+        chat_id=message.from_user.id,
         text="Выберите действие:",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
