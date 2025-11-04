@@ -937,24 +937,7 @@ async def handle_scheduled_broadcast_view(update: Update, context: ContextTypes.
     voice_id = message_content.get("voice_id")
     caption = message_content.get("caption", "")
     
-    # Отправляем первое сообщение с датой и временем рассылки и кнопками
-    broadcast_date = broadcast.scheduled_datetime.strftime('%d.%m.%Y %H:%M')
-    time_info_text = f"📅 Дата и время рассылки: {broadcast_date}"
-    
-    # Кнопки для управления рассылкой
-    keyboard = [
-        [InlineKeyboardButton("✏️ Изменить текст", callback_data=f"scheduled_broadcast_edit_text_{broadcast.id}")],
-        [InlineKeyboardButton("🖼️ Изменить медиа", callback_data=f"scheduled_broadcast_edit_media_{broadcast.id}")],
-        [InlineKeyboardButton("🔘 Изменить кнопки", callback_data=f"scheduled_broadcast_edit_buttons_{broadcast.id}")],
-        [InlineKeyboardButton("📅 Перенести дату отправки", callback_data=f"scheduled_broadcast_edit_datetime_{broadcast.id}")],
-        [InlineKeyboardButton("🗑️ Отменить рассылку", callback_data=f"scheduled_broadcast_delete_{broadcast.id}")],
-        [InlineKeyboardButton("✅ Подтвердить отправку", callback_data=f"scheduled_broadcast_confirm_send_{broadcast.id}")],
-        [InlineKeyboardButton("📋 Вернуться к списку", callback_data="scheduled_broadcasts_list")]
-    ]
-    
-    await query.edit_message_text(time_info_text, reply_markup=InlineKeyboardMarkup(keyboard))
-    
-    # Проверяем, есть ли кнопки для отображения
+    # Проверяем, есть ли кнопки для отображения (для превью поста)
     buttons_data = message_content.get("buttons")
     reply_markup = None
     if buttons_data:
@@ -1077,6 +1060,35 @@ async def handle_scheduled_broadcast_view(update: Update, context: ContextTypes.
             text=full_post_text,
             parse_mode="HTML"
         )
+    
+    # Теперь отправляем сообщение с датой и временем рассылки и кнопками управления
+    broadcast_date = broadcast.scheduled_datetime.strftime('%d.%m.%Y %H:%M')
+    time_info_text = f"📅 Дата и время рассылки: {broadcast_date}"
+    
+    # Кнопки для управления рассылкой
+    keyboard = [
+        [InlineKeyboardButton("✏️ Изменить текст", callback_data=f"scheduled_broadcast_edit_text_{broadcast.id}")],
+        [InlineKeyboardButton("🖼️ Изменить медиа", callback_data=f"scheduled_broadcast_edit_media_{broadcast.id}")],
+        [InlineKeyboardButton("🔘 Изменить кнопки", callback_data=f"scheduled_broadcast_edit_buttons_{broadcast.id}")],
+        [InlineKeyboardButton("📅 Перенести дату отправки", callback_data=f"scheduled_broadcast_edit_datetime_{broadcast.id}")],
+        [InlineKeyboardButton("🗑️ Отменить рассылку", callback_data=f"scheduled_broadcast_delete_{broadcast.id}")],
+        [InlineKeyboardButton("✅ Подтвердить отправку", callback_data=f"scheduled_broadcast_confirm_send_{broadcast.id}")],
+        [InlineKeyboardButton("📋 Вернуться к списку", callback_data="scheduled_broadcasts_list")]
+    ]
+    
+    await context.bot.send_message(
+        chat_id=query.from_user.id,
+        text=time_info_text,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    
+    # Редактируем исходное сообщение, чтобы убрать кнопки, которые вызвали этот обработчик
+    # и показать, что действие выполнено
+    try:
+        await query.edit_message_text("Пост отображен выше")
+    except Exception:
+        # Если не удалось отредактировать (например, сообщение устарело), просто пропускаем
+        pass
 
 
 async def handle_broadcast_edit_text_request(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
