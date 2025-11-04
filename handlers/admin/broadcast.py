@@ -20,7 +20,7 @@ from telegram.helpers import escape_markdown
 
 from config import get_settings
 from db_session import get_db
-from models.crud import iter_broadcast_targets, create_scheduled_broadcast, get_scheduled_broadcasts_by_admin
+from models.crud import iter_broadcast_targets, create_scheduled_broadcast, get_scheduled_broadcast, get_scheduled_broadcasts_by_admin
 from models.user import User  # Добавляем импорт модели User
 from services.notifier import Notifier
 from services.state_manager import StateManager
@@ -496,7 +496,7 @@ async def handle_scheduled_broadcast_time_input(update: Update, context: Context
             
             # Обновляем дату и время рассылки
             from db_session import get_db
-            from models.crud import update_scheduled_broadcast
+            from models.crud import get_scheduled_broadcast, update_scheduled_broadcast
             with get_db() as db:
                 success = update_scheduled_broadcast(
                     db,
