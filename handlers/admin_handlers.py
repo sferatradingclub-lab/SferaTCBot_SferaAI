@@ -45,6 +45,12 @@ from .admin.broadcast import (
     handle_broadcast_delete_confirm,
     handle_broadcast_edit_text,
     handle_broadcast_edit_datetime,
+    handle_broadcast_edit_media_request,
+    handle_broadcast_edit_buttons_request,
+    handle_broadcast_confirm_send_request,
+    handle_broadcast_edit_media,
+    handle_broadcast_edit_buttons,
+    handle_broadcast_confirm_now,
     run_broadcast as broadcast_run_broadcast,
 )
 
@@ -108,6 +114,8 @@ async def handle_admin_message(update: Update, context: ContextTypes.DEFAULT_TYP
         AdminState.BROADCAST_SCHEDULE_AWAITING_TIME: handle_scheduled_broadcast_time_input,
         AdminState.BROADCAST_EDIT_AWAITING_TEXT: handle_broadcast_edit_text,
         AdminState.BROADCAST_EDIT_AWAITING_TIME: handle_broadcast_edit_datetime,
+        AdminState.BROADCAST_EDIT_AWAITING_MEDIA: handle_broadcast_edit_media,
+        AdminState.BROADCAST_EDIT_AWAITING_BUTTONS: handle_broadcast_edit_buttons,
         AdminState.USERS_AWAITING_ID: _handle_user_lookup_wrapper,
         AdminState.USERS_AWAITING_DM: _handle_direct_message_wrapper,
     }
@@ -149,6 +157,12 @@ async def admin_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         elif command.startswith("scheduled_broadcast_edit_text_"):
             await handle_broadcast_edit_text_request(update, context)
             return
+        elif command.startswith("scheduled_broadcast_edit_media_"):
+            await handle_broadcast_edit_media_request(update, context)
+            return
+        elif command.startswith("scheduled_broadcast_edit_buttons_"):
+            await handle_broadcast_edit_buttons_request(update, context)
+            return
         elif command.startswith("scheduled_broadcast_edit_datetime_"):
             await handle_broadcast_edit_datetime_request(update, context)
             return
@@ -157,6 +171,12 @@ async def admin_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
             return
         elif command.startswith("scheduled_broadcast_delete_confirm_"):
             await handle_broadcast_delete_confirm(update, context)
+            return
+        elif command.startswith("scheduled_broadcast_confirm_send_"):
+            await handle_broadcast_confirm_send_request(update, context)
+            return
+        elif command.startswith("scheduled_broadcast_confirm_now_"):
+            await handle_broadcast_confirm_now(update, context)
             return
         elif command.startswith("scheduled_broadcast_cancel_edit"):
             # Отмена редактирования

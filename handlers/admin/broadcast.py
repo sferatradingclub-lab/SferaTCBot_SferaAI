@@ -346,6 +346,12 @@ __all__ = [
     "handle_broadcast_delete_confirm",
     "handle_broadcast_edit_text",
     "handle_broadcast_edit_datetime",
+    "handle_broadcast_edit_media_request",
+    "handle_broadcast_edit_buttons_request",
+    "handle_broadcast_confirm_send_request",
+    "handle_broadcast_edit_media",
+    "handle_broadcast_edit_buttons",
+    "handle_broadcast_confirm_now",
     "run_broadcast",
 ]
 
@@ -931,6 +937,32 @@ async def handle_scheduled_broadcast_view(update: Update, context: ContextTypes.
     voice_id = message_content.get("voice_id")
     caption = message_content.get("caption", "")
     
+    # Проверяем, есть ли кнопки для отображения
+    buttons_data = message_content.get("buttons")
+    reply_markup = None
+    if buttons_data:
+        from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+        try:
+            keyboard = []
+            for row in buttons_data:
+                if isinstance(row, list):
+                    keyboard_row = []
+                    for button_text in row:
+                        if isinstance(button_text, str):
+                            # Для простых кнопок создаем callback_data на основе текста
+                            keyboard_row.append(InlineKeyboardButton(button_text, callback_data=f"preview_btn_{button_text[:20]}"))
+                        elif isinstance(button_text, dict) and "text" in button_text and "callback_data" in button_text:
+                            # Для кнопок с явной callback_data
+                            keyboard_row.append(InlineKeyboardButton(
+                                button_text["text"],
+                                callback_data=button_text["callback_data"]
+                            ))
+                    keyboard.append(keyboard_row)
+            if keyboard:
+                reply_markup = InlineKeyboardMarkup(keyboard)
+        except Exception as e:
+            logger.warning(f"Ошибка при создании клавиатуры для превью: {e}")
+    
     # Если есть медиа-контент, отправляем его с соответствующим методом
     if photo_id:
         # Отправляем фото с подписью
@@ -941,7 +973,8 @@ async def handle_scheduled_broadcast_view(update: Update, context: ContextTypes.
         await context.bot.send_photo(
             chat_id=query.from_user.id,
             photo=photo_id,
-            caption=full_caption
+            caption=full_caption,
+            reply_markup=reply_markup
         )
     elif video_id:
         # Отправляем видео с подписью
@@ -952,7 +985,8 @@ async def handle_scheduled_broadcast_view(update: Update, context: ContextTypes.
         await context.bot.send_video(
             chat_id=query.from_user.id,
             video=video_id,
-            caption=full_caption
+            caption=full_caption,
+            reply_markup=reply_markup
         )
     elif document_id:
         # Отправляем документ с подписью
@@ -963,7 +997,8 @@ async def handle_scheduled_broadcast_view(update: Update, context: ContextTypes.
         await context.bot.send_document(
             chat_id=query.from_user.id,
             document=document_id,
-            caption=full_caption
+            caption=full_caption,
+            reply_markup=reply_markup
         )
     elif audio_id:
         # Отправляем аудио с подписью
@@ -974,7 +1009,8 @@ async def handle_scheduled_broadcast_view(update: Update, context: ContextTypes.
         await context.bot.send_audio(
             chat_id=query.from_user.id,
             audio=audio_id,
-            caption=full_caption
+            caption=full_caption,
+            reply_markup=reply_markup
         )
     elif voice_id:
         # Отправляем голосовое сообщение
@@ -986,7 +1022,8 @@ async def handle_scheduled_broadcast_view(update: Update, context: ContextTypes.
         # Отправляем голосовое сообщение без caption, так как Telegram не поддерживает caption для голосовых сообщений
         await context.bot.send_voice(
             chat_id=query.from_user.id,
-            voice=voice_id
+            voice=voice_id,
+            reply_markup=reply_markup
         )
         # Отправляем текст отдельным сообщением, только если это не стандартное сообщение об ID
         if voice_caption != f"ID сообщения: {message_id}":
@@ -1005,9 +1042,24 @@ async def handle_scheduled_broadcast_view(update: Update, context: ContextTypes.
         else:
             full_post_text = f"Текст не найден. ID сообщения: {message_id}"
         
+        # Проверяем, есть ли кнопки для отображения
+        buttons_data = message_content.get("buttons")
+        if buttons_data:
+            # Добавляем информацию о кнопках к тексту
+            buttons_info = "\n\n<b>Кнопки:</b>\n"
+            for i, row in enumerate(buttons_data):
+                if isinstance(row, list):
+                    for j, button in enumerate(row):
+                        if isinstance(button, str):
+                            buttons_info += f"• {button}\n"
+                        elif isinstance(button, dict) and "text" in button:
+                            buttons_info += f"• {button['text']}\n"
+            full_post_text += buttons_info
+        
         await context.bot.send_message(
             chat_id=query.from_user.id,
-            text=full_post_text
+            text=full_post_text,
+            parse_mode="HTML"
         )
     
     # Отправляем второе сообщение с датой и временем рассылки
@@ -1017,9 +1069,12 @@ async def handle_scheduled_broadcast_view(update: Update, context: ContextTypes.
     # Кнопки для управления рассылкой
     keyboard = [
         [InlineKeyboardButton("✏️ Изменить текст", callback_data=f"scheduled_broadcast_edit_text_{broadcast.id}")],
-        [InlineKeyboardButton("📅 Изменить дату и время", callback_data=f"scheduled_broadcast_edit_datetime_{broadcast.id}")],
-        [InlineKeyboardButton("🗑️ Удалить рассылку", callback_data=f"scheduled_broadcast_delete_{broadcast.id}")],
-        [InlineKeyboardButton("⬅️ Назад к списку", callback_data="scheduled_broadcasts_list")]
+        [InlineKeyboardButton("🖼️ Изменить медиа", callback_data=f"scheduled_broadcast_edit_media_{broadcast.id}")],
+        [InlineKeyboardButton("🔘 Изменить кнопки", callback_data=f"scheduled_broadcast_edit_buttons_{broadcast.id}")],
+        [InlineKeyboardButton("📅 Перенести дату отправки", callback_data=f"scheduled_broadcast_edit_datetime_{broadcast.id}")],
+        [InlineKeyboardButton("🗑️ Отменить рассылку", callback_data=f"scheduled_broadcast_delete_{broadcast.id}")],
+        [InlineKeyboardButton("✅ Подтвердить отправку", callback_data=f"scheduled_broadcast_confirm_send_{broadcast.id}")],
+        [InlineKeyboardButton("📋 Вернуться к списку", callback_data="scheduled_broadcasts_list")]
     ]
     
     await query.edit_message_text(time_info_text, reply_markup=InlineKeyboardMarkup(keyboard))
@@ -1215,6 +1270,268 @@ async def handle_broadcast_edit_text(update: Update, context: ContextTypes.DEFAU
     )
 
 
+async def handle_broadcast_edit_media_request(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Запрашивает у пользователя новое медиа для рассылки."""
+    query = update.callback_query
+    if query is None:
+        return
+
+    await query.answer()
+    
+    # Извлекаем ID рассылки из callback_data
+    command = query.data
+    broadcast_id = int(command.split("_")[-1])
+    
+    # Сохраняем ID рассылки в контексте для дальнейшего использования
+    context.user_data["broadcast_edit_id"] = broadcast_id
+    
+    # Устанавливаем состояние ожидания нового медиа
+    from services.state_manager import StateManager
+    state_manager = StateManager(context)
+    state_manager.set_admin_state(AdminState.BROADCAST_EDIT_AWAITING_MEDIA)
+    
+    await query.edit_message_text("🖼️ Отправьте новое медиа для рассылки (фото, видео, документ, аудио или голосовое сообщение):")
+    
+    # Добавляем кнопку отмены
+    keyboard = [
+        [InlineKeyboardButton("❌ Отмена", callback_data="scheduled_broadcast_cancel_edit")]
+    ]
+    await context.bot.send_message(
+        chat_id=query.from_user.id,
+        text="Нажмите кнопку ниже для отмены редактирования:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+
+async def handle_broadcast_edit_buttons_request(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Запрашивает у пользователя новые кнопки для рассылки."""
+    query = update.callback_query
+    if query is None:
+        return
+
+    await query.answer()
+    
+    # Извлекаем ID рассылки из callback_data
+    command = query.data
+    broadcast_id = int(command.split("_")[-1])
+    
+    # Сохраняем ID рассылки в контексте для дальнейшего использования
+    context.user_data["broadcast_edit_id"] = broadcast_id
+    
+    # Устанавливаем состояние ожидания новых кнопок
+    from services.state_manager import StateManager
+    state_manager = StateManager(context)
+    state_manager.set_admin_state(AdminState.BROADCAST_EDIT_AWAITING_BUTTONS)
+    
+    await query.edit_message_text("🔘 Отправьте новую клавиатуру в формате JSON для рассылки (например, [['Кнопка 1', 'Кнопка 2'], ['Кнопка 3']]):")
+    
+    # Добавляем кнопку отмены
+    keyboard = [
+        [InlineKeyboardButton("❌ Отмена", callback_data="scheduled_broadcast_cancel_edit")]
+    ]
+    await context.bot.send_message(
+        chat_id=query.from_user.id,
+        text="Нажмите кнопку ниже для отмены редактирования:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+
+async def handle_broadcast_confirm_send_request(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Запрашивает подтверждение отправки рассылки."""
+    query = update.callback_query
+    if query is None:
+        return
+
+    await query.answer()
+    
+    # Извлекаем ID рассылки из callback_data
+    command = query.data
+    broadcast_id = int(command.split("_")[-1])
+    
+    # Показываем кнопки подтверждения
+    keyboard = [
+        [InlineKeyboardButton("✅ Да, отправить сейчас", callback_data=f"scheduled_broadcast_confirm_now_{broadcast_id}")],
+        [InlineKeyboardButton("❌ Отмена", callback_data=f"scheduled_broadcasts_list")]
+    ]
+    
+    await query.edit_message_text("⚠️ Вы уверены, что хотите отправить эту рассылку прямо сейчас?", reply_markup=InlineKeyboardMarkup(keyboard))
+
+
+async def handle_broadcast_edit_media(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Обрабатывает новое медиа для рассылки."""
+    message = update.message
+    if message is None:
+        return
+
+    # Проверяем, что мы в нужном состоянии
+    from services.state_manager import StateManager
+    state_manager = StateManager(context)
+    current_state = state_manager.get_admin_state()
+    
+    if current_state != AdminState.BROADCAST_EDIT_AWAITING_MEDIA:
+        return
+
+    # Получаем ID рассылки
+    broadcast_id = context.user_data.get("broadcast_edit_id")
+    if not broadcast_id:
+        await message.reply_text("❌ Ошибка: неизвестная рассылка для редактирования.")
+        state_manager.reset_admin_state()
+        return
+
+    # Проверяем наличие медиа-контента и сохраняем его данные
+    media_data = {}
+    if message.photo:  # Если это фото
+        # Берем фото самого высокого качества (последний элемент в массиве)
+        photo_file_id = message.photo[-1].file_id
+        media_data["photo_id"] = photo_file_id
+        # Сохраняем подпись, если она есть
+        if message.caption:
+            media_data["caption"] = message.caption
+    elif message.video:  # Если это видео
+        video_file_id = message.video.file_id
+        media_data["video_id"] = video_file_id
+        if message.caption:
+            media_data["caption"] = message.caption
+    elif message.document:  # Если это документ
+        document_file_id = message.document.file_id
+        media_data["document_id"] = document_file_id
+        if message.caption:
+            media_data["caption"] = message.caption
+    elif message.audio:  # Если это аудио
+        audio_file_id = message.audio.file_id
+        media_data["audio_id"] = audio_file_id
+        if message.caption:
+            media_data["caption"] = message.caption
+    elif message.voice:  # Если это голосовое сообщение
+        voice_file_id = message.voice.file_id
+        media_data["voice_id"] = voice_file_id
+        # Для голосовых сообщений подпись не используется в Telegram, но сохраняем отдельно для отображения
+        if message.caption:
+            media_data["caption"] = message.caption
+    else:
+        await message.reply_text("❌ Пожалуйста, отправьте медиа-файл (фото, видео, документ, аудио или голосовое сообщение).")
+        return
+
+    # Обновляем содержимое рассылки
+    from db_session import get_db
+    from models.crud import get_scheduled_broadcast, update_scheduled_broadcast
+    with get_db() as db:
+        existing_broadcast = get_scheduled_broadcast(db, broadcast_id)
+        if not existing_broadcast:
+            await message.reply_text("❌ Рассылка не найдена.")
+            state_manager.reset_admin_state()
+            return
+        
+        # Обновляем содержимое сообщения в JSON
+        import json
+        message_content = json.loads(existing_broadcast.message_content)
+        
+        # Обновляем медиа-данные
+        for key, value in media_data.items():
+            message_content[key] = value
+        
+        success = update_scheduled_broadcast(
+            db,
+            broadcast_id,
+            message_content=json.dumps(message_content)
+        )
+
+    if success:
+        await message.reply_text("✅ Медиа для рассылки успешно обновлено!")
+    else:
+        await message.reply_text("❌ Не удалось обновить медиа для рассылки.")
+
+    # Сбрасываем состояние
+    state_manager.reset_admin_state()
+    # Очищаем данные
+    context.user_data.pop("broadcast_edit_id", None)
+    
+    # Добавляем кнопки для возврата
+    keyboard = [
+        [InlineKeyboardButton("📋 К списку рассылок", callback_data="scheduled_broadcasts_list")]
+    ]
+    await context.bot.send_message(
+        chat_id=message.from_user.id,
+        text="Выберите действие:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+
+async def handle_broadcast_edit_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Обрабатывает новые кнопки для рассылки."""
+    message = update.message
+    if message is None:
+        return
+
+    # Проверяем, что мы в нужном состоянии
+    from services.state_manager import StateManager
+    state_manager = StateManager(context)
+    current_state = state_manager.get_admin_state()
+    
+    if current_state != AdminState.BROADCAST_EDIT_AWAITING_BUTTONS:
+        return
+
+    # Получаем ID рассылки
+    broadcast_id = context.user_data.get("broadcast_edit_id")
+    if not broadcast_id:
+        await message.reply_text("❌ Ошибка: неизвестная рассылка для редактирования.")
+        state_manager.reset_admin_state()
+        return
+
+    # Пытаемся разобрать JSON с кнопками
+    try:
+        import json
+        buttons_data = json.loads(message.text)
+        # Проверяем, что это список списков
+        if not isinstance(buttons_data, list) or not all(isinstance(row, list) for row in buttons_data):
+            raise ValueError("Неверный формат кнопок")
+    except (json.JSONDecodeError, ValueError):
+        await message.reply_text("❌ Неверный формат кнопок. Отправьте кнопки в формате JSON (например, [['Кнопка 1', 'Кнопка 2'], ['Кнопка 3']]).")
+        return
+
+    # Обновляем содержимое рассылки
+    from db_session import get_db
+    from models.crud import get_scheduled_broadcast, update_scheduled_broadcast
+    with get_db() as db:
+        existing_broadcast = get_scheduled_broadcast(db, broadcast_id)
+        if not existing_broadcast:
+            await message.reply_text("❌ Рассылка не найдена.")
+            state_manager.reset_admin_state()
+            return
+        
+        # Обновляем содержимое сообщения в JSON
+        message_content = json.loads(existing_broadcast.message_content)
+        
+        # Обновляем кнопки
+        message_content["buttons"] = buttons_data
+        
+        success = update_scheduled_broadcast(
+            db,
+            broadcast_id,
+            message_content=json.dumps(message_content)
+        )
+
+    if success:
+        await message.reply_text("✅ Кнопки для рассылки успешно обновлены!")
+    else:
+        await message.reply_text("❌ Не удалось обновить кнопки для рассылки.")
+
+    # Сбрасываем состояние
+    state_manager.reset_admin_state()
+    # Очищаем данные
+    context.user_data.pop("broadcast_edit_id", None)
+    
+    # Добавляем кнопки для возврата
+    keyboard = [
+        [InlineKeyboardButton("📋 К списку рассылок", callback_data="scheduled_broadcasts_list")]
+    ]
+    await context.bot.send_message(
+        chat_id=message.from_user.id,
+        text="Выберите действие:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+
 async def handle_broadcast_edit_datetime(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обрабатывает ввод нового времени для рассылки."""
     message = update.message
@@ -1316,4 +1633,63 @@ async def handle_broadcast_edit_datetime(update: Update, context: ContextTypes.D
     keyboard = [
         [InlineKeyboardButton("📋 К списку рассылок", callback_data="scheduled_broadcasts_list")]
     ]
-    await message.reply_text("Выберите действие:", reply_markup=InlineKeyboardMarkup(keyboard))
+    await context.bot.send_message(
+        chat_id=message.from_user.id,
+        text="Выберите действие:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+async def handle_broadcast_confirm_now(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Подтверждает и выполняет немедленную отправку рассылки."""
+    query = update.callback_query
+    if query is None:
+        return
+
+    await query.answer()
+    
+    # Извлекаем ID рассылки из callback_data
+    command = query.data
+    broadcast_id = int(command.split("_")[-1])
+    
+    from db_session import get_db
+    from models.crud import get_scheduled_broadcast
+    with get_db() as db:
+        broadcast = get_scheduled_broadcast(db, broadcast_id)
+        
+        if not broadcast:
+            await query.edit_message_text("❌ Рассылка не найдена.")
+            return
+    
+    # Десериализуем содержимое сообщения
+    import json
+    message_data = json.loads(broadcast.message_content)
+    
+    # Отправляем рассылку немедленно
+    from services.broadcast_scheduler import BroadcastSchedulerService
+    from config import get_settings
+    settings = get_settings()
+    scheduler_service = BroadcastSchedulerService(context.bot)
+    
+    try:
+        await scheduler_service._send_scheduled_broadcast(broadcast, message_data)
+        
+        # Отмечаем как отправленную
+        from models.crud import mark_broadcast_as_sent
+        with get_db() as db:
+            mark_broadcast_as_sent(db, broadcast.id)
+        
+        await query.edit_message_text("✅ Рассылка успешно отправлена!")
+        
+    except Exception as e:
+        settings.logger.error(f"Ошибка при немедленной отправке рассылки {broadcast.id}: {e}")
+        await query.edit_message_text(f"❌ Ошибка при отправке рассылки: {e}")
+    
+    # Добавляем кнопку для возврата к списку
+    keyboard = [
+        [InlineKeyboardButton("📋 К списку рассылок", callback_data="scheduled_broadcasts_list")]
+    ]
+    await context.bot.send_message(
+        chat_id=query.from_user.id,
+        text="Выберите действие:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )

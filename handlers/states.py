@@ -28,5 +28,7 @@ class AdminState(Enum):
     BROADCAST_EDIT_AWAITING_TEXT = auto()      # Ожидание нового текста для редактирования рассылки
     BROADCAST_EDIT_AWAITING_DATE = auto()      # Ожидание выбора новой даты для рассылки
     BROADCAST_EDIT_AWAITING_TIME = auto()      # Ожидание ввода нового времени для рассылки
+    BROADCAST_EDIT_AWAITING_MEDIA = auto()     # Ожидание нового медиа для редактирования рассылки
+    BROADCAST_EDIT_AWAITING_BUTTONS = auto()   # Ожидание новых кнопок для редактирования рассылки
     USERS_AWAITING_ID = auto()
     USERS_AWAITING_DM = auto()
