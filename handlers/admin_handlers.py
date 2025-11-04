@@ -38,6 +38,13 @@ from .admin.broadcast import (
     handle_scheduled_broadcast_time_input,
     handle_scheduled_broadcast_confirmation,
     handle_scheduled_broadcasts_list,
+    handle_scheduled_broadcast_view,
+    handle_broadcast_edit_text_request,
+    handle_broadcast_edit_datetime_request,
+    handle_broadcast_delete_request,
+    handle_broadcast_delete_confirm,
+    handle_broadcast_edit_text,
+    handle_broadcast_edit_datetime,
     run_broadcast as broadcast_run_broadcast,
 )
 
@@ -99,6 +106,8 @@ async def handle_admin_message(update: Update, context: ContextTypes.DEFAULT_TYP
     handlers = {
         AdminState.BROADCAST_AWAITING_MESSAGE: prepare_broadcast_message,
         AdminState.BROADCAST_SCHEDULE_AWAITING_TIME: handle_scheduled_broadcast_time_input,
+        AdminState.BROADCAST_EDIT_AWAITING_TEXT: handle_broadcast_edit_text,
+        AdminState.BROADCAST_EDIT_AWAITING_TIME: handle_broadcast_edit_datetime,
         AdminState.USERS_AWAITING_ID: _handle_user_lookup_wrapper,
         AdminState.USERS_AWAITING_DM: _handle_direct_message_wrapper,
     }
@@ -135,8 +144,24 @@ async def admin_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
             await handle_scheduled_broadcasts_list(update, context)
             return
         elif command.startswith("scheduled_broadcast_view_"):
-            # Пока не реализовано - в дальнейшем можно добавить просмотр конкретной рассылки
-            await query.edit_message_text("Функция просмотра отдельной рассылки будет реализована позже.")
+            await handle_scheduled_broadcast_view(update, context)
+            return
+        elif command.startswith("scheduled_broadcast_edit_text_"):
+            await handle_broadcast_edit_text_request(update, context)
+            return
+        elif command.startswith("scheduled_broadcast_edit_datetime_"):
+            await handle_broadcast_edit_datetime_request(update, context)
+            return
+        elif command.startswith("scheduled_broadcast_delete_") and not command.endswith("_confirm"):
+            await handle_broadcast_delete_request(update, context)
+            return
+        elif command.startswith("scheduled_broadcast_delete_confirm_"):
+            await handle_broadcast_delete_confirm(update, context)
+            return
+        elif command.startswith("scheduled_broadcast_cancel_edit"):
+            # Отмена редактирования
+            state_manager.reset_admin_state()
+            await handle_scheduled_broadcasts_list(update, context)
             return
 
     if command == "admin_main":

@@ -81,6 +81,11 @@ async def prepare_broadcast_message(
     state_manager = StateManager(context)
     state_manager.set_admin_state(AdminState.BROADCAST_AWAITING_CONFIRMATION)
     context.user_data["broadcast_message_id"] = message.message_id
+    
+    # Сохраняем текст сообщения, если он есть
+    original_text = getattr(message, 'text', None) or getattr(message, 'caption', None)
+    if original_text:
+        context.user_data["broadcast_original_text"] = original_text
 
     await context.bot.copy_message(
         chat_id=settings.ADMIN_CHAT_ID,
@@ -198,6 +203,10 @@ async def broadcast_confirmation_handler(
         state_manager.set_admin_state(AdminState.BROADCAST_SCHEDULE_AWAITING_DATE)
         # Сохраняем ID сообщения для отложенной отправки
         context.user_data["scheduled_broadcast_message_id"] = context.user_data.get("broadcast_message_id")
+        # Сохраняем оригинальный текст, если он есть
+        original_text = context.user_data.get("broadcast_original_text")
+        if original_text:
+            context.user_data["scheduled_broadcast_original_text"] = original_text
         # Показываем кнопки выбора даты
         keyboard = create_date_quick_select_keyboard()
         await query.edit_message_text("Выберите дату для отправки рассылки:", reply_markup=keyboard)
@@ -279,6 +288,14 @@ __all__ = [
     "handle_scheduled_broadcast_date_selection",
     "handle_scheduled_broadcast_time_input",
     "handle_scheduled_broadcast_confirmation",
+    "handle_scheduled_broadcasts_list",
+    "handle_scheduled_broadcast_view",
+    "handle_broadcast_edit_text_request",
+    "handle_broadcast_edit_datetime_request",
+    "handle_broadcast_delete_request",
+    "handle_broadcast_delete_confirm",
+    "handle_broadcast_edit_text",
+    "handle_broadcast_edit_datetime",
     "run_broadcast",
 ]
 
@@ -324,8 +341,17 @@ async def handle_calendar_callback(update: Update, context: ContextTypes.DEFAULT
             month_name = months_map.get(selected_date_obj.month, selected_date_obj.month)
             formatted_date = f"{day} {month_name} {selected_date_obj.year}"
 
-            state_manager.set_admin_state(AdminState.BROADCAST_SCHEDULE_AWAITING_TIME)
-            await query.edit_message_text(f"Вы выбрали дату: {formatted_date}\n\nТеперь введите время в формате ЧЧ:ММ (24-часовой формат):")
+            # Проверяем текущее состояние, чтобы определить, создаем мы новую рассылку или редактируем существующую
+            current_state = state_manager.get_admin_state()
+            if current_state == AdminState.BROADCAST_EDIT_AWAITING_DATE:
+                # Это изменение даты существующей рассылки
+                context.user_data["new_broadcast_date"] = selected_date_str
+                state_manager.set_admin_state(AdminState.BROADCAST_EDIT_AWAITING_TIME)
+                await query.edit_message_text(f"Вы выбрали новую дату: {formatted_date}\n\nТеперь введите новое время в формате ЧЧ:ММ (24-часовой формат):")
+            else:
+                # Это создание новой рассылки
+                state_manager.set_admin_state(AdminState.BROADCAST_SCHEDULE_AWAITING_TIME)
+                await query.edit_message_text(f"Вы выбрали дату: {formatted_date}\n\nТеперь введите время в формате ЧЧ:ММ (24-часовой формат):")
 
         elif command.startswith("calendar_prev_month_") or command.startswith("calendar_next_month_"):
             logger.info("Обработка команды навигации по месяцам")
@@ -361,7 +387,11 @@ async def handle_calendar_callback(update: Update, context: ContextTypes.DEFAULT
                     from datetime import date as dt_date
                     current_date = dt_date.today()
                     calendar_keyboard = create_calendar_keyboard(current_date)
-                    await query.message.reply_text("Выберите дату:", reply_markup=calendar_keyboard)
+                    await context.bot.send_message(
+                        chat_id=query.from_user.id,
+                        text="Выберите дату:",
+                        reply_markup=calendar_keyboard
+                    )
                     logger.info("Новое сообщение с календарем успешно отправлено")
                 except Exception as e2:
                     logger.error(f"Ошибка при отправке нового сообщения для calendar_expand: {e2}", exc_info=True)
@@ -436,38 +466,111 @@ async def handle_scheduled_broadcast_time_input(update: Update, context: Context
     # Сохраняем дату и время
     context.user_data["scheduled_broadcast_datetime"] = scheduled_datetime.isoformat()
 
-    # Показываем подтверждение
-    state_manager.set_admin_state(AdminState.BROADCAST_SCHEDULE_CONFIRMATION)
-    
-    # Получаем день недели и форматируем дату по-русски
-    weekday = scheduled_datetime.strftime('%A')
-    weekdays_map = {
-        'Monday': 'понедельник',
-        'Tuesday': 'вторник',
-        'Wednesday': 'среду',
-        'Thursday': 'четверг',
-        'Friday': 'пятницу',
-        'Saturday': 'субботу',
-        'Sunday': 'воскресенье'
-    }
-    weekday_ru = weekdays_map.get(weekday, weekday)
-    
-    # Форматируем дату в русском формате
-    day = scheduled_datetime.day
-    months_map = {
-        1: "января", 2: "февраля", 3: "марта", 4: "апреля",
-        5: "мая", 6: "июня", 7: "июля", 8: "августа",
-        9: "сентября", 10: "октября", 11: "ноября", 12: "декабря"
-    }
-    month_name = months_map.get(scheduled_datetime.month, scheduled_datetime.month)
-    formatted_date = f"{day} {month_name} {scheduled_datetime.year}"
-    
-    confirmation_text = f"Вы выбрали дату: {formatted_date} в {time_input}\n\nВсе верно?"
-    keyboard = [
-        [InlineKeyboardButton("✅ Да, все верно", callback_data="scheduled_broadcast_confirm")],
-        [InlineKeyboardButton("📅 Изменить дату", callback_data="scheduled_broadcast_change_date")]
-    ]
-    await message.reply_text(confirmation_text, reply_markup=InlineKeyboardMarkup(keyboard))
+    # Проверяем текущее состояние, чтобы определить, создаем мы новую рассылку или редактируем существующую
+    current_state = state_manager.get_admin_state()
+    if current_state == AdminState.BROADCAST_EDIT_AWAITING_TIME:
+        # Это изменение времени существующей рассылки
+        # В этом случае мы уже обновили дату и время в другом месте,
+        # а здесь нужно завершить процесс редактирования
+        new_broadcast_date = context.user_data.get("new_broadcast_date")
+        if new_broadcast_date:
+            # Объединяем выбранную дату и введенное время
+            selected_datetime_str = f"{new_broadcast_date} {time_input}"
+            new_datetime = dt.strptime(selected_datetime_str, "%Y-%m-%d %H:%M")
+            current_datetime = dt.now()
+            if new_datetime <= current_datetime:
+                await message.reply_text("❌ Ошибка: нельзя запланировать рассылку на прошедшее время. Пожалуйста, выберите будущую дату и время.")
+                # Сбрасываем состояние и возвращаем к выбору даты
+                state_manager.set_admin_state(AdminState.BROADCAST_EDIT_AWAITING_DATE)
+                from handlers.calendar import create_date_quick_select_keyboard
+                keyboard = create_date_quick_select_keyboard()
+                await message.reply_text("📅 Выберите дату для отправки рассылки:", reply_markup=keyboard)
+                return
+            
+            # Получаем ID рассылки
+            broadcast_id = context.user_data.get("broadcast_edit_id")
+            if not broadcast_id:
+                await message.reply_text("❌ Ошибка: неизвестная рассылка для редактирования.")
+                state_manager.reset_admin_state()
+                return
+            
+            # Обновляем дату и время рассылки
+            from db_session import get_db
+            from models.crud import update_scheduled_broadcast
+            with get_db() as db:
+                success = update_scheduled_broadcast(
+                    db,
+                    broadcast_id,
+                    scheduled_datetime=new_datetime
+                )
+            
+            if success:
+                # Форматируем дату в русском формате
+                day = new_datetime.day
+                months_map = {
+                    1: "января", 2: "февраля", 3: "марта", 4: "апреля",
+                    5: "мая", 6: "июня", 7: "июля", 8: "августа",
+                    9: "сентября", 10: "октября", 11: "ноября", 12: "декабря"
+                }
+                month_name = months_map.get(new_datetime.month, new_datetime.month)
+                formatted_date = f"{day} {month_name} {new_datetime.year}"
+                
+                await message.reply_text(f"✅ Дата и время рассылки успешно обновлены на {formatted_date} в {new_datetime.strftime('%H:%M')}!")
+            else:
+                await message.reply_text("❌ Не удалось обновить дату и время рассылки.")
+            
+            # Сбрасываем состояние
+            state_manager.reset_admin_state()
+            # Очищаем данные
+            context.user_data.pop("broadcast_edit_id", None)
+            context.user_data.pop("new_broadcast_date", None)
+            
+            # Добавляем кнопки для возврата
+            keyboard = [
+                [InlineKeyboardButton("📋 К списку рассылок", callback_data="scheduled_broadcasts_list")]
+            ]
+            await context.bot.send_message(
+                chat_id=query.from_user.id,
+                text="Выберите действие:",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+        else:
+            await message.reply_text("❌ Ошибка: дата не выбрана.")
+            state_manager.reset_admin_state()
+    else:
+        # Это создание новой рассылки
+        # Показываем подтверждение
+        state_manager.set_admin_state(AdminState.BROADCAST_SCHEDULE_CONFIRMATION)
+        
+        # Получаем день недели и форматируем дату по-русски
+        weekday = scheduled_datetime.strftime('%A')
+        weekdays_map = {
+            'Monday': 'понедельник',
+            'Tuesday': 'вторник',
+            'Wednesday': 'среду',
+            'Thursday': 'четверг',
+            'Friday': 'пятницу',
+            'Saturday': 'субботу',
+            'Sunday': 'воскресенье'
+        }
+        weekday_ru = weekdays_map.get(weekday, weekday)
+        
+        # Форматируем дату в русском формате
+        day = scheduled_datetime.day
+        months_map = {
+            1: "января", 2: "февраля", 3: "марта", 4: "апреля",
+            5: "мая", 6: "июня", 7: "июля", 8: "августа",
+            9: "сентября", 10: "октября", 11: "ноября", 12: "декабря"
+        }
+        month_name = months_map.get(scheduled_datetime.month, scheduled_datetime.month)
+        formatted_date = f"{day} {month_name} {scheduled_datetime.year}"
+        
+        confirmation_text = f"Вы выбрали дату: {formatted_date} в {time_input}\n\nВсе верно?"
+        keyboard = [
+            [InlineKeyboardButton("✅ Да, все верно", callback_data="scheduled_broadcast_confirm")],
+            [InlineKeyboardButton("📅 Изменить дату", callback_data="scheduled_broadcast_change_date")]
+        ]
+        await message.reply_text(confirmation_text, reply_markup=InlineKeyboardMarkup(keyboard))
 
 
 async def handle_scheduled_broadcast_confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -527,12 +630,48 @@ async def handle_scheduled_broadcast_confirmation(update: Update, context: Conte
             return
 
         # Подготовим содержимое сообщения в JSON-формате
-        # Для простоты в этом примере будем сохранять только ID сообщения
-        # В реальной реализации нужно будет сериализовать все содержимое сообщения
-        message_content = json.dumps({
-            "message_id": message_id,
-            "chat_id": settings.ADMIN_CHAT_ID
-        })
+        # Используем сохраненный оригинальный текст, если он есть
+        saved_original_text = context.user_data.get("scheduled_broadcast_original_text")
+        
+        if saved_original_text:
+            # Сохраняем и ID сообщения, и текст
+            message_content = json.dumps({
+                "message_id": message_id,
+                "chat_id": settings.ADMIN_CHAT_ID,
+                "original_text": saved_original_text
+            })
+        else:
+            # Попробуем получить текст оригинального сообщения для сохранения
+            try:
+                # Получаем оригинальное сообщение для извлечения текста
+                original_message = await context.bot.get_message(
+                    chat_id=settings.ADMIN_CHAT_ID,
+                    message_id=message_id
+                )
+                
+                # Проверяем, есть ли текст в сообщении
+                original_text = getattr(original_message, 'text', None) or getattr(original_message, 'caption', None)
+                
+                if original_text:
+                    # Сохраняем и ID сообщения, и текст
+                    message_content = json.dumps({
+                        "message_id": message_id,
+                        "chat_id": settings.ADMIN_CHAT_ID,
+                        "original_text": original_text
+                    })
+                else:
+                    # Если текста нет, сохраняем только ID
+                    message_content = json.dumps({
+                        "message_id": message_id,
+                        "chat_id": settings.ADMIN_CHAT_ID
+                    })
+            except Exception as e:
+                # Если не удалось получить текст, сохраняем только ID
+                self.logger.warning(f"Не удалось получить текст оригинального сообщения {message_id}: {e}")
+                message_content = json.dumps({
+                    "message_id": message_id,
+                    "chat_id": settings.ADMIN_CHAT_ID
+                })
 
         from db_session import get_db
         try:
@@ -599,7 +738,11 @@ async def handle_scheduled_broadcast_confirmation(update: Update, context: Conte
             [InlineKeyboardButton("➕ Новая рассылка", callback_data="admin_broadcast")]
         ]
         try:
-            await query.message.reply_text("Выберите действие:", reply_markup=InlineKeyboardMarkup(keyboard))
+            await context.bot.send_message(
+                chat_id=query.from_user.id,
+                text="Выберите действие:",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
             logger.info("handle_scheduled_broadcast_confirmation: сообщение с кнопками управления отправлено")
         except Exception as e:
             logger.error(f"Ошибка при отправке сообщения с кнопками управления: {e}")
@@ -646,17 +789,33 @@ async def handle_scheduled_broadcasts_list(update: Update, context: ContextTypes
             [InlineKeyboardButton("➕ Создать новую рассылку", callback_data="admin_broadcast")],
             [InlineKeyboardButton("⬅️ Назад в админку", callback_data="admin_main")]
         ]
-        await query.message.reply_text("Выберите действие:", reply_markup=InlineKeyboardMarkup(keyboard))
+        # Используем chat_id из callback_query, так как query.message может быть None после edit
+        await context.bot.send_message(
+            chat_id=query.from_user.id,
+            text="Выберите действие:",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
         return
 
     # Формируем список рассылок
     keyboard = []
     for broadcast in scheduled_broadcasts:
-        # Получаем дату и первые 30 символов сообщения
+        # Получаем дату и превью сообщения
         broadcast_date = broadcast.scheduled_datetime.strftime('%d.%m.%Y %H:%M')
-        message_preview = json.loads(broadcast.message_content).get("message_id", "Сообщение")
-        # Ограничиваем длину превью
-        preview_text = str(message_preview)[:30] + "..." if len(str(message_preview)) > 30 else str(message_preview)
+        message_content = json.loads(broadcast.message_content)
+        new_text = message_content.get("new_text")
+        
+        if new_text:
+            # Если есть обновленный текст, показываем первые 50 символов с многоточием при необходимости
+            preview_text = new_text[:50] + "..." if len(new_text) > 50 else new_text
+        else:
+            # Проверяем, есть ли оригинальный текст сообщения
+            original_text = message_content.get("original_text")
+            if original_text:
+                preview_text = original_text[:50] + "..." if len(original_text) > 50 else original_text
+            else:
+                preview_text = "Текст не найден"
+        
         button_text = f"{broadcast_date} - {preview_text}"
         callback_data = f"scheduled_broadcast_view_{broadcast.id}"
         keyboard.append([InlineKeyboardButton(button_text, callback_data=callback_data)])
@@ -664,4 +823,353 @@ async def handle_scheduled_broadcasts_list(update: Update, context: ContextTypes
     # Добавляем кнопку назад
     keyboard.append([InlineKeyboardButton("⬅️ Назад в админку", callback_data="admin_main")])
     
-    await query.edit_message_text("Ваши запланированные рассылки:", reply_markup=InlineKeyboardMarkup(keyboard))
+    try:
+        await query.edit_message_text("Ваши запланированные рассылки:", reply_markup=InlineKeyboardMarkup(keyboard))
+    except Exception:
+        # Если не удалось отредактировать сообщение (например, оно устарело), отправляем новое
+        await context.bot.send_message(
+            chat_id=query.from_user.id,
+            text="Ваши запланированные рассылки:",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+
+
+async def handle_scheduled_broadcast_view(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Обработка запроса на просмотр конкретной запланированной рассылки."""
+    query = update.callback_query
+    if query is None:
+        return
+
+    await query.answer()
+    
+    # Извлекаем ID рассылки из callback_data
+    command = query.data
+    broadcast_id = int(command.split("_")[-1])
+    
+    admin_id = update.effective_user.id
+    
+    from db_session import get_db
+    with get_db() as db:
+        broadcast = get_scheduled_broadcast(db, broadcast_id)
+        
+        if not broadcast or broadcast.admin_id != admin_id:
+            await query.edit_message_text("❌ Рассылка не найдена или недоступна.")
+            return
+    
+    # Формируем информацию о рассылке
+    broadcast_date = broadcast.scheduled_datetime.strftime('%d.%m.%Y %H:%M')
+    message_content = json.loads(broadcast.message_content)
+    message_id = message_content.get("message_id", "Неизвестно")
+    new_text = message_content.get("new_text")
+    original_text = message_content.get("original_text")
+    
+    if new_text:
+        info_text = f"📋 Информация о рассылке:\n\n📅 Дата и время: {broadcast_date}\n💬 Текст рассылки: {new_text}"
+    elif original_text:
+        info_text = f"📋 Информация о рассылке:\n\n📅 Дата и время: {broadcast_date}\n💬 Оригинальный текст: {original_text}"
+    else:
+        info_text = f"📋 Информация о рассылке:\n\n📅 Дата и время: {broadcast_date}\n💬 ID сообщения: {message_id}"
+    
+    # Кнопки для управления рассылкой
+    keyboard = [
+        [InlineKeyboardButton("✏️ Изменить текст", callback_data=f"scheduled_broadcast_edit_text_{broadcast.id}")],
+        [InlineKeyboardButton("📅 Изменить дату и время", callback_data=f"scheduled_broadcast_edit_datetime_{broadcast.id}")],
+        [InlineKeyboardButton("🗑️ Удалить рассылку", callback_data=f"scheduled_broadcast_delete_{broadcast.id}")],
+        [InlineKeyboardButton("⬅️ Назад к списку", callback_data="scheduled_broadcasts_list")]
+    ]
+    
+    await query.edit_message_text(info_text, reply_markup=InlineKeyboardMarkup(keyboard))
+
+
+async def handle_broadcast_edit_text_request(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Запрашивает у пользователя новый текст для рассылки."""
+    query = update.callback_query
+    if query is None:
+        return
+
+    await query.answer()
+    
+    # Извлекаем ID рассылки из callback_data
+    command = query.data
+    broadcast_id = int(command.split("_")[-1])
+    
+    # Сохраняем ID рассылки в контексте для дальнейшего использования
+    context.user_data["broadcast_edit_id"] = broadcast_id
+    
+    # Устанавливаем состояние ожидания нового текста
+    from services.state_manager import StateManager
+    state_manager = StateManager(context)
+    state_manager.set_admin_state(AdminState.BROADCAST_EDIT_AWAITING_TEXT)
+    
+    await query.edit_message_text("✏️ Отправьте новый текст для рассылки:")
+    
+    # Добавляем кнопку отмены
+    keyboard = [
+        [InlineKeyboardButton("❌ Отмена", callback_data="scheduled_broadcast_cancel_edit")]
+    ]
+    await context.bot.send_message(
+        chat_id=query.from_user.id,
+        text="Нажмите кнопку ниже для отмены редактирования:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+
+async def handle_broadcast_edit_datetime_request(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Начинает процесс изменения даты и времени рассылки."""
+    query = update.callback_query
+    if query is None:
+        return
+
+    await query.answer()
+    
+    # Извлекаем ID рассылки из callback_data
+    command = query.data
+    broadcast_id = int(command.split("_")[-1])
+    
+    # Сохраняем ID рассылки в контексте для дальнейшего использования
+    context.user_data["broadcast_edit_id"] = broadcast_id
+    
+    # Устанавливаем состояние ожидания выбора новой даты
+    from services.state_manager import StateManager
+    state_manager = StateManager(context)
+    state_manager.set_admin_state(AdminState.BROADCAST_EDIT_AWAITING_DATE)
+    
+    # Показываем кнопки выбора даты
+    from handlers.calendar import create_date_quick_select_keyboard
+    keyboard = create_date_quick_select_keyboard()
+    await query.edit_message_text("📅 Выберите новую дату для рассылки:", reply_markup=keyboard)
+
+
+async def handle_broadcast_delete_request(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Запрашивает подтверждение на удаление рассылки."""
+    query = update.callback_query
+    if query is None:
+        return
+
+    await query.answer()
+    
+    # Извлекаем ID рассылки из callback_data
+    command = query.data
+    broadcast_id = int(command.split("_")[-1])
+    
+    # Сохраняем ID рассылки в контексте для дальнейшего использования
+    context.user_data["broadcast_delete_id"] = broadcast_id
+    
+    keyboard = [
+        [InlineKeyboardButton("✅ Да, удалить", callback_data=f"scheduled_broadcast_delete_confirm_{broadcast_id}")],
+        [InlineKeyboardButton("❌ Отмена", callback_data="scheduled_broadcasts_list")]
+    ]
+    
+    await query.edit_message_text("⚠️ Вы уверены, что хотите удалить эту рассылку?", reply_markup=InlineKeyboardMarkup(keyboard))
+
+
+async def handle_broadcast_delete_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Подтверждает и выполняет удаление рассылки."""
+    query = update.callback_query
+    if query is None:
+        return
+
+    await query.answer()
+    
+    # Извлекаем ID рассылки из callback_data
+    command = query.data
+    broadcast_id = int(command.split("_")[-1])
+    
+    from db_session import get_db
+    with get_db() as db:
+        from models.crud import delete_scheduled_broadcast
+        success = delete_scheduled_broadcast(db, broadcast_id)
+    
+    if success:
+        await query.edit_message_text("✅ Рассылка успешно удалена!")
+    else:
+        await query.edit_message_text("❌ Не удалось удалить рассылку. Возможно, она уже была удалена.")
+    
+    # Добавляем кнопку для возврата к списку
+    keyboard = [
+        [InlineKeyboardButton("📋 К списку рассылок", callback_data="scheduled_broadcasts_list")]
+    ]
+    await context.bot.send_message(
+        chat_id=query.from_user.id,
+        text="Выберите действие:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+
+async def handle_broadcast_edit_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Обрабатывает новый текст для рассылки."""
+    message = update.message
+    if message is None:
+        return
+
+    # Проверяем, что мы в нужном состоянии
+    from services.state_manager import StateManager
+    state_manager = StateManager(context)
+    current_state = state_manager.get_admin_state()
+    
+    if current_state != AdminState.BROADCAST_EDIT_AWAITING_TEXT:
+        return
+    
+    # Получаем ID рассылки
+    broadcast_id = context.user_data.get("broadcast_edit_id")
+    if not broadcast_id:
+        await message.reply_text("❌ Ошибка: неизвестная рассылка для редактирования.")
+        state_manager.reset_admin_state()
+        return
+    
+    # Получаем новый текст (в данном случае - это новое содержимое сообщения)
+    new_text = message.text or message.caption
+    
+    if not new_text:
+        # Проверяем, может быть, это медиа-сообщение с описанием
+        if hasattr(message, 'caption') and message.caption:
+            new_text = message.caption
+        else:
+            await message.reply_text("❌ Пожалуйста, отправьте текст для новой рассылки.")
+            return
+    
+    # Обновляем содержимое рассылки
+    from db_session import get_db
+    from models.crud import get_scheduled_broadcast, update_scheduled_broadcast
+    with get_db() as db:
+        existing_broadcast = get_scheduled_broadcast(db, broadcast_id)
+        if not existing_broadcast:
+            await message.reply_text("❌ Рассылка не найдена.")
+            state_manager.reset_admin_state()
+            return
+        
+        # Обновляем содержимое сообщения в JSON
+        import json
+        message_content = json.loads(existing_broadcast.message_content)
+        # Обновляем или добавляем новый текст
+        message_content["new_text"] = new_text  # Добавляем новый текст к существующему содержимому
+        
+        success = update_scheduled_broadcast(
+            db,
+            broadcast_id,
+            message_content=json.dumps(message_content)
+        )
+    
+    if success:
+        await message.reply_text("✅ Текст рассылки успешно обновлен!")
+    else:
+        await message.reply_text("❌ Не удалось обновить текст рассылки.")
+    
+    # Сбрасываем состояние
+    state_manager.reset_admin_state()
+    # Очищаем данные
+    context.user_data.pop("broadcast_edit_id", None)
+    
+    # Добавляем кнопки для возврата
+    keyboard = [
+        [InlineKeyboardButton("📋 К списку рассылок", callback_data="scheduled_broadcasts_list")]
+    ]
+    await context.bot.send_message(
+        chat_id=query.from_user.id,
+        text="Выберите действие:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+
+async def handle_broadcast_edit_datetime(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Обрабатывает ввод нового времени для рассылки."""
+    message = update.message
+    if message is None:
+        return
+
+    # Проверяем, что мы в нужном состоянии
+    from services.state_manager import StateManager
+    state_manager = StateManager(context)
+    current_state = state_manager.get_admin_state()
+    
+    if current_state != AdminState.BROADCAST_EDIT_AWAITING_TIME:
+        return
+    
+    time_input = message.text.strip()
+
+    # Проверяем формат времени (ЧЧ:М)
+    import re
+    time_pattern = r"^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$"
+    if not re.match(time_pattern, time_input):
+        await message.reply_text("❌ Неверный формат времени. Пожалуйста, введите время в формате ЧЧ:ММ (например, 14:30)")
+        return
+
+    # Добавляем 0 в начало, если нужно
+    if len(time_input.split(':')[0]) == 1:
+        time_input = '0' + time_input
+
+    # Сохраняем новое время
+    context.user_data["new_broadcast_time"] = time_input
+    
+    # Получаем дату и время
+    selected_date_str = context.user_data.get("new_broadcast_date")
+    selected_time_str = context.user_data.get("new_broadcast_time")
+    
+    if not selected_date_str or not selected_time_str:
+        await message.reply_text("❌ Ошибка: дата или время не выбраны.")
+        state_manager.reset_admin_state()
+        return
+
+    from datetime import datetime as dt
+    try:
+        # Объединяем выбранную дату и время
+        selected_datetime_str = f"{selected_date_str} {selected_time_str}"
+        new_datetime = dt.strptime(selected_datetime_str, "%Y-%m-%d %H:%M")
+        current_datetime = dt.now()
+        if new_datetime <= current_datetime:
+            await message.reply_text("❌ Ошибка: нельзя запланировать рассылку на прошедшее время. Пожалуйста, выберите будущую дату и время.")
+            # Сбрасываем состояние и возвращаем к выбору даты
+            state_manager.set_admin_state(AdminState.BROADCAST_EDIT_AWAITING_DATE)
+            from handlers.calendar import create_date_quick_select_keyboard
+            keyboard = create_date_quick_select_keyboard()
+            await message.reply_text("📅 Выберите дату для отправки рассылки:", reply_markup=keyboard)
+            return
+    except ValueError:
+        await message.reply_text("❌ Ошибка при обработке даты и времени.")
+        state_manager.reset_admin_state()
+        return
+
+    # Получаем ID рассылки
+    broadcast_id = context.user_data.get("broadcast_edit_id")
+    if not broadcast_id:
+        await message.reply_text("❌ Ошибка: неизвестная рассылка для редактирования.")
+        state_manager.reset_admin_state()
+        return
+    
+    # Обновляем дату и время рассылки
+    from db_session import get_db
+    from models.crud import update_scheduled_broadcast
+    with get_db() as db:
+        success = update_scheduled_broadcast(
+            db,
+            broadcast_id,
+            scheduled_datetime=new_datetime
+        )
+    
+    if success:
+        # Форматируем дату в русском формате
+        day = new_datetime.day
+        months_map = {
+            1: "января", 2: "февраля", 3: "марта", 4: "апреля",
+            5: "мая", 6: "июня", 7: "июля", 8: "августа",
+            9: "сентября", 10: "октября", 11: "ноября", 12: "декабря"
+        }
+        month_name = months_map.get(new_datetime.month, new_datetime.month)
+        formatted_date = f"{day} {month_name} {new_datetime.year}"
+        
+        await message.reply_text(f"✅ Дата и время рассылки успешно обновлены на {formatted_date} в {new_datetime.strftime('%H:%M')}!")
+    else:
+        await message.reply_text("❌ Не удалось обновить дату и время рассылки.")
+    
+    # Сбрасываем состояние
+    state_manager.reset_admin_state()
+    # Очищаем данные
+    context.user_data.pop("broadcast_edit_id", None)
+    context.user_data.pop("new_broadcast_date", None)
+    context.user_data.pop("new_broadcast_time", None)
+    
+    # Добавляем кнопки для возврата
+    keyboard = [
+        [InlineKeyboardButton("📋 К списку рассылок", callback_data="scheduled_broadcasts_list")]
+    ]
+    await message.reply_text("Выберите действие:", reply_markup=InlineKeyboardMarkup(keyboard))

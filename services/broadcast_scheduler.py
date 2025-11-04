@@ -57,43 +57,109 @@ class BroadcastSchedulerService:
         """Отправляет конкретную запланированную рассылку."""
         from models.crud import iter_broadcast_targets
         
-        # Получаем ID сообщения и чата
-        message_id = message_data.get("message_id")
-        source_chat_id = message_data.get("chat_id") or settings.ADMIN_CHAT_ID
+        # Проверяем, есть ли обновленный текст у рассылки
+        new_text = message_data.get("new_text")
         
-        if not message_id:
-            self.logger.error(f"Нет ID сообщения для рассылки {scheduled_broadcast.id}")
-            return
-        
-        # Итерируем по пользователям и отправляем сообщение
-        success_count = 0
-        error_count = 0
-        
-        with get_db() as db:
-            for user_id_batch in iter_broadcast_targets(db):
-                # Отправляем сообщения в этой батч
-                for user_id in user_id_batch:
-                    try:
-                        await self.bot.copy_message(
-                            chat_id=user_id,
-                            from_chat_id=source_chat_id,
-                            message_id=message_id
-                        )
-                        success_count += 1
-                    except TelegramError as e:
-                        error_count += 1
-                        self.logger.warning(f"Ошибка отправки рассылки пользователю {user_id}: {e}")
-                        
-                        # Проверяем, заблокировал ли пользователь бота
-                        if "bot was blocked" in str(e) or "user is deactivated" in str(e):
-                            # В реальной системе можно было бы обновить статус пользователя
-                            pass
-                    except Exception as e:
-                        error_count += 1
-                        self.logger.error(f"Неожиданная ошибка при отправке рассылки пользователю {user_id}: {e}")
+        if new_text:
+            # Если есть обновленный текст, отправляем его напрямую
+            success_count = 0
+            error_count = 0
+            
+            with get_db() as db:
+                for user_id_batch in iter_broadcast_targets(db):
+                    # Отправляем сообщения в этой батч
+                    for user_id in user_id_batch:
+                        try:
+                            await self.bot.send_message(
+                                chat_id=user_id,
+                                text=new_text
+                            )
+                            success_count += 1
+                        except TelegramError as e:
+                            error_count += 1
+                            self.logger.warning(f"Ошибка отправки рассылки пользователю {user_id}: {e}")
+                            
+                            # Проверяем, заблокировал ли пользователь бота
+                            if "bot was blocked" in str(e) or "user is deactivated" in str(e):
+                                # В реальной системе можно было бы обновить статус пользователя
+                                pass
+                        except Exception as e:
+                            error_count += 1
+                            self.logger.error(f"Неожиданная ошибка при отправке рассылки пользователю {user_id}: {e}")
+                    
+                    # Делаем паузу между батчами, чтобы не превысить лимиты Telegram API
+                    await asyncio.sleep(0.05)  # 50 мс между батчами
+        else:
+            # Проверяем, есть ли оригинальный текст
+            original_text = message_data.get("original_text")
+            if original_text:
+                # Если есть оригинальный текст, отправляем его напрямую
+                success_count = 0
+                error_count = 0
                 
-                # Делаем паузу между батчами, чтобы не превысить лимиты Telegram API
-                await asyncio.sleep(0.05)  # 50 мс между батчами
+                with get_db() as db:
+                    for user_id_batch in iter_broadcast_targets(db):
+                        # Отправляем сообщения в этой батч
+                        for user_id in user_id_batch:
+                            try:
+                                await self.bot.send_message(
+                                    chat_id=user_id,
+                                    text=original_text
+                                )
+                                success_count += 1
+                            except TelegramError as e:
+                                error_count += 1
+                                self.logger.warning(f"Ошибка отправки рассылки пользователю {user_id}: {e}")
+                                
+                                # Проверяем, заблокировал ли пользователь бота
+                                if "bot was blocked" in str(e) or "user is deactivated" in str(e):
+                                    # В реальной системе можно было бы обновить статус пользователя
+                                    pass
+                            except Exception as e:
+                                error_count += 1
+                                self.logger.error(f"Неожиданная ошибка при отправке рассылки пользователю {user_id}: {e}")
+                        
+                        # Делаем паузу между батчами, чтобы не превысить лимиты Telegram API
+                        await asyncio.sleep(0.05)  # 50 мс между батчами
+            else:
+                # Если текста нет, используем оригинальный метод (copy_message)
+                # Получаем ID сообщения и чата
+                message_id = message_data.get("message_id")
+                source_chat_id = message_data.get("chat_id") or settings.ADMIN_CHAT_ID
+                
+                if not message_id:
+                    self.logger.error(f"Нет ID сообщения для рассылки {scheduled_broadcast.id}")
+                    return
+                
+                # Итерируем по пользователям и отправляем сообщение
+                success_count = 0
+                error_count = 0
+                
+                with get_db() as db:
+                    for user_id_batch in iter_broadcast_targets(db):
+                        # Отправляем сообщения в этой батч
+                        for user_id in user_id_batch:
+                            try:
+                                await self.bot.copy_message(
+                                    chat_id=user_id,
+                                    from_chat_id=source_chat_id,
+                                    message_id=message_id
+                                )
+                                success_count += 1
+                            except TelegramError as e:
+                                error_count += 1
+                                self.logger.warning(f"Ошибка отправки рассылки пользователю {user_id}: {e}")
+                                
+                                # Проверяем, заблокировал ли пользователь бота
+                                if "bot was blocked" in str(e) or "user is deactivated" in str(e):
+                                    # В реальной системе можно было бы обновить статус пользователя
+                                    pass
+                            except Exception as e:
+                                error_count += 1
+                                self.logger.error(f"Неожиданная ошибка при отправке рассылки пользователю {user_id}: {e}")
+                        
+                        # Делаем паузу между батчами, чтобы не превысить лимиты Telegram API
+                        await asyncio.sleep(0.05)  # 50 мс между батчами
         
         self.logger.info(f"Отправка рассылки {scheduled_broadcast.id} завершена: {success_count} успешно, {error_count} с ошибками")
         
