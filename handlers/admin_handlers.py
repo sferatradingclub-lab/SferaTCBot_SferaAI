@@ -205,11 +205,23 @@ async def admin_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     elif command in ["admin_stats_today", "admin_stats_all"]:
         await show_stats(update, context, query=query, period=command.split("_")[-1])
     elif command == "admin_broadcast":
+        # Показываем выбор между новой рассылкой и списком запланированных
+        broadcast_keyboard = [
+            [InlineKeyboardButton("🆕 Новая рассылка", callback_data="admin_broadcast_new")],
+            [InlineKeyboardButton("📋 Все запланированные рассылки", callback_data="admin_broadcast_scheduled_list")]
+        ]
+        await query.edit_message_text(
+            "Выберите действие:",
+            reply_markup=InlineKeyboardMarkup(broadcast_keyboard)
+        )
+    elif command == "admin_broadcast_new":
         state_manager.reset_admin_state()  # Сбросим любое текущее состояние
         state_manager.set_admin_state(AdminState.BROADCAST_AWAITING_MESSAGE)
         await query.edit_message_text(
             "Режим создания рассылки. Пришлите следующее сообщение, и я подготовлю его к отправке.",
         )
+    elif command == "admin_broadcast_scheduled_list":
+        await handle_scheduled_broadcasts_list(update, context)
     elif command == "admin_users":
         state_manager.set_admin_state(AdminState.USERS_AWAITING_ID)
         await query.edit_message_text(
