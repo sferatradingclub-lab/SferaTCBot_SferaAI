@@ -1365,56 +1365,17 @@ async def handle_broadcast_delete_confirm(update: Update, context: ContextTypes.
         from models.crud import delete_scheduled_broadcast
         success = delete_scheduled_broadcast(db, broadcast_id)
     
+    # Отправляем ответ пользователю, не пытаясь редактировать сообщение с подтверждением
     if success:
-        try:
-            # Добавляем уникальный параметр для гарантированного изменения содержимого сообщения
-            current_text = query.message.text if query.message else None
-            new_text = f"✅ Рассылка успешно удалена!\n\nУникальный ID: {broadcast_id}_{int(datetime.now().timestamp())}"
-            
-            if current_text != new_text:
-                await query.edit_message_text(new_text)
-            else:
-                await query.answer()
-        except Exception as e:
-            if "Message is not modified" in str(e):
-                # Если сообщение не изменено, просто отвечаем на callback_query
-                await query.answer()
-            elif "Bad Request" in str(e):
-                # Если ошибка Bad Request (например, сообщение устарело), отправляем новое сообщение
-                await context.bot.send_message(
-                    chat_id=query.from_user.id,
-                    text="✅ Рассылка успешно удалена!"
-                )
-                await query.answer()
-            else:
-                # Если другая ошибка, логируем её
-                logger.error(f"Ошибка при редактировании сообщения после удаления рассылки: {e}")
-                await query.answer(text="✅ Рассылка успешно удалена!")
+        response_text = "✅ Рассылка успешно удалена!"
     else:
-        try:
-            # Добавляем уникальный параметр для гарантированного изменения содержимого сообщения
-            current_text = query.message.text if query.message else None
-            new_text = f"❌ Не удалось удалить рассылку. Возможно, она уже была удалена.\n\nУникальный ID: {broadcast_id}_{int(datetime.now().timestamp())}"
-            
-            if current_text != new_text:
-                await query.edit_message_text(new_text)
-            else:
-                await query.answer()
-        except Exception as e:
-            if "Message is not modified" in str(e):
-                # Если сообщение не изменено, просто отвечаем на callback_query
-                await query.answer()
-            elif "Bad Request" in str(e):
-                # Если ошибка Bad Request (например, сообщение устарело), отправляем новое сообщение
-                await context.bot.send_message(
-                    chat_id=query.from_user.id,
-                    text="❌ Не удалось удалить рассылку. Возможно, она уже была удалена."
-                )
-                await query.answer()
-            else:
-                # Если другая ошибка, логируем её
-                logger.error(f"Ошибка при редактировании сообщения после неудачного удаления рассылки: {e}")
-                await query.answer(text="❌ Не удалось удалить рассылку. Возможно, она уже была удалена.")
+        response_text = "❌ Не удалось удалить рассылку. Возможно, она уже была удалена."
+    
+    # Отправляем новое сообщение с результатом вместо редактирования старого
+    await context.bot.send_message(
+        chat_id=query.from_user.id,
+        text=response_text
+    )
     
     # Добавляем кнопку для возврата к списку
     keyboard = [
