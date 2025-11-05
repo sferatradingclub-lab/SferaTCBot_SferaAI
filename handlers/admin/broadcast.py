@@ -1367,9 +1367,9 @@ async def handle_broadcast_delete_confirm(update: Update, context: ContextTypes.
     
     if success:
         try:
-            # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
+            # Добавляем уникальный параметр для гарантированного изменения содержимого сообщения
             current_text = query.message.text if query.message else None
-            new_text = "✅ Рассылка успешно удалена!"
+            new_text = f"✅ Рассылка успешно удалена!\n\nУникальный ID: {broadcast_id}_{int(datetime.now().timestamp())}"
             
             if current_text != new_text:
                 await query.edit_message_text(new_text)
@@ -1392,9 +1392,9 @@ async def handle_broadcast_delete_confirm(update: Update, context: ContextTypes.
                 await query.answer(text="✅ Рассылка успешно удалена!")
     else:
         try:
-            # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
+            # Добавляем уникальный параметр для гарантированного изменения содержимого сообщения
             current_text = query.message.text if query.message else None
-            new_text = "❌ Не удалось удалить рассылку. Возможно, она уже была удалена."
+            new_text = f"❌ Не удалось удалить рассылку. Возможно, она уже была удалена.\n\nУникальный ID: {broadcast_id}_{int(datetime.now().timestamp())}"
             
             if current_text != new_text:
                 await query.edit_message_text(new_text)
