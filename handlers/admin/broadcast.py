@@ -368,16 +368,16 @@ async def handle_calendar_callback(update: Update, context: ContextTypes.DEFAULT
     command = query.data
     logger.info(f"Получена календарная команда: {command}")
 
-    # Проверяем, что пользователь находится в состоянии планирования рассылки
+    # Проверяем, что пользователь находится в состоянии планирования рассылки или редактирования даты
     state_manager = StateManager(context)
     current_state = state_manager.get_admin_state()
     logger.info(f"Текущее состояние пользователя: {current_state}")
-    if current_state != AdminState.BROADCAST_SCHEDULE_AWAITING_DATE:
+    if current_state not in [AdminState.BROADCAST_SCHEDULE_AWAITING_DATE, AdminState.BROADCAST_EDIT_AWAITING_DATE]:
         # Вместо просто return, логируем проблему
-        logger.warning(f"Календарная команда {command} получена в состоянии {current_state}, ожидалось BROADCAST_SCHEDULE_AWAITING_DATE")
+        logger.warning(f"Календарная команда {command} получена в состоянии {current_state}, ожидалось BROADCAST_SCHEDULE_AWAITING_DATE или BROADCAST_EDIT_AWAITING_DATE")
         return
 
-    logger.info(f"Обработка команды {command} в состоянии BROADCAST_SCHEDULE_AWAITING_DATE")
+    logger.info(f"Обработка команды {command} в состоянии {current_state}")
     try:
         if command.startswith("calendar_select_"):
             logger.info("Обработка команды calendar_select_")
@@ -398,7 +398,7 @@ async def handle_calendar_callback(update: Update, context: ContextTypes.DEFAULT
             formatted_date = f"{day} {month_name} {selected_date_obj.year}"
 
             # Проверяем текущее состояние, чтобы определить, создаем мы новую рассылку или редактируем существующую
-            current_state = state_manager.get_admin_state()
+            # Используем уже определенную переменную current_state, а не вызываем state_manager.get_admin_state() снова
             if current_state == AdminState.BROADCAST_EDIT_AWAITING_DATE:
                 # Это изменение даты существующей рассылки
                 context.user_data["new_broadcast_date"] = selected_date_str
@@ -433,6 +433,7 @@ async def handle_calendar_callback(update: Update, context: ContextTypes.DEFAULT
             calendar_keyboard = create_calendar_keyboard(current_date)
             logger.info(f"Создана клавиатура календаря для даты {current_date}")
             try:
+                # Важно: сохранить текущее состояние, чтобы после выбора даты корректно обработать результат
                 await query.edit_message_text("Выберите дату:", reply_markup=calendar_keyboard)
                 logger.info("Сообщение с календарем успешно отредактировано")
             except Exception as e:
