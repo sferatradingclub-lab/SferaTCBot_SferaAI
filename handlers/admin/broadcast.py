@@ -1385,6 +1385,7 @@ async def handle_broadcast_delete_confirm(update: Update, context: ContextTypes.
                     chat_id=query.from_user.id,
                     text="✅ Рассылка успешно удалена!"
                 )
+                await query.answer()
             else:
                 # Если другая ошибка, логируем её
                 logger.error(f"Ошибка при редактировании сообщения после удаления рассылки: {e}")
@@ -1409,6 +1410,7 @@ async def handle_broadcast_delete_confirm(update: Update, context: ContextTypes.
                     chat_id=query.from_user.id,
                     text="❌ Не удалось удалить рассылку. Возможно, она уже была удалена."
                 )
+                await query.answer()
             else:
                 # Если другая ошибка, логируем её
                 logger.error(f"Ошибка при редактировании сообщения после неудачного удаления рассылки: {e}")
