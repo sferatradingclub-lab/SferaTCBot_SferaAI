@@ -1176,10 +1176,22 @@ async def handle_broadcast_delete_request(update: Update, context: ContextTypes.
     except Exception as e:
         if "Message is not modified" in str(e):
             # Если сообщение не изменено, просто отвечаем на callback_query
+            await query.answer()
+            return
+        elif "Bad Request" in str(e):
+            # Если ошибка Bad Request (например, сообщение устарело), отправляем новое сообщение
+            await context.bot.send_message(
+                chat_id=query.from_user.id,
+                text="⚠️ Вы уверены, что хотите удалить эту рассылку?",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            await query.answer()
             return
         else:
-            # Если другая ошибка, пробрасываем её
-            raise
+            # Если другая ошибка, логируем её
+            logger.error(f"Ошибка при редактировании сообщения запроса удаления: {e}")
+            await query.answer(text="⚠️ Произошла ошибка при запросе удаления рассылки.")
+            return
 
 
 async def handle_broadcast_delete_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1206,10 +1218,16 @@ async def handle_broadcast_delete_confirm(update: Update, context: ContextTypes.
             if "Message is not modified" in str(e):
                 # Если сообщение не изменено, просто отвечаем на callback_query
                 await query.answer()
-                return
+            elif "Bad Request" in str(e):
+                # Если ошибка Bad Request (например, сообщение устарело), отправляем новое сообщение
+                await context.bot.send_message(
+                    chat_id=query.from_user.id,
+                    text="✅ Рассылка успешно удалена!"
+                )
             else:
-                # Если другая ошибка, пробрасываем её
-                raise
+                # Если другая ошибка, логируем её
+                logger.error(f"Ошибка при редактировании сообщения после удаления рассылки: {e}")
+                await query.answer(text="✅ Рассылка успешно удалена!")
     else:
         try:
             await query.edit_message_text("❌ Не удалось удалить рассылку. Возможно, она уже была удалена.")
@@ -1217,10 +1235,16 @@ async def handle_broadcast_delete_confirm(update: Update, context: ContextTypes.
             if "Message is not modified" in str(e):
                 # Если сообщение не изменено, просто отвечаем на callback_query
                 await query.answer()
-                return
+            elif "Bad Request" in str(e):
+                # Если ошибка Bad Request (например, сообщение устарело), отправляем новое сообщение
+                await context.bot.send_message(
+                    chat_id=query.from_user.id,
+                    text="❌ Не удалось удалить рассылку. Возможно, она уже была удалена."
+                )
             else:
-                # Если другая ошибка, пробрасываем её
-                raise
+                # Если другая ошибка, логируем её
+                logger.error(f"Ошибка при редактировании сообщения после неудачного удаления рассылки: {e}")
+                await query.answer(text="❌ Не удалось удалить рассылку. Возможно, она уже была удалена.")
     
     # Добавляем кнопку для возврата к списку
     keyboard = [
