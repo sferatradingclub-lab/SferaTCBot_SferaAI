@@ -90,37 +90,47 @@ class BroadcastSchedulerService:
         success_count = 0
         error_count = 0
         
-        if new_text:
-            # Если есть обновленный текст, отправляем его напрямую
-            with get_db() as db:
-                for user_id_batch in iter_broadcast_targets(db):
-                    # Отправляем сообщения в этой батч
-                    for user_id in user_id_batch:
-                        try:
-                            await self.bot.send_message(
-                                chat_id=user_id,
-                                text=new_text,
-                                reply_markup=reply_markup
-                            )
-                            success_count += 1
-                        except TelegramError as e:
-                            error_count += 1
-                            self.logger.warning(f"Ошибка отправки рассылки пользователю {user_id}: {e}")
-                            
-                            # Проверяем, заблокировал ли пользователь бота
-                            if "bot was blocked" in str(e) or "user is deactivated" in str(e):
-                                # В реальной системе можно было бы обновить статус пользователя
-                                pass
-                        except Exception as e:
-                            error_count += 1
-                            self.logger.error(f"Неожиданная ошибка при отправке рассылки пользователю {user_id}: {e}")
-                    
-                    # Делаем паузу между батчами, чтобы не превысить лимиты Telegram API
-                    await asyncio.sleep(0.05)  # 50 мс между батчами
+        # Проверяем, есть ли обновленный текст (включая пустую строку, которая означает "без текста")
+        has_new_text = "new_text" in message_data
+        
+        if has_new_text:
+            new_text = message_data.get("new_text")
+            self.logger.info(f"Обнаружен new_text: '{new_text[:50]}...' (длина: {len(new_text) if new_text else 0})")
+            # Если new_text существует (даже если пустой), отправляем только его (или без текста, если пустой)
+            if new_text: # Если new_text не пустой
+                with get_db() as db:
+                    for user_id_batch in iter_broadcast_targets(db):
+                        # Отправляем сообщения в этой батч
+                        for user_id in user_id_batch:
+                            try:
+                                await self.bot.send_message(
+                                    chat_id=user_id,
+                                    text=new_text,
+                                    reply_markup=reply_markup
+                                )
+                                success_count += 1
+                            except TelegramError as e:
+                                error_count += 1
+                                self.logger.warning(f"Ошибка отправки рассылки пользователю {user_id}: {e}")
+                                
+                                # Проверяем, заблокировал ли пользователь бота
+                                if "bot was blocked" in str(e) or "user is deactivated" in str(e):
+                                    # В реальной системе можно было бы обновить статус пользователя
+                                    pass
+                            except Exception as e:
+                                error_count += 1
+                                self.logger.error(f"Неожиданная ошибка при отправке рассылки пользователю {user_id}: {e}")
+                        
+                        # Делаем паузу между батчами, чтобы не превысить лимиты Telegram API
+                        await asyncio.sleep(0.05)  # 50 мс между батчами
+            else:
+                self.logger.info("new_text пустой, текст отправляться не будет")
+                # Если new_text пустой, то просто не отправляем текст, переходим к медиа или copy_message
         else:
             # Проверяем, есть ли оригинальный текст
             original_text = message_data.get("original_text")
             if original_text:
+                self.logger.info(f"Обнаружен original_text: '{original_text[:50]}...' (длина: {len(original_text) if original_text else 0})")
                 # Если есть оригинальный текст, отправляем его напрямую
                 with get_db() as db:
                     for user_id_batch in iter_broadcast_targets(db):
@@ -157,7 +167,13 @@ class BroadcastSchedulerService:
                 
                 if photo_id:
                     # Отправляем фото
-                    caption = message_data.get("caption", "")
+                    # Если new_text пустой, не отправляем caption
+                    if has_new_text and not message_data.get("new_text"):
+                        caption = ""  # Не отправляем caption, если new_text пустой
+                        self.logger.info("new_text пустой, caption для фото не будет отправлен")
+                    else:
+                        caption = message_data.get("caption", "")
+                        self.logger.info(f"caption для фото: '{caption[:50]}...' (длина: {len(caption)})")
                     with get_db() as db:
                         for user_id_batch in iter_broadcast_targets(db):
                             for user_id in user_id_batch:
@@ -178,11 +194,17 @@ class BroadcastSchedulerService:
                                 except Exception as e:
                                     error_count += 1
                                     self.logger.error(f"Неожиданная ошибка при отправке фото-рассылки пользователю {user_id}: {e}")
-                            
-                            await asyncio.sleep(0.05)  # 50 мс между батчами
+                                
+                                await asyncio.sleep(0.05)  # 50 мс между батчами
                 elif video_id:
                     # Отправляем видео
-                    caption = message_data.get("caption", "")
+                    # Если new_text пустой, не отправляем caption
+                    if has_new_text and not message_data.get("new_text"):
+                        caption = ""  # Не отправляем caption, если new_text пустой
+                        self.logger.info("new_text пустой, caption для видео не будет отправлен")
+                    else:
+                        caption = message_data.get("caption", "")
+                        self.logger.info(f"caption для видео: '{caption[:50]}...' (длина: {len(caption)})")
                     with get_db() as db:
                         for user_id_batch in iter_broadcast_targets(db):
                             for user_id in user_id_batch:
@@ -203,11 +225,17 @@ class BroadcastSchedulerService:
                                 except Exception as e:
                                     error_count += 1
                                     self.logger.error(f"Неожиданная ошибка при отправке видео-рассылки пользователю {user_id}: {e}")
-                            
-                            await asyncio.sleep(0.05)  # 50 мс между батчами
+                                
+                                await asyncio.sleep(0.05) # 50 мс между батчами
                 elif document_id:
                     # Отправляем документ
-                    caption = message_data.get("caption", "")
+                    # Если new_text пустой, не отправляем caption
+                    if has_new_text and not message_data.get("new_text"):
+                        caption = ""  # Не отправляем caption, если new_text пустой
+                        self.logger.info("new_text пустой, caption для документа не будет отправлен")
+                    else:
+                        caption = message_data.get("caption", "")
+                        self.logger.info(f"caption для документа: '{caption[:50]}...' (длина: {len(caption)})")
                     with get_db() as db:
                         for user_id_batch in iter_broadcast_targets(db):
                             for user_id in user_id_batch:
@@ -228,11 +256,17 @@ class BroadcastSchedulerService:
                                 except Exception as e:
                                     error_count += 1
                                     self.logger.error(f"Неожиданная ошибка при отправке документ-рассылки пользователю {user_id}: {e}")
-                            
-                            await asyncio.sleep(0.05)  # 50 мс между батчами
+                                
+                                await asyncio.sleep(0.05)  # 50 мс между батчами
                 elif audio_id:
                     # Отправляем аудио
-                    caption = message_data.get("caption", "")
+                    # Если new_text пустой, не отправляем caption
+                    if has_new_text and not message_data.get("new_text"):
+                        caption = ""  # Не отправляем caption, если new_text пустой
+                        self.logger.info("new_text пустой, caption для аудио не будет отправлен")
+                    else:
+                        caption = message_data.get("caption", "")
+                        self.logger.info(f"caption для аудио: '{caption[:50]}...' (длина: {len(caption)})")
                     with get_db() as db:
                         for user_id_batch in iter_broadcast_targets(db):
                             for user_id in user_id_batch:
@@ -253,10 +287,17 @@ class BroadcastSchedulerService:
                                 except Exception as e:
                                     error_count += 1
                                     self.logger.error(f"Неожиданная ошибка при отправке аудио-рассылки пользователю {user_id}: {e}")
-                            
-                            await asyncio.sleep(0.05)  # 50 мс между батчами
+                                
+                                await asyncio.sleep(0.05)  # 50 мс между батчами
                 elif voice_id:
                     # Отправляем голосовое сообщение
+                    self.logger.info(f"Отправка голосового сообщения, has_new_text: {has_new_text}")
+                    if has_new_text and not message_data.get("new_text"):
+                        self.logger.info("new_text пустой, caption для голосового сообщения не будет отправлен отдельно")
+                    else:
+                        caption = message_data.get("caption", "")
+                        if caption:
+                            self.logger.info(f"caption для голосового сообщения будет отправлен отдельно: '{caption[:50]}...' (длина: {len(caption)})")
                     with get_db() as db:
                         for user_id_batch in iter_broadcast_targets(db):
                             for user_id in user_id_batch:
@@ -268,13 +309,15 @@ class BroadcastSchedulerService:
                                     )
                                     success_count += 1
                                     
-                                    # Отправляем подпись отдельным сообщением, если она есть
-                                    caption = message_data.get("caption", "")
-                                    if caption:
-                                        await self.bot.send_message(
-                                            chat_id=user_id,
-                                            text=caption
-                                        )
+                                    # Отправляем подпись отдельным сообщением, если она есть и new_text не пустой
+                                    # Если new_text был установлен в пустую строку, это означает, что пользователь не хочет отправлять текст
+                                    if not (has_new_text and not message_data.get("new_text")):  # new_text не пустой или вообще не установлен
+                                        caption = message_data.get("caption", "")
+                                        if caption:
+                                            await self.bot.send_message(
+                                                chat_id=user_id,
+                                                text=caption
+                                            )
                                 except TelegramError as e:
                                     error_count += 1
                                     self.logger.warning(f"Ошибка отправки голосовой рассылки пользователю {user_id}: {e}")

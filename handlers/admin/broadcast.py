@@ -1352,18 +1352,35 @@ async def handle_broadcast_delete_confirm(update: Update, context: ContextTypes.
     """Подтверждает и выполняет удаление рассылки."""
     query = update.callback_query
     if query is None:
+        logger.error("handle_broadcast_delete_confirm: query is None")
         return
 
     await query.answer()
     
     # Извлекаем ID рассылки из callback_data
     command = query.data
-    broadcast_id = int(command.split("_")[-1])
+    logger.info(f"handle_broadcast_delete_confirm: получена команда {command}")
+    
+    try:
+        broadcast_id = int(command.split("_")[-1])
+        logger.info(f"handle_broadcast_delete_confirm: извлеченный ID рассылки {broadcast_id}")
+    except (ValueError, IndexError) as e:
+        logger.error(f"handle_broadcast_delete_confirm: ошибка при извлечении ID из команды {command}: {e}")
+        await context.bot.send_message(
+            chat_id=query.from_user.id,
+            text="❌ Ошибка при обработке запроса на удаление."
+        )
+        return
     
     from db_session import get_db
     with get_db() as db:
         from models.crud import delete_scheduled_broadcast
-        success = delete_scheduled_broadcast(db, broadcast_id)
+        try:
+            success = delete_scheduled_broadcast(db, broadcast_id)
+            logger.info(f"handle_broadcast_delete_confirm: результат удаления для ID {broadcast_id}: {success}")
+        except Exception as e:
+            logger.error(f"handle_broadcast_delete_confirm: ошибка при удалении рассылки {broadcast_id}: {e}")
+            success = False
     
     # Отправляем ответ пользователю, не пытаясь редактировать сообщение с подтверждением
     if success:
