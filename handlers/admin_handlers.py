@@ -166,11 +166,11 @@ async def admin_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         elif command.startswith("scheduled_broadcast_edit_datetime_"):
             await handle_broadcast_edit_datetime_request(update, context)
             return
-        elif command.startswith("scheduled_broadcast_delete_") and not command.endswith("_confirm"):
-            await handle_broadcast_delete_request(update, context)
-            return
         elif command.startswith("scheduled_broadcast_delete_confirm_"):
             await handle_broadcast_delete_confirm(update, context)
+            return
+        elif command.startswith("scheduled_broadcast_delete_") and "_confirm_" not in command:
+            await handle_broadcast_delete_request(update, context)
             return
         elif command.startswith("scheduled_broadcast_confirm_send_"):
             await handle_broadcast_confirm_send_request(update, context)
