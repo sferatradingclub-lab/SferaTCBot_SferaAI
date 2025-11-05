@@ -339,23 +339,24 @@ def delete_scheduled_broadcast(db: Session, broadcast_id: int):
     
     logger.info(f"Попытка удалить рассылку с ID: {broadcast_id}")
     
-    # Сначала проверим, существует ли рассылка
-    scheduled_broadcast = db.query(ScheduledBroadcast).filter(ScheduledBroadcast.id == broadcast_id).first()
-    
-    if scheduled_broadcast:
-        logger.info(f"Найдена рассылка для удаления: ID {scheduled_broadcast.id}, дата {scheduled_broadcast.scheduled_datetime}, admin_id: {scheduled_broadcast.admin_id}")
+    try:
+        # Прямое удаление записи по ID с возвратом количества измененных строк
+        deleted_count = db.query(ScheduledBroadcast).filter(
+            ScheduledBroadcast.id == broadcast_id
+        ).delete(synchronize_session=False)
         
-        try:
-            db.delete(scheduled_broadcast)
+        if deleted_count > 0:
             db.commit()
             logger.info(f"Рассылка с ID {broadcast_id} успешно удалена из базы данных")
             return True
-        except Exception as e:
-            logger.error(f"Ошибка при удалении рассылки с ID {broadcast_id}: {e}", exc_info=True)
-            db.rollback()
+        else:
+            db.rollback()  # Необязательный откат, если ничего не удалено
+            logger.warning(f"Рассылка с ID {broadcast_id} не найдена для удаления")
             return False
-    else:
-        logger.warning(f"Рассылка с ID {broadcast_id} не найдена для удаления")
+            
+    except Exception as e:
+        logger.error(f"Ошибка при удалении рассылки с ID {broadcast_id}: {e}", exc_info=True)
+        db.rollback()
         return False
 
 
