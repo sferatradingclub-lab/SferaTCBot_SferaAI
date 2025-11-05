@@ -273,7 +273,17 @@ def create_scheduled_broadcast(db: Session, admin_id: int, message_content: str,
 
 def get_scheduled_broadcast(db: Session, broadcast_id: int):
     """Получает отложенную рассылку по ID."""
-    return db.query(ScheduledBroadcast).filter(ScheduledBroadcast.id == broadcast_id).first()
+    from config import get_settings
+    settings = get_settings()
+    logger = settings.logger
+    
+    logger.info(f"Поиск рассылки с ID: {broadcast_id}")
+    broadcast = db.query(ScheduledBroadcast).filter(ScheduledBroadcast.id == broadcast_id).first()
+    if broadcast:
+        logger.info(f"Найдена рассылка: ID {broadcast.id}, дата {broadcast.scheduled_datetime}, admin_id {broadcast.admin_id}")
+    else:
+        logger.warning(f"Рассылка с ID {broadcast_id} не найдена")
+    return broadcast
 
 
 def get_scheduled_broadcasts_by_admin(db: Session, admin_id: int):
@@ -312,9 +322,27 @@ def mark_broadcast_as_sent(db: Session, broadcast_id: int):
 
 def delete_scheduled_broadcast(db: Session, broadcast_id: int):
     """Удаляет отложенную рассылку."""
+    from config import get_settings
+    settings = get_settings()
+    logger = settings.logger
+    
+    logger.info(f"Попытка удалить рассылку с ID: {broadcast_id}")
+    
+    # Сначала проверим, существует ли рассылка
     scheduled_broadcast = db.query(ScheduledBroadcast).filter(ScheduledBroadcast.id == broadcast_id).first()
+    
     if scheduled_broadcast:
-        db.delete(scheduled_broadcast)
-        db.commit()
-        return True
-    return False
+        logger.info(f"Найдена рассылка для удаления: ID {scheduled_broadcast.id}, дата {scheduled_broadcast.scheduled_datetime}, admin_id: {scheduled_broadcast.admin_id}")
+        
+        try:
+            db.delete(scheduled_broadcast)
+            db.commit()
+            logger.info(f"Рассылка с ID {broadcast_id} успешно удалена из базы данных")
+            return True
+        except Exception as e:
+            logger.error(f"Ошибка при удалении рассылки с ID {broadcast_id}: {e}", exc_info=True)
+            db.rollback()
+            return False
+    else:
+        logger.warning(f"Рассылка с ID {broadcast_id} не найдена для удаления")
+        return False

@@ -1373,22 +1373,39 @@ async def handle_broadcast_delete_confirm(update: Update, context: ContextTypes.
         return
     
     from db_session import get_db
+    from models.crud import get_scheduled_broadcast, delete_scheduled_broadcast
     with get_db() as db:
-        from models.crud import delete_scheduled_broadcast
         try:
-            success = delete_scheduled_broadcast(db, broadcast_id)
-            logger.info(f"handle_broadcast_delete_confirm: результат удаления для ID {broadcast_id}: {success}")
+            # Сначала проверим, существует ли рассылка
+            existing_broadcast = get_scheduled_broadcast(db, broadcast_id)
+            if not existing_broadcast:
+                logger.warning(f"handle_broadcast_delete_confirm: рассылка с ID {broadcast_id} не найдена для удаления")
+                response_text = "❌ Рассылка не найдена. Возможно, она уже была удалена."
+                success = False
+            else:
+                logger.info(f"handle_broadcast_delete_confirm: найдена рассылка для удаления, ID: {broadcast_id}, дата: {existing_broadcast.scheduled_datetime}")
+                
+                # Проверим, принадлежит ли рассылка текущему администратору
+                admin_id = update.effective_user.id
+                if existing_broadcast.admin_id != admin_id:
+                    logger.warning(f"handle_broadcast_delete_confirm: попытка удалить чужую рассылку, ID админа: {admin_id}, ID владельца рассылки: {existing_broadcast.admin_id}")
+                    response_text = "❌ У вас нет прав на удаление этой рассылки."
+                    success = False
+                else:
+                    # Выполняем удаление
+                    success = delete_scheduled_broadcast(db, broadcast_id)
+                    if success:
+                        logger.info(f"handle_broadcast_delete_confirm: рассылка с ID {broadcast_id} успешно удалена")
+                        response_text = "✅ Рассылка успешно удалена!"
+                    else:
+                        logger.warning(f"handle_broadcast_delete_confirm: не удалось удалить рассылку с ID {broadcast_id}")
+                        response_text = "❌ Не удалось удалить рассылку. Возможно, она уже была удалена."
         except Exception as e:
-            logger.error(f"handle_broadcast_delete_confirm: ошибка при удалении рассылки {broadcast_id}: {e}")
+            logger.error(f"handle_broadcast_delete_confirm: ошибка при работе с базой данных для рассылки {broadcast_id}: {e}", exc_info=True)
+            response_text = "❌ Произошла ошибка при удалении рассылки."
             success = False
     
     # Отправляем ответ пользователю, не пытаясь редактировать сообщение с подтверждением
-    if success:
-        response_text = "✅ Рассылка успешно удалена!"
-    else:
-        response_text = "❌ Не удалось удалить рассылку. Возможно, она уже была удалена."
-    
-    # Отправляем новое сообщение с результатом вместо редактирования старого
     await context.bot.send_message(
         chat_id=query.from_user.id,
         text=response_text
