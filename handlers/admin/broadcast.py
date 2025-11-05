@@ -373,6 +373,8 @@ __all__ = [
     "handle_broadcast_edit_media",
     "handle_broadcast_edit_buttons",
     "handle_broadcast_confirm_now",
+    "handle_broadcast_delete_all_request",
+    "handle_broadcast_delete_all_confirm",
     "run_broadcast",
 ]
 
@@ -1000,7 +1002,8 @@ async def handle_scheduled_broadcasts_list(update: Update, context: ContextTypes
         callback_data = f"scheduled_broadcast_view_{broadcast.id}"
         keyboard.append([InlineKeyboardButton(button_text, callback_data=callback_data)])
     
-    # Добавляем кнопку назад
+    # Добавляем кнопку удалить все и кнопку назад
+    keyboard.append([InlineKeyboardButton("🗑️ Удалить все рассылки", callback_data="scheduled_broadcast_delete_all_request")])
     keyboard.append([InlineKeyboardButton("⬅️ Назад в админку", callback_data="admin_main")])
     
     try:
@@ -1406,6 +1409,130 @@ async def handle_broadcast_delete_confirm(update: Update, context: ContextTypes.
             success = False
     
     # Отправляем ответ пользователю, не пытаясь редактировать сообщение с подтверждением
+    await context.bot.send_message(
+        chat_id=query.from_user.id,
+        text=response_text
+    )
+    
+    # Добавляем кнопку для возврата к списку
+    keyboard = [
+        [InlineKeyboardButton("📋 К списку рассылок", callback_data="scheduled_broadcasts_list")]
+    ]
+    await context.bot.send_message(
+        chat_id=query.from_user.id,
+        text="Выберите действие:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+
+async def handle_broadcast_delete_all_request(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Запрашивает подтверждение на удаление всех отложенных рассылок текущего администратора."""
+    query = update.callback_query
+    if query is None:
+        return
+
+    await query.answer()
+    
+    admin_id = update.effective_user.id
+    
+    from db_session import get_db
+    from models.crud import get_scheduled_broadcasts_by_admin
+    with get_db() as db:
+        scheduled_broadcasts = get_scheduled_broadcasts_by_admin(db, admin_id)
+    
+    if not scheduled_broadcasts:
+        # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
+        current_text = query.message.text if query.message else None
+        new_text = "У вас нет запланированных рассылок для удаления."
+        
+        if current_text != new_text:
+            await query.edit_message_text(new_text)
+        else:
+            await query.answer()
+        keyboard = [
+            [InlineKeyboardButton("📋 К списку рассылок", callback_data="scheduled_broadcasts_list")]
+        ]
+        await context.bot.send_message(
+            chat_id=query.from_user.id,
+            text="Выберите действие:",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        return
+    
+    count = len(scheduled_broadcasts)
+    
+    keyboard = [
+        [InlineKeyboardButton("✅ Да, удалить все", callback_data="scheduled_broadcast_delete_all_confirm")],
+        [InlineKeyboardButton("❌ Отмена", callback_data="scheduled_broadcasts_list")]
+    ]
+    
+    try:
+        # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
+        current_text = query.message.text if query.message else None
+        new_text = f"⚠️ Вы уверены, что хотите удалить все {count} запланированных рассылок? Это действие нельзя отменить."
+        
+        if current_text != new_text:
+            await query.edit_message_text(new_text, reply_markup=InlineKeyboardMarkup(keyboard))
+        else:
+            await query.answer()
+    except Exception as e:
+        if "Message is not modified" in str(e):
+            # Если сообщение не изменено, просто отвечаем на callback_query
+            await query.answer()
+            return
+        elif "Bad Request" in str(e):
+            # Если ошибка Bad Request (например, сообщение устарело), отправляем новое сообщение
+            await context.bot.send_message(
+                chat_id=query.from_user.id,
+                text=f"⚠️ Вы уверены, что хотите удалить все {count} запланированных рассылок? Это действие нельзя отменить.",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            await query.answer()
+            return
+        else:
+            # Если другая ошибка, логируем её
+            logger.error(f"Ошибка при редактировании сообщения запроса удаления всех: {e}")
+            await query.answer(text="⚠️ Произошла ошибка при запросе удаления рассылок.")
+            return
+
+
+async def handle_broadcast_delete_all_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Подтверждает и выполняет удаление всех отложенных рассылок текущего администратора."""
+    query = update.callback_query
+    if query is None:
+        logger.error("handle_broadcast_delete_all_confirm: query is None")
+        return
+
+    await query.answer()
+    
+    admin_id = update.effective_user.id
+    
+    from db_session import get_db
+    from models.crud import delete_scheduled_messages_by_admin
+    with get_db() as db:
+        try:
+            # Выполняем пакетное удаление всех рассылок администратора
+            success_count, error_count, failed_ids = delete_scheduled_messages_by_admin(db, admin_id)
+            
+            if success_count > 0 or error_count > 0:
+                response_text = f"✅ Удаление завершено!\n\n"
+                response_text += f"• Успешно удалено: {success_count}\n"
+                response_text += f"• Ошибок: {error_count}"
+                
+                if failed_ids:
+                    response_text += f"\n• Неудачные ID: {failed_ids[:10]}"  # Показываем первые 10 неудачных ID
+                    if len(failed_ids) > 10:
+                        response_text += f" и еще {len(failed_ids) - 10}..."
+            else:
+                response_text = "⚠️ Нечего удалять - у вас нет запланированных рассылок."
+                
+            logger.info(f"Удаление всех рассылок администратора {admin_id} завершено: {success_count} успешно, {error_count} ошибок")
+                
+        except Exception as e:
+            logger.error(f"handle_broadcast_delete_all_confirm: ошибка при удалении всех рассылок администратора {admin_id}: {e}", exc_info=True)
+            response_text = "❌ Произошла ошибка при удалении рассылок."
+    
+    # Отправляем ответ пользователю
     await context.bot.send_message(
         chat_id=query.from_user.id,
         text=response_text

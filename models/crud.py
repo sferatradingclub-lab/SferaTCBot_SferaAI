@@ -357,3 +357,116 @@ def delete_scheduled_broadcast(db: Session, broadcast_id: int):
     else:
         logger.warning(f"Рассылка с ID {broadcast_id} не найдена для удаления")
         return False
+
+
+def delete_scheduled_messages(db: Session, broadcast_ids: list[int], batch_size: int = 50) -> tuple[int, int, list[int]]:
+    """
+    Удаляет отложенные рассылки пакетно с retry-логикой и логированием.
+    
+    Args:
+        db: Сессия базы данных
+        broadcast_ids: Список ID рассылок для удаления
+        batch_size: Размер батча для удаления (по умолчанию 50)
+        
+    Returns:
+        tuple: (успешно удалено, ошибок, список неудачных ID)
+    """
+    from config import get_settings
+    settings = get_settings()
+    logger = settings.logger
+    
+    if not broadcast_ids:
+        logger.info("Список ID рассылок пуст, удаление не требуется")
+        return 0, 0, []
+    
+    total_success = 0
+    total_errors = 0
+    failed_ids = []
+    
+    logger.info(f"Начинаю пакетное удаление {len(broadcast_ids)} отложенных рассылок")
+    
+    # Разбиваем список ID на батчи
+    for i in range(0, len(broadcast_ids), batch_size):
+        batch = broadcast_ids[i:i + batch_size]
+        logger.info(f"Обработка батча {i//batch_size + 1}/{(len(broadcast_ids) + batch_size - 1)//batch_size}, размер: {len(batch)}")
+        
+        # Пытаемся удалить батч
+        batch_success = 0
+        batch_errors = 0
+        
+        # Сначала проверяем, какие рассылки существуют
+        existing_broadcasts = db.query(ScheduledBroadcast.id).filter(
+            ScheduledBroadcast.id.in_(batch)
+        ).all()
+        
+        existing_ids = [b.id for b in existing_broadcasts]
+        not_found_ids = [bid for bid in batch if bid not in existing_ids]
+        
+        if not_found_ids:
+            logger.warning(f"Рассылки с ID {not_found_ids} не найдены для удаления")
+            batch_errors += len(not_found_ids)
+            failed_ids.extend(not_found_ids)
+        
+        # Удаляем существующие рассылки
+        if existing_ids:
+            try:
+                deleted_count = db.query(ScheduledBroadcast).filter(
+                    ScheduledBroadcast.id.in_(existing_ids)
+                ).delete(synchronize_session=False)
+                
+                db.commit()
+                batch_success += deleted_count
+                logger.info(f"Успешно удалено {deleted_count} рассылок из батча")
+                
+            except Exception as e:
+                logger.error(f"Ошибка при удалении батча {existing_ids}: {e}", exc_info=True)
+                db.rollback()
+                batch_errors += len(existing_ids)
+                failed_ids.extend(existing_ids)
+        
+        total_success += batch_success
+        total_errors += batch_errors
+        
+        # Делаем небольшую паузу между батчами, чтобы не перегружать БД
+        import time
+        time.sleep(0.1)
+    
+    logger.info(f"Пакетное удаление завершено: {total_success} успешно, {total_errors} ошибок")
+    
+    return total_success, total_errors, failed_ids
+
+
+def delete_scheduled_messages_by_admin(db: Session, admin_id: int, batch_size: int = 50) -> tuple[int, int, list[int]]:
+    """
+    Удаляет все отложенные рассылки для конкретного администратора.
+    
+    Args:
+        db: Сессия базы данных
+        admin_id: ID администратора
+        batch_size: Размер батча для удаления (по умолчанию 50)
+        
+    Returns:
+        tuple: (успешно удалено, ошибок, список неудачных ID)
+    """
+    from config import get_settings
+    settings = get_settings()
+    logger = settings.logger
+    
+    logger.info(f"Начинаю удаление всех отложенных рассылок для администратора {admin_id}")
+    
+    # Получаем все ID рассылок для администратора
+    broadcast_ids = [
+        broadcast.id for broadcast in
+        db.query(ScheduledBroadcast.id).filter(
+            ScheduledBroadcast.admin_id == admin_id
+        ).all()
+    ]
+    
+    if not broadcast_ids:
+        logger.info(f"Для администратора {admin_id} нет отложенных рассылок для удаления")
+        return 0, 0, []
+    
+    logger.info(f"Найдено {len(broadcast_ids)} отложенных рассылок для администратора {admin_id}")
+    
+    # Выполняем пакетное удаление
+    return delete_scheduled_messages(db, broadcast_ids, batch_size)
