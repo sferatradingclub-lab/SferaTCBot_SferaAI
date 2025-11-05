@@ -1171,7 +1171,15 @@ async def handle_broadcast_delete_request(update: Update, context: ContextTypes.
         [InlineKeyboardButton("❌ Отмена", callback_data="scheduled_broadcasts_list")]
     ]
     
-    await query.edit_message_text("⚠️ Вы уверены, что хотите удалить эту рассылку?", reply_markup=InlineKeyboardMarkup(keyboard))
+    try:
+        await query.edit_message_text("⚠️ Вы уверены, что хотите удалить эту рассылку?", reply_markup=InlineKeyboardMarkup(keyboard))
+    except Exception as e:
+        if "Message is not modified" in str(e):
+            # Если сообщение не изменено, просто отвечаем на callback_query
+            return
+        else:
+            # Если другая ошибка, пробрасываем её
+            raise
 
 
 async def handle_broadcast_delete_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1192,9 +1200,27 @@ async def handle_broadcast_delete_confirm(update: Update, context: ContextTypes.
         success = delete_scheduled_broadcast(db, broadcast_id)
     
     if success:
-        await query.edit_message_text("✅ Рассылка успешно удалена!")
+        try:
+            await query.edit_message_text("✅ Рассылка успешно удалена!")
+        except Exception as e:
+            if "Message is not modified" in str(e):
+                # Если сообщение не изменено, просто отвечаем на callback_query
+                await query.answer()
+                return
+            else:
+                # Если другая ошибка, пробрасываем её
+                raise
     else:
-        await query.edit_message_text("❌ Не удалось удалить рассылку. Возможно, она уже была удалена.")
+        try:
+            await query.edit_message_text("❌ Не удалось удалить рассылку. Возможно, она уже была удалена.")
+        except Exception as e:
+            if "Message is not modified" in str(e):
+                # Если сообщение не изменено, просто отвечаем на callback_query
+                await query.answer()
+                return
+            else:
+                # Если другая ошибка, пробрасываем её
+                raise
     
     # Добавляем кнопку для возврата к списку
     keyboard = [
