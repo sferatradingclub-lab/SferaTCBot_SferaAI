@@ -155,7 +155,14 @@ async def user_actions_handler(update: Update, context: ContextTypes.DEFAULT_TYP
                     [[InlineKeyboardButton("🎉 Перейти к полному курсу!", url=settings.FULL_COURSE_URL)]]
                 ),
             )
-            await query.edit_message_text(f"{original_message}\n\n*Статус: ✅ Одобрено*", parse_mode='MarkdownV2')
+            # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
+            current_text = query.message.text if query.message else None
+            new_text = f"{original_message}\n\n*Статус: ✅ Одобрено*"
+            
+            if current_text != new_text:
+                await query.edit_message_text(new_text, parse_mode='MarkdownV2')
+            else:
+                await query.answer()
 
         elif action == "reject":
             reject_user_in_db(db, user_id)
@@ -168,7 +175,14 @@ async def user_actions_handler(update: Update, context: ContextTypes.DEFAULT_TYP
                 text=rejection_text,
                 reply_markup=InlineKeyboardMarkup(support_button),
             )
-            await query.edit_message_text(f"{original_message}\n\n*Статус: ❌ Отклонено*", parse_mode='MarkdownV2')
+            # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
+            current_text = query.message.text if query.message else None
+            new_text = f"{original_message}\n\n*Статус: ❌ Отклонено*"
+            
+            if current_text != new_text:
+                await query.edit_message_text(new_text, parse_mode='MarkdownV2')
+            else:
+                await query.answer()
 
         elif action == "revoke":
             revoke_user_in_db(db, user_id)
@@ -180,10 +194,24 @@ async def user_actions_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             context.user_data['dm_target_user_id'] = user_id
             if action == "reply":
                 context.user_data['reply_to_message_id'] = int(parts[3]) if len(parts) > 3 else None
-            await query.edit_message_text(f"Введите ответ для пользователя {display_name}:")
+            # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
+            current_text = query.message.text if query.message else None
+            new_text = f"Введите ответ для пользователя {display_name}:"
+            
+            if current_text != new_text:
+                await query.edit_message_text(new_text)
+            else:
+                await query.answer()
 
         elif action == "block":
-            await query.edit_message_text(f"Вы уверены, что хотите заблокировать {display_name}?", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("ДА, заблокировать", callback_data=f'user_blockconfirm_{user_id}')], [InlineKeyboardButton("Отмена", callback_data=f'user_showcard_{user_id}')]]))
+            # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
+            current_text = query.message.text if query.message else None
+            new_text = f"Вы уверены, что хотите заблокировать {display_name}?"
+            
+            if current_text != new_text:
+                await query.edit_message_text(new_text, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("ДА, заблокировать", callback_data=f'user_blockconfirm_{user_id}')], [InlineKeyboardButton("Отмена", callback_data=f'user_showcard_{user_id}')]]))
+            else:
+                await query.answer()
 
         elif action == "blockconfirm":
             ban_user_in_db(db, user_id, True)
@@ -202,10 +230,17 @@ async def user_actions_handler(update: Update, context: ContextTypes.DEFAULT_TYP
                     [InlineKeyboardButton("Отмена", callback_data=f"user_showcard_{user_id}")],
                 ]
             )
-            await query.edit_message_text(
-                f"Вы уверены, что хотите НАВСЕГДА удалить пользователя {display_name}?",
-                reply_markup=confirmation_keyboard,
-            )
+            # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
+            current_text = query.message.text if query.message else None
+            new_text = f"Вы уверены, что хотите НАВСЕГДА удалить пользователя {display_name}?"
+            
+            if current_text != new_text:
+                await query.edit_message_text(
+                    new_text,
+                    reply_markup=confirmation_keyboard,
+                )
+            else:
+                await query.answer()
 
         elif action == "deleteconfirm":
             was_deleted = delete_user_in_db(db, user_id)
@@ -213,19 +248,33 @@ async def user_actions_handler(update: Update, context: ContextTypes.DEFAULT_TYP
                 logger.info(
                     "Админ (%s) удалил пользователя %s", query.from_user.id, user_id
                 )
-                await query.edit_message_text(
-                    f"✅ Пользователь с ID {user_id} был успешно удален.",
-                    reply_markup=InlineKeyboardMarkup(
-                        [[InlineKeyboardButton("⬅️ В админку", callback_data="admin_main")]]
-                    ),
-                )
+                # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
+                current_text = query.message.text if query.message else None
+                new_text = f"✅ Пользователь с ID {user_id} был успешно удален."
+                
+                if current_text != new_text:
+                    await query.edit_message_text(
+                        new_text,
+                        reply_markup=InlineKeyboardMarkup(
+                            [[InlineKeyboardButton("⬅️ В админку", callback_data="admin_main")]]
+                        ),
+                    )
+                else:
+                    await query.answer()
             else:
-                await query.edit_message_text(
-                    "⚠️ Пользователь не найден или уже удален.",
-                    reply_markup=InlineKeyboardMarkup(
-                        [[InlineKeyboardButton("⬅️ В админку", callback_data="admin_main")]]
-                    ),
-                )
+                # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
+                current_text = query.message.text if query.message else None
+                new_text = "⚠️ Пользователь не найден или уже удален."
+                
+                if current_text != new_text:
+                    await query.edit_message_text(
+                        new_text,
+                        reply_markup=InlineKeyboardMarkup(
+                            [[InlineKeyboardButton("⬅️ В админку", callback_data="admin_main")]]
+                        ),
+                    )
+                else:
+                    await query.answer()
 
     if action not in [
         "approve",

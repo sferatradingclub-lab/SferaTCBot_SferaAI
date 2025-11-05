@@ -703,11 +703,19 @@ async def send_video_or_photo_fallback(
                             parse_mode=kwargs.get('parse_mode')
                         )
                     else:
-                        return await query.edit_message_text(
-                            text=caption,
-                            reply_markup=reply_markup,
-                            parse_mode=kwargs.get('parse_mode')
-                        )
+                        # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
+                        current_text = query.message.text if query.message else None
+                        new_text = caption
+                        
+                        if current_text != new_text:
+                            return await query.edit_message_text(
+                                text=new_text,
+                                reply_markup=reply_markup,
+                                parse_mode=kwargs.get('parse_mode')
+                            )
+                        else:
+                            await query.answer()
+                            return
                 except TelegramError as e3:
                     settings.logger.warning(f"Не удалось отредактировать сообщение: {e3}")
                     await query.answer("Не удалось обновить сообщение.")
@@ -716,17 +724,33 @@ async def send_video_or_photo_fallback(
         else:
             try:
                 if query.message and (query.message.photo or query.message.animation or query.message.video):
-                    return await query.edit_message_caption(
-                        caption=caption,
-                        reply_markup=reply_markup,
-                        parse_mode=kwargs.get('parse_mode')
-                    )
+                    # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
+                    current_caption = query.message.caption if query.message else None
+                    new_caption = caption
+                    
+                    if current_caption != new_caption:
+                        return await query.edit_message_caption(
+                            caption=new_caption,
+                            reply_markup=reply_markup,
+                            parse_mode=kwargs.get('parse_mode')
+                        )
+                    else:
+                        await query.answer()
+                        return
                 else:
-                    return await query.edit_message_text(
-                        text=caption,
-                        reply_markup=reply_markup,
-                        parse_mode=kwargs.get('parse_mode')
-                    )
+                    # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
+                    current_text = query.message.text if query.message else None
+                    new_text = caption
+                    
+                    if current_text != new_text:
+                        return await query.edit_message_text(
+                            text=new_text,
+                            reply_markup=reply_markup,
+                            parse_mode=kwargs.get('parse_mode')
+                        )
+                    else:
+                        await query.answer()
+                        return
             except TelegramError as e:
                 settings.logger.warning(f"Не удалось отредактировать сообщение: {e}")
                 await query.answer("Не удалось обновить сообщение.")

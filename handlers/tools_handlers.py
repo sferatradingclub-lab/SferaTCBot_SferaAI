@@ -69,7 +69,14 @@ async def tools_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         if query.message and (query.message.photo or query.message.animation or query.message.video):
             await query.edit_message_caption(caption=text, reply_markup=keyboard)
         else:
-            await query.edit_message_text(text=text, reply_markup=keyboard)
+            # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
+            current_text = query.message.text if query.message else None
+            new_text = text
+            
+            if current_text != new_text:
+                await query.edit_message_text(text=new_text, reply_markup=keyboard)
+            else:
+                await query.answer()
         return
 
     if query_data.startswith('tool_'):
@@ -121,11 +128,18 @@ async def tools_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
                             parse_mode='Markdown'
                         )
                     else:
-                        await query.edit_message_text(
-                            text=caption,
-                            reply_markup=reply_markup,
-                            parse_mode='Markdown'
-                        )
+                        # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
+                        current_text = query.message.text if query.message else None
+                        new_text = caption
+                        
+                        if current_text != new_text:
+                            await query.edit_message_text(
+                                text=new_text,
+                                reply_markup=reply_markup,
+                                parse_mode='Markdown'
+                            )
+                        else:
+                            await query.answer()
                 except Exception as e:
                     # Если не удалось отредактировать сообщение, отправляем новое
                     settings.logger.warning(f"Не удалось отредактировать сообщение: {e}. Отправляем новое сообщение.")

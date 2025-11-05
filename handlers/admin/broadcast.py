@@ -224,7 +224,14 @@ async def broadcast_confirmation_handler(
     if command == "broadcast_send":
         state_manager = StateManager(context)
         state_manager.reset_admin_state()
-        await query.edit_message_text("Начинаю рассылку... Оповещу по завершении.")
+        # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
+        current_text = query.message.text if query.message else None
+        new_text = "Начинаю рассылку... Оповещу по завершении."
+        
+        if current_text != new_text:
+            await query.edit_message_text(new_text)
+        else:
+            await query.answer()
         context.job_queue.run_once(run_broadcast, 0)
     elif command == "broadcast_schedule_later":
         # Переходим в состояние ожидания выбора даты
@@ -259,11 +266,25 @@ async def broadcast_confirmation_handler(
         
         # Показываем кнопки выбора даты
         keyboard = create_date_quick_select_keyboard()
-        await query.edit_message_text("Выберите дату для отправки рассылки:", reply_markup=keyboard)
+        # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
+        current_text = query.message.text if query.message else None
+        new_text = "Выберите дату для отправки рассылки:"
+        
+        if current_text != new_text:
+            await query.edit_message_text(new_text, reply_markup=keyboard)
+        else:
+            await query.answer()
     elif command == "broadcast_cancel":
         state_manager = StateManager(context)
         state_manager.reset_admin_state()
-        await query.edit_message_text("Рассылка отменена.")
+        # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
+        current_text = query.message.text if query.message else None
+        new_text = "Рассылка отменена."
+        
+        if current_text != new_text:
+            await query.edit_message_text(new_text)
+        else:
+            await query.answer()
         context.user_data.pop("broadcast_message_id", None)
 
 
@@ -403,11 +424,25 @@ async def handle_calendar_callback(update: Update, context: ContextTypes.DEFAULT
                 # Это изменение даты существующей рассылки
                 context.user_data["new_broadcast_date"] = selected_date_str
                 state_manager.set_admin_state(AdminState.BROADCAST_EDIT_AWAITING_TIME)
-                await query.edit_message_text(f"Вы выбрали новую дату: {formatted_date}\n\nТеперь введите новое время в формате ЧЧ:ММ (24-часовой формат):")
+                # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
+                current_text = query.message.text if query.message else None
+                new_text = f"Вы выбрали новую дату: {formatted_date}\n\nТеперь введите новое время в формате ЧЧ:ММ (24-часовой формат):"
+                
+                if current_text != new_text:
+                    await query.edit_message_text(new_text)
+                else:
+                    await query.answer()
             else:
                 # Это создание новой рассылки
                 state_manager.set_admin_state(AdminState.BROADCAST_SCHEDULE_AWAITING_TIME)
-                await query.edit_message_text(f"Вы выбрали дату: {formatted_date}\n\nТеперь введите время в формате ЧЧ:ММ (24-часовой формат):")
+                # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
+                current_text = query.message.text if query.message else None
+                new_text = f"Вы выбрали дату: {formatted_date}\n\nТеперь введите время в формате ЧЧ:ММ (24-часовой формат):"
+                
+                if current_text != new_text:
+                    await query.edit_message_text(new_text)
+                else:
+                    await query.answer()
 
         elif command.startswith("calendar_prev_month_") or command.startswith("calendar_next_month_"):
             logger.info("Обработка команды навигации по месяцам")
@@ -424,7 +459,14 @@ async def handle_calendar_callback(update: Update, context: ContextTypes.DEFAULT
                 new_keyboard = create_calendar_keyboard(target_date)
                 await query.edit_message_reply_markup(reply_markup=new_keyboard)
             except ValueError:
-                await query.edit_message_text("Ошибка при обработке даты.")
+                # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
+                current_text = query.message.text if query.message else None
+                new_text = "Ошибка при обработке даты."
+                
+                if current_text != new_text:
+                    await query.edit_message_text(new_text)
+                else:
+                    await query.answer()
 
         elif command == "calendar_expand":
             logger.info("Обработка команды calendar_expand")
@@ -434,7 +476,14 @@ async def handle_calendar_callback(update: Update, context: ContextTypes.DEFAULT
             logger.info(f"Создана клавиатура календаря для даты {current_date}")
             try:
                 # Важно: сохранить текущее состояние, чтобы после выбора даты корректно обработать результат
-                await query.edit_message_text("Выберите дату:", reply_markup=calendar_keyboard)
+                # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
+                current_text = query.message.text if query.message else None
+                new_text = "Выберите дату:"
+                
+                if current_text != new_text:
+                    await query.edit_message_text(new_text, reply_markup=calendar_keyboard)
+                else:
+                    await query.answer()
                 logger.info("Сообщение с календарем успешно отредактировано")
             except Exception as e:
                 logger.error(f"Ошибка при редактировании сообщения для calendar_expand: {e}", exc_info=True)
@@ -455,7 +504,14 @@ async def handle_calendar_callback(update: Update, context: ContextTypes.DEFAULT
     except Exception as e:
         logger.error(f"Ошибка в обработке календарного события {command}: {e}", exc_info=True)
         try:
-            await query.edit_message_text("Произошла ошибка при обработке календаря. Попробуйте снова.")
+            # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
+            current_text = query.message.text if query.message else None
+            new_text = "Произошла ошибка при обработке календаря. Попробуйте снова."
+            
+            if current_text != new_text:
+                await query.edit_message_text(new_text)
+            else:
+                await query.answer()
         except Exception:
             # Если не удалось отредактировать сообщение, просто пропускаем
             pass
@@ -648,7 +704,14 @@ async def handle_scheduled_broadcast_confirmation(update: Update, context: Conte
     if current_state != AdminState.BROADCAST_SCHEDULE_CONFIRMATION:
         logger.warning(f"Получена команда {command} в состоянии {current_state}, ожидалось BROADCAST_SCHEDULE_CONFIRMATION")
         try:
-            await query.edit_message_text("Ошибка: некорректное состояние для подтверждения рассылки.")
+            # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
+            current_text = query.message.text if query.message else None
+            new_text = "Ошибка: некорректное состояние для подтверждения рассылки."
+            
+            if current_text != new_text:
+                await query.edit_message_text(new_text)
+            else:
+                await query.answer()
         except Exception as e:
             logger.error(f"Ошибка при редактировании сообщения: {e}")
         return
@@ -667,7 +730,14 @@ async def handle_scheduled_broadcast_confirmation(update: Update, context: Conte
         if not all([scheduled_datetime_str, message_id, admin_id]):
             logger.warning(f"Недостаточно данных для создания рассылки: scheduled_datetime_str={bool(scheduled_datetime_str)}, message_id={bool(message_id)}, admin_id={bool(admin_id)}")
             try:
-                await query.edit_message_text("Ошибка: необходимые данные для создания рассылки отсутствуют.")
+                # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
+                current_text = query.message.text if query.message else None
+                new_text = "Ошибка: необходимые данные для создания рассылки отсутствуют."
+                
+                if current_text != new_text:
+                    await query.edit_message_text(new_text)
+                else:
+                    await query.answer()
             except Exception as e:
                 logger.error(f"Ошибка при редактировании сообщения: {e}")
             state_manager.reset_admin_state()
@@ -680,7 +750,14 @@ async def handle_scheduled_broadcast_confirmation(update: Update, context: Conte
         except ValueError as e:
             logger.error(f"Ошибка преобразования даты: {e}")
             try:
-                await query.edit_message_text("Ошибка при обработке даты и времени.")
+                # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
+                current_text = query.message.text if query.message else None
+                new_text = "Ошибка при обработке даты и времени."
+                
+                if current_text != new_text:
+                    await query.edit_message_text(new_text)
+                else:
+                    await query.answer()
             except Exception as edit_error:
                 logger.error(f"Ошибка при редактировании сообщения: {edit_error}")
             state_manager.reset_admin_state()
@@ -755,7 +832,14 @@ async def handle_scheduled_broadcast_confirmation(update: Update, context: Conte
         except Exception as e:
             logger.error(f"Ошибка при создании отложенной рассылки: {e}", exc_info=True)
             try:
-                await query.edit_message_text("Ошибка при сохранении отложенной рассылки.")
+                # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
+                current_text = query.message.text if query.message else None
+                new_text = "Ошибка при сохранении отложенной рассылки."
+                
+                if current_text != new_text:
+                    await query.edit_message_text(new_text)
+                else:
+                    await query.answer()
             except Exception as edit_error:
                 logger.error(f"Ошибка при редактировании сообщения: {edit_error}")
             state_manager.reset_admin_state()
@@ -795,7 +879,14 @@ async def handle_scheduled_broadcast_confirmation(update: Update, context: Conte
         formatted_date = f"{day} {month_name} {scheduled_datetime.year}"
         
         try:
-            await query.edit_message_text(f"Рассылка запланирована на {weekday_ru} {formatted_date} в {scheduled_datetime.strftime('%H:%M')}")
+            # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
+            current_text = query.message.text if query.message else None
+            new_text = f"Рассылка запланирована на {weekday_ru} {formatted_date} в {scheduled_datetime.strftime('%H:%M')}"
+            
+            if current_text != new_text:
+                await query.edit_message_text(new_text)
+            else:
+                await query.answer()
             logger.info("handle_scheduled_broadcast_confirmation: сообщение о планировании рассылки отправлено")
         except Exception as e:
             logger.error(f"Ошибка при редактировании сообщения с подтверждением: {e}")
@@ -825,12 +916,26 @@ async def handle_scheduled_broadcast_confirmation(update: Update, context: Conte
         current_date = datetime.now(ZoneInfo("Europe/Minsk")).date()
         calendar_keyboard = create_calendar_keyboard(current_date)
         try:
-            await query.edit_message_text("Выберите новую дату для отправки рассылки:", reply_markup=calendar_keyboard)
+            # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
+            current_text = query.message.text if query.message else None
+            new_text = "Выберите новую дату для отправки рассылки:"
+            
+            if current_text != new_text:
+                await query.edit_message_text(new_text, reply_markup=calendar_keyboard)
+            else:
+                await query.answer()
             logger.info("handle_scheduled_broadcast_confirmation: календарь для выбора новой даты отправлен")
         except Exception as e:
             logger.error(f"Ошибка при отправке календаря для изменения даты: {e}")
             try:
-                await query.edit_message_text("Произошла ошибка при открытии календаря.")
+                # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
+                current_text = query.message.text if query.message else None
+                new_text = "Произошла ошибка при открытии календаря."
+                
+                if current_text != new_text:
+                    await query.edit_message_text(new_text)
+                else:
+                    await query.answer()
             except:
                 pass
     else:
@@ -852,7 +957,14 @@ async def handle_scheduled_broadcasts_list(update: Update, context: ContextTypes
         scheduled_broadcasts = get_scheduled_broadcasts_by_admin(db, admin_id)
     
     if not scheduled_broadcasts:
-        await query.edit_message_text("У вас нет запланированных рассылок.")
+        # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
+        current_text = query.message.text if query.message else None
+        new_text = "У вас нет запланированных рассылок."
+        
+        if current_text != new_text:
+            await query.edit_message_text(new_text)
+        else:
+            await query.answer()
         keyboard = [
             [InlineKeyboardButton("➕ Создать новую рассылку", callback_data="admin_broadcast")],
             [InlineKeyboardButton("⬅️ Назад в админку", callback_data="admin_main")]
@@ -892,7 +1004,14 @@ async def handle_scheduled_broadcasts_list(update: Update, context: ContextTypes
     keyboard.append([InlineKeyboardButton("⬅️ Назад в админку", callback_data="admin_main")])
     
     try:
-        await query.edit_message_text("Ваши запланированные рассылки:", reply_markup=InlineKeyboardMarkup(keyboard))
+        # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
+        current_text = query.message.text if query.message else None
+        new_text = "Ваши запланированные рассылки:"
+        
+        if current_text != new_text:
+            await query.edit_message_text(new_text, reply_markup=InlineKeyboardMarkup(keyboard))
+        else:
+            await query.answer()
     except Exception:
         # Если не удалось отредактировать сообщение (например, оно устарело), отправляем новое
         await context.bot.send_message(
@@ -921,7 +1040,14 @@ async def handle_scheduled_broadcast_view(update: Update, context: ContextTypes.
         broadcast = get_scheduled_broadcast(db, broadcast_id)
         
         if not broadcast or broadcast.admin_id != admin_id:
-            await query.edit_message_text("❌ Рассылка не найдена или недоступна.")
+            # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
+            current_text = query.message.text if query.message else None
+            new_text = "❌ Рассылка не найдена или недоступна."
+            
+            if current_text != new_text:
+                await query.edit_message_text(new_text)
+            else:
+                await query.answer()
             return
     
     # Получаем текст рассылки для отображения
@@ -1086,7 +1212,14 @@ async def handle_scheduled_broadcast_view(update: Update, context: ContextTypes.
     # Редактируем исходное сообщение, чтобы убрать кнопки, которые вызвали этот обработчик
     # и показать, что действие выполнено
     try:
-        await query.edit_message_text("Пост отображен выше")
+        # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
+        current_text = query.message.text if query.message else None
+        new_text = "Пост отображен выше"
+        
+        if current_text != new_text:
+            await query.edit_message_text(new_text)
+        else:
+            await query.answer()
     except Exception:
         # Если не удалось отредактировать (например, сообщение устарело), просто пропускаем
         pass
@@ -1112,7 +1245,14 @@ async def handle_broadcast_edit_text_request(update: Update, context: ContextTyp
     state_manager = StateManager(context)
     state_manager.set_admin_state(AdminState.BROADCAST_EDIT_AWAITING_TEXT)
     
-    await query.edit_message_text("✏️ Отправьте новый текст для рассылки:")
+    # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
+    current_text = query.message.text if query.message else None
+    new_text = "✏️ Отправьте новый текст для рассылки:"
+    
+    if current_text != new_text:
+        await query.edit_message_text(new_text)
+    else:
+        await query.answer()
     
     # Добавляем кнопку отмены
     keyboard = [
@@ -1148,7 +1288,14 @@ async def handle_broadcast_edit_datetime_request(update: Update, context: Contex
     # Показываем кнопки выбора даты
     from handlers.calendar import create_date_quick_select_keyboard
     keyboard = create_date_quick_select_keyboard()
-    await query.edit_message_text("📅 Выберите новую дату для рассылки:", reply_markup=keyboard)
+    # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
+    current_text = query.message.text if query.message else None
+    new_text = "📅 Выберите новую дату для рассылки:"
+    
+    if current_text != new_text:
+        await query.edit_message_text(new_text, reply_markup=keyboard)
+    else:
+        await query.answer()
 
 
 async def handle_broadcast_delete_request(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1172,7 +1319,14 @@ async def handle_broadcast_delete_request(update: Update, context: ContextTypes.
     ]
     
     try:
-        await query.edit_message_text("⚠️ Вы уверены, что хотите удалить эту рассылку?", reply_markup=InlineKeyboardMarkup(keyboard))
+        # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
+        current_text = query.message.text if query.message else None
+        new_text = "⚠️ Вы уверены, что хотите удалить эту рассылку?"
+        
+        if current_text != new_text:
+            await query.edit_message_text(new_text, reply_markup=InlineKeyboardMarkup(keyboard))
+        else:
+            await query.answer()
     except Exception as e:
         if "Message is not modified" in str(e):
             # Если сообщение не изменено, просто отвечаем на callback_query
@@ -1213,7 +1367,14 @@ async def handle_broadcast_delete_confirm(update: Update, context: ContextTypes.
     
     if success:
         try:
-            await query.edit_message_text("✅ Рассылка успешно удалена!")
+            # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
+            current_text = query.message.text if query.message else None
+            new_text = "✅ Рассылка успешно удалена!"
+            
+            if current_text != new_text:
+                await query.edit_message_text(new_text)
+            else:
+                await query.answer()
         except Exception as e:
             if "Message is not modified" in str(e):
                 # Если сообщение не изменено, просто отвечаем на callback_query
@@ -1230,7 +1391,14 @@ async def handle_broadcast_delete_confirm(update: Update, context: ContextTypes.
                 await query.answer(text="✅ Рассылка успешно удалена!")
     else:
         try:
-            await query.edit_message_text("❌ Не удалось удалить рассылку. Возможно, она уже была удалена.")
+            # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
+            current_text = query.message.text if query.message else None
+            new_text = "❌ Не удалось удалить рассылку. Возможно, она уже была удалена."
+            
+            if current_text != new_text:
+                await query.edit_message_text(new_text)
+            else:
+                await query.answer()
         except Exception as e:
             if "Message is not modified" in str(e):
                 # Если сообщение не изменено, просто отвечаем на callback_query
@@ -1468,7 +1636,14 @@ async def handle_broadcast_edit_media_request(update: Update, context: ContextTy
     state_manager = StateManager(context)
     state_manager.set_admin_state(AdminState.BROADCAST_EDIT_AWAITING_MEDIA)
     
-    await query.edit_message_text("🖼️ Отправьте новое медиа для рассылки (фото, видео, документ, аудио или голосовое сообщение):")
+    # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
+    current_text = query.message.text if query.message else None
+    new_text = "🖼️ Отправьте новое медиа для рассылки (фото, видео, документ, аудио или голосовое сообщение):"
+    
+    if current_text != new_text:
+        await query.edit_message_text(new_text)
+    else:
+        await query.answer()
     
     # Добавляем кнопку отмены
     keyboard = [
@@ -1501,7 +1676,14 @@ async def handle_broadcast_edit_buttons_request(update: Update, context: Context
     state_manager = StateManager(context)
     state_manager.set_admin_state(AdminState.BROADCAST_EDIT_AWAITING_BUTTONS)
     
-    await query.edit_message_text("🔘 Отправьте новую клавиатуру в формате JSON для рассылки (например, [['Кнопка 1', 'Кнопка 2'], ['Кнопка 3']]):")
+    # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
+    current_text = query.message.text if query.message else None
+    new_text = "🔘 Отправьте новую клавиатуру в формате JSON для рассылки (например, [['Кнопка 1', 'Кнопка 2'], ['Кнопка 3']]):"
+    
+    if current_text != new_text:
+        await query.edit_message_text(new_text)
+    else:
+        await query.answer()
     
     # Добавляем кнопку отмены
     keyboard = [
@@ -1532,7 +1714,14 @@ async def handle_broadcast_confirm_send_request(update: Update, context: Context
         [InlineKeyboardButton("❌ Отмена", callback_data=f"scheduled_broadcasts_list")]
     ]
     
-    await query.edit_message_text("⚠️ Вы уверены, что хотите отправить эту рассылку прямо сейчас?", reply_markup=InlineKeyboardMarkup(keyboard))
+    # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
+    current_text = query.message.text if query.message else None
+    new_text = "⚠️ Вы уверены, что хотите отправить эту рассылку прямо сейчас?"
+    
+    if current_text != new_text:
+        await query.edit_message_text(new_text, reply_markup=InlineKeyboardMarkup(keyboard))
+    else:
+        await query.answer()
 
 
 async def handle_broadcast_edit_media(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1835,7 +2024,14 @@ async def handle_broadcast_confirm_now(update: Update, context: ContextTypes.DEF
         broadcast = get_scheduled_broadcast(db, broadcast_id)
         
         if not broadcast:
-            await query.edit_message_text("❌ Рассылка не найдена.")
+            # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
+            current_text = query.message.text if query.message else None
+            new_text = "❌ Рассылка не найдена."
+            
+            if current_text != new_text:
+                await query.edit_message_text(new_text)
+            else:
+                await query.answer()
             return
     
     # Десериализуем содержимое сообщения
@@ -1856,11 +2052,25 @@ async def handle_broadcast_confirm_now(update: Update, context: ContextTypes.DEF
         with get_db() as db:
             mark_broadcast_as_sent(db, broadcast.id)
         
-        await query.edit_message_text("✅ Рассылка успешно отправлена!")
+        # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
+        current_text = query.message.text if query.message else None
+        new_text = "✅ Рассылка успешно отправлена!"
+        
+        if current_text != new_text:
+            await query.edit_message_text(new_text)
+        else:
+            await query.answer()
         
     except Exception as e:
         settings.logger.error(f"Ошибка при немедленной отправке рассылки {broadcast.id}: {e}")
-        await query.edit_message_text(f"❌ Ошибка при отправке рассылки: {e}")
+        # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
+        current_text = query.message.text if query.message else None
+        new_text = f"❌ Ошибка при отправке рассылки: {e}"
+        
+        if current_text != new_text:
+            await query.edit_message_text(new_text)
+        else:
+            await query.answer()
     
     # Добавляем кнопку для возврата к списку
     keyboard = [

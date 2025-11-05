@@ -186,10 +186,17 @@ async def admin_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     if command == "admin_main":
         state_manager.reset_admin_state()
-        await query.edit_message_text(
-            "Добро пожаловать в админ-панель:",
-            reply_markup=get_admin_panel_keyboard(),
-        )
+        # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
+        current_text = query.message.text if query.message else None
+        new_text = "Добро пожаловать в админ-панель:"
+        
+        if current_text != new_text:
+            await query.edit_message_text(
+                new_text,
+                reply_markup=get_admin_panel_keyboard(),
+            )
+        else:
+            await query.answer()
     elif command == "admin_status":
         await show_status(update, context, query=query)
     elif command == "admin_stats":
@@ -198,10 +205,17 @@ async def admin_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
             [InlineKeyboardButton("За все время", callback_data="admin_stats_all")],
             [InlineKeyboardButton("⬅️ Назад в админку", callback_data="admin_main")],
         ]
-        await query.edit_message_text(
-            "Выберите период для просмотра статистики:",
-            reply_markup=InlineKeyboardMarkup(stats_keyboard),
-        )
+        # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
+        current_text = query.message.text if query.message else None
+        new_text = "Выберите период для просмотра статистики:"
+        
+        if current_text != new_text:
+            await query.edit_message_text(
+                new_text,
+                reply_markup=InlineKeyboardMarkup(stats_keyboard),
+            )
+        else:
+            await query.answer()
     elif command in ["admin_stats_today", "admin_stats_all"]:
         await show_stats(update, context, query=query, period=command.split("_")[-1])
     elif command == "admin_broadcast":
@@ -210,23 +224,44 @@ async def admin_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
             [InlineKeyboardButton("🆕 Новая рассылка", callback_data="admin_broadcast_new")],
             [InlineKeyboardButton("📋 Все запланированные рассылки", callback_data="admin_broadcast_scheduled_list")]
         ]
-        await query.edit_message_text(
-            "Выберите действие:",
-            reply_markup=InlineKeyboardMarkup(broadcast_keyboard)
-        )
+        # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
+        current_text = query.message.text if query.message else None
+        new_text = "Выберите действие:"
+        
+        if current_text != new_text:
+            await query.edit_message_text(
+                new_text,
+                reply_markup=InlineKeyboardMarkup(broadcast_keyboard)
+            )
+        else:
+            await query.answer()
     elif command == "admin_broadcast_new":
         state_manager.reset_admin_state()  # Сбросим любое текущее состояние
         state_manager.set_admin_state(AdminState.BROADCAST_AWAITING_MESSAGE)
-        await query.edit_message_text(
-            "Режим создания рассылки. Пришлите следующее сообщение, и я подготовлю его к отправке.",
-        )
+        # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
+        current_text = query.message.text if query.message else None
+        new_text = "Режим создания рассылки. Пришлите следующее сообщение, и я подготовлю его к отправке."
+        
+        if current_text != new_text:
+            await query.edit_message_text(
+                new_text,
+            )
+        else:
+            await query.answer()
     elif command == "admin_broadcast_scheduled_list":
         await handle_scheduled_broadcasts_list(update, context)
     elif command == "admin_users":
         state_manager.set_admin_state(AdminState.USERS_AWAITING_ID)
-        await query.edit_message_text(
-            "Режим управления. Отправьте User ID или @username пользователя для поиска.",
-        )
+        # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
+        current_text = query.message.text if query.message else None
+        new_text = "Режим управления. Отправьте User ID или @username пользователя для поиска."
+        
+        if current_text != new_text:
+            await query.edit_message_text(
+                new_text,
+            )
+        else:
+            await query.answer()
 
 
 @handle_errors
