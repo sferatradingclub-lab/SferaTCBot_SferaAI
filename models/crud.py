@@ -288,10 +288,21 @@ def get_scheduled_broadcast(db: Session, broadcast_id: int):
 
 def get_scheduled_broadcasts_by_admin(db: Session, admin_id: int):
     """Получает все отложенные рассылки для конкретного администратора."""
-    return db.query(ScheduledBroadcast).filter(
+    from config import get_settings
+    settings = get_settings()
+    logger = settings.logger
+    
+    logger.info(f"Поиск запланированных рассылок для администратора {admin_id}")
+    broadcasts = db.query(ScheduledBroadcast).filter(
         ScheduledBroadcast.admin_id == admin_id,
         ScheduledBroadcast.is_sent == False  # noqa: E712
     ).order_by(ScheduledBroadcast.scheduled_datetime).all()
+    
+    logger.info(f"Найдено {len(broadcasts)} запланированных рассылок для администратора {admin_id}")
+    for broadcast in broadcasts:
+        logger.debug(f"  - ID: {broadcast.id}, дата: {broadcast.scheduled_datetime}, текст: {broadcast.message_content[:100]}...")
+    
+    return broadcasts
 
 
 def get_pending_scheduled_broadcasts(db: Session):
