@@ -51,8 +51,6 @@ from .admin.broadcast import (
     handle_broadcast_edit_media,
     handle_broadcast_edit_buttons,
     handle_broadcast_confirm_now,
-    handle_broadcast_delete_all_request,
-    handle_broadcast_delete_all_confirm,
     run_broadcast as broadcast_run_broadcast,
 )
 
@@ -173,12 +171,6 @@ async def admin_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
             return
         elif command.startswith("scheduled_broadcast_delete_confirm_"):
             await handle_broadcast_delete_confirm(update, context)
-            return
-        elif command == "scheduled_broadcast_delete_all_request":
-            await handle_broadcast_delete_all_request(update, context)
-            return
-        elif command == "scheduled_broadcast_delete_all_confirm":
-            await handle_broadcast_delete_all_confirm(update, context)
             return
         elif command.startswith("scheduled_broadcast_confirm_send_"):
             await handle_broadcast_confirm_send_request(update, context)

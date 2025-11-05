@@ -373,8 +373,6 @@ __all__ = [
     "handle_broadcast_edit_media",
     "handle_broadcast_edit_buttons",
     "handle_broadcast_confirm_now",
-    "handle_broadcast_delete_all_request",
-    "handle_broadcast_delete_all_confirm",
     "run_broadcast",
 ]
 
@@ -1002,8 +1000,7 @@ async def handle_scheduled_broadcasts_list(update: Update, context: ContextTypes
         callback_data = f"scheduled_broadcast_view_{broadcast.id}"
         keyboard.append([InlineKeyboardButton(button_text, callback_data=callback_data)])
     
-    # Добавляем кнопку удалить все и кнопку назад
-    keyboard.append([InlineKeyboardButton("🗑️ Удалить все рассылки", callback_data="scheduled_broadcast_delete_all_request")])
+    # Добавляем кнопку назад
     keyboard.append([InlineKeyboardButton("⬅️ Назад в админку", callback_data="admin_main")])
     
     try:
