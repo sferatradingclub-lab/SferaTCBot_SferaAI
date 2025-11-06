@@ -260,10 +260,20 @@ def count_active_users_since(db: Session, since_datetime: datetime) -> int:
 
 def create_scheduled_broadcast(db: Session, admin_id: int, message_content: str, scheduled_datetime: datetime):
     """Создает новую отложенную рассылку."""
+    # Импортируем pytz для работы с часовыми поясами
+    import pytz
+    
+    # Локализуем "наивное" время в часовом поясе 'Europe/Berlin'
+    admin_tz = pytz.timezone('Europe/Berlin')
+    aware_local_time = admin_tz.localize(scheduled_datetime)
+    
+    # Конвертируем в UTC
+    utc_schedule_time = aware_local_time.astimezone(pytz.utc)
+    
     scheduled_broadcast = ScheduledBroadcast(
         admin_id=admin_id,
         message_content=message_content,
-        scheduled_datetime=scheduled_datetime
+        scheduled_datetime=utc_schedule_time
     )
     db.add(scheduled_broadcast)
     db.commit()
