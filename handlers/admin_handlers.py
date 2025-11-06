@@ -12,6 +12,7 @@ except ImportError:
     from backports.zoneinfo import ZoneInfo  # для старых версий Python
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 
 from config import get_settings
@@ -224,17 +225,22 @@ async def admin_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
             [InlineKeyboardButton("🆕 Новая рассылка", callback_data="admin_broadcast_new")],
             [InlineKeyboardButton("📋 Все запланированные рассылки", callback_data="admin_broadcast_scheduled_list")]
         ]
+        broadcast_markup = InlineKeyboardMarkup(broadcast_keyboard)
         # Сравниваем текущий текст сообщения с новым, чтобы избежать ошибки "Message is not modified"
         current_text = query.message.text if query.message else None
         new_text = "Выберите действие:"
-        
+
         if current_text != new_text:
             await query.edit_message_text(
                 new_text,
-                reply_markup=InlineKeyboardMarkup(broadcast_keyboard)
+                reply_markup=broadcast_markup
             )
         else:
-            await query.answer()
+            try:
+                await query.edit_message_reply_markup(reply_markup=broadcast_markup)
+            except BadRequest as exc:
+                if "message is not modified" not in str(exc).lower():
+                    raise
     elif command == "admin_broadcast_new":
         state_manager.reset_admin_state()  # Сбросим любое текущее состояние
         state_manager.set_admin_state(AdminState.BROADCAST_AWAITING_MESSAGE)
