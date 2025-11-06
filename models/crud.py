@@ -1,5 +1,5 @@
 # models/crud.py
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from typing import Iterator, Optional
 
 import logging
@@ -258,18 +258,31 @@ def count_active_users_since(db: Session, since_datetime: datetime) -> int:
 
 # CRUD-операции для отложенных рассылок
 
+def _ensure_utc(dt: datetime) -> datetime:
+    """Преобразует переданную дату и время в UTC."""
+
+    if dt.tzinfo is None:
+        local_timezone = settings.timezone
+        localized_dt = dt.replace(tzinfo=local_timezone)
+    else:
+        localized_dt = dt
+
+    return localized_dt.astimezone(timezone.utc)
+
+
+def _apply_local_timezone(broadcast: Optional[ScheduledBroadcast]) -> Optional[ScheduledBroadcast]:
+    """Применяет локальный часовой пояс к дате отправки рассылки."""
+
+    if broadcast and broadcast.scheduled_datetime is not None:
+        broadcast.scheduled_datetime = settings.to_local_time(broadcast.scheduled_datetime)
+    return broadcast
+
+
 def create_scheduled_broadcast(db: Session, admin_id: int, message_content: str, scheduled_datetime: datetime):
     """Создает новую отложенную рассылку."""
-    # Импортируем pytz для работы с часовыми поясами
-    import pytz
-    
-    # Локализуем "наивное" время в часовом поясе 'Europe/Berlin'
-    admin_tz = pytz.timezone('Europe/Berlin')
-    aware_local_time = admin_tz.localize(scheduled_datetime)
-    
-    # Конвертируем в UTC
-    utc_schedule_time = aware_local_time.astimezone(pytz.utc)
-    
+
+    utc_schedule_time = _ensure_utc(scheduled_datetime)
+
     scheduled_broadcast = ScheduledBroadcast(
         admin_id=admin_id,
         message_content=message_content,
@@ -289,6 +302,7 @@ def get_scheduled_broadcast(db: Session, broadcast_id: int):
     
     logger.info(f"Поиск рассылки с ID: {broadcast_id}")
     broadcast = db.query(ScheduledBroadcast).filter(ScheduledBroadcast.id == broadcast_id).first()
+    broadcast = _apply_local_timezone(broadcast)
     if broadcast:
         logger.info(f"Найдена рассылка: ID {broadcast.id}, дата {broadcast.scheduled_datetime}, admin_id {broadcast.admin_id}")
     else:
@@ -307,7 +321,9 @@ def get_scheduled_broadcasts_by_admin(db: Session, admin_id: int):
         ScheduledBroadcast.admin_id == admin_id,
         ScheduledBroadcast.is_sent == False  # noqa: E712
     ).order_by(ScheduledBroadcast.scheduled_datetime).all()
-    
+
+    broadcasts = [_apply_local_timezone(broadcast) for broadcast in broadcasts]
+
     logger.info(f"Найдено {len(broadcasts)} запланированных рассылок для администратора {admin_id}")
     for broadcast in broadcasts:
         logger.debug(f"  - ID: {broadcast.id}, дата: {broadcast.scheduled_datetime}, текст: {broadcast.message_content[:100]}...")
@@ -317,11 +333,10 @@ def get_scheduled_broadcasts_by_admin(db: Session, admin_id: int):
 
 def get_pending_scheduled_broadcasts(db: Session):
     """Получает все неотправленные отложенные рассылки."""
-    import pytz
-    from datetime import datetime
+
     return db.query(ScheduledBroadcast).filter(
         ScheduledBroadcast.is_sent == False,  # noqa: E712
-        ScheduledBroadcast.scheduled_datetime <= datetime.now(pytz.utc)
+        ScheduledBroadcast.scheduled_datetime <= datetime.now(timezone.utc)
     ).order_by(ScheduledBroadcast.scheduled_datetime).all()
 
 
@@ -329,21 +344,7 @@ def update_scheduled_broadcast(db: Session, broadcast_id: int, **kwargs):
     """Обновляет данные отложенной рассылки."""
     # Проверяем, есть ли в kwargs ключ scheduled_datetime
     if 'scheduled_datetime' in kwargs:
-        # Импортируем pytz для работы с часовыми поясами
-        import pytz
-        
-        # Получаем наивное время из kwargs
-        naive_schedule_time = kwargs['scheduled_datetime']
-        
-        # Локализуем "наивное" время в часовом поясе 'Europe/Berlin'
-        admin_tz = pytz.timezone('Europe/Berlin')
-        aware_local_time = admin_tz.localize(naive_schedule_time)
-        
-        # Конвертируем в UTC
-        utc_schedule_time = aware_local_time.astimezone(pytz.utc)
-        
-        # Обновляем значение в kwargs
-        kwargs['scheduled_datetime'] = utc_schedule_time
+        kwargs['scheduled_datetime'] = _ensure_utc(kwargs['scheduled_datetime'])
     
     updated_rows = db.query(ScheduledBroadcast).filter(ScheduledBroadcast.id == broadcast_id).update(kwargs)
     db.commit()
@@ -354,7 +355,7 @@ def mark_broadcast_as_sent(db: Session, broadcast_id: int):
     """Отмечает рассылку как отправленную."""
     updated_rows = db.query(ScheduledBroadcast).filter(ScheduledBroadcast.id == broadcast_id).update({
         ScheduledBroadcast.is_sent: True,
-        ScheduledBroadcast.sent_at: datetime.now()
+        ScheduledBroadcast.sent_at: datetime.now(timezone.utc)
     })
     db.commit()
     return bool(updated_rows)
