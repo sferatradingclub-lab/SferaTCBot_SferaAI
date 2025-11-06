@@ -317,15 +317,34 @@ def get_scheduled_broadcasts_by_admin(db: Session, admin_id: int):
 
 def get_pending_scheduled_broadcasts(db: Session):
     """Получает все неотправленные отложенные рассылки."""
+    import pytz
     from datetime import datetime
     return db.query(ScheduledBroadcast).filter(
         ScheduledBroadcast.is_sent == False,  # noqa: E712
-        ScheduledBroadcast.scheduled_datetime <= datetime.now()
+        ScheduledBroadcast.scheduled_datetime <= datetime.now(pytz.utc)
     ).order_by(ScheduledBroadcast.scheduled_datetime).all()
 
 
 def update_scheduled_broadcast(db: Session, broadcast_id: int, **kwargs):
     """Обновляет данные отложенной рассылки."""
+    # Проверяем, есть ли в kwargs ключ scheduled_datetime
+    if 'scheduled_datetime' in kwargs:
+        # Импортируем pytz для работы с часовыми поясами
+        import pytz
+        
+        # Получаем наивное время из kwargs
+        naive_schedule_time = kwargs['scheduled_datetime']
+        
+        # Локализуем "наивное" время в часовом поясе 'Europe/Berlin'
+        admin_tz = pytz.timezone('Europe/Berlin')
+        aware_local_time = admin_tz.localize(naive_schedule_time)
+        
+        # Конвертируем в UTC
+        utc_schedule_time = aware_local_time.astimezone(pytz.utc)
+        
+        # Обновляем значение в kwargs
+        kwargs['scheduled_datetime'] = utc_schedule_time
+    
     updated_rows = db.query(ScheduledBroadcast).filter(ScheduledBroadcast.id == broadcast_id).update(kwargs)
     db.commit()
     return bool(updated_rows)
