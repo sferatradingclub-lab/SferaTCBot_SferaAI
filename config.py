@@ -4,8 +4,10 @@ import logging
 import os
 import re
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from functools import lru_cache
 from typing import ClassVar, Dict, List, Optional
+from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
 
@@ -91,7 +93,7 @@ class Settings:
     CHATGPT_IMAGE_URL: Optional[str] = field(init=False)
     SUPPORT_IMAGE_URL: Optional[str] = field(init=False)
     TOOLS_IMAGE_URL: Optional[str] = field(init=False)
-    
+
     # URL для видео
     WELCOME_VIDEO_URL: Optional[str] = field(init=False)
     TRAINING_VIDEO_URL: Optional[str] = field(init=False)
@@ -108,6 +110,9 @@ class Settings:
 
     TOOLS_DATA: Dict[str, Dict[str, object]] = field(init=False)
 
+    TIMEZONE_NAME: str = field(init=False)
+    timezone: ZoneInfo = field(init=False)
+
     def __post_init__(self) -> None:
         self.LOG_TO_FILE = self._env_flag("LOG_TO_FILE", default=False)
         self.LOG_FILE_PATH = os.getenv("LOG_FILE_PATH", "bot.log")
@@ -116,6 +121,7 @@ class Settings:
         # Улучшенная валидация без внешних зависимостей
         self._validate_core_settings()
         self._load_core_settings()
+        self._load_timezone_settings()
         self._load_webhook_settings()
         self._load_database_settings()
         self._load_chatgpt_settings()
@@ -125,6 +131,27 @@ class Settings:
         self._load_streaming_settings()
         self._load_cache_settings()
         self._emit_warnings()
+
+    def _load_timezone_settings(self) -> None:
+        timezone_name = os.getenv("BOT_TIMEZONE", "Europe/Minsk")
+        try:
+            self.timezone = ZoneInfo(timezone_name)
+            self.TIMEZONE_NAME = timezone_name
+        except Exception:
+            fallback = "UTC"
+            self.logger.warning(
+                "Некорректный часовой пояс '%s'. Используется UTC в качестве значения по умолчанию.",
+                timezone_name,
+            )
+            self.timezone = ZoneInfo(fallback)
+            self.TIMEZONE_NAME = fallback
+
+    def to_local_time(self, value: datetime) -> datetime:
+        """Преобразует переданное время в локальный часовой пояс бота."""
+
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.astimezone(self.timezone)
 
     def _validate_core_settings(self) -> None:
         """Валидация критически важных настроек без внешних библиотек."""
