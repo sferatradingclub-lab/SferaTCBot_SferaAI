@@ -1,6 +1,6 @@
 import asyncio
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any
 
 from telegram import Bot
@@ -481,11 +481,12 @@ class BroadcastSchedulerService:
         # Отправляем уведомление администратору
         try:
             notifier = Notifier(self.bot)
+            sent_time_local = settings.to_local_time(datetime.now(timezone.utc))
             report_text = (
                 f"✅ Отложена рассылка отправлена!\n\n"
                 f"• Успешно: {success_count}\n"
                 f"• Ошибки: {error_count}\n"
-                f"• Время отправки: {scheduled_broadcast.scheduled_datetime}"
+                f"• Время отправки: {sent_time_local.strftime('%Y-%m-%d %H:%M:%S')}"
             )
             await notifier.send_admin_notification(report_text)
         except Exception as e:
