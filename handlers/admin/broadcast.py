@@ -981,7 +981,8 @@ async def handle_scheduled_broadcasts_list(update: Update, context: ContextTypes
     keyboard = []
     for broadcast in scheduled_broadcasts:
         # Получаем дату и превью сообщения
-        broadcast_date = broadcast.scheduled_datetime.strftime('%d.%m.%Y %H:%M')
+        local_datetime = settings.to_local_time(broadcast.scheduled_datetime)
+        broadcast_date = local_datetime.strftime('%d.%m.%Y %H:%M')
         message_content = json.loads(broadcast.message_content)
         new_text = message_content.get("new_text")
         
@@ -1189,7 +1190,8 @@ async def handle_scheduled_broadcast_view(update: Update, context: ContextTypes.
         )
     
     # Теперь отправляем сообщение с датой и временем рассылки и кнопками управления
-    broadcast_date = broadcast.scheduled_datetime.strftime('%d.%m.%Y %H:%M')
+    local_datetime = settings.to_local_time(broadcast.scheduled_datetime)
+    broadcast_date = local_datetime.strftime('%d.%m.%Y %H:%M')
     time_info_text = f"📅 Дата и время рассылки: {broadcast_date}"
     
     # Кнопки для управления рассылкой
