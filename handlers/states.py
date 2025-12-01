@@ -5,14 +5,8 @@ class UserState(Enum):
     """Перечень состояний конечного автомата пользователя."""
 
     DEFAULT = auto()
-
-    CHATGPT_ACTIVE = auto()
-    CHATGPT_STREAMING = auto()
-
     SUPPORT_LLM_ACTIVE = auto()
     AWAITING_SUPPORT_MESSAGE = auto()
-
-    AWAITING_VERIFICATION_ID = auto()
 
 
 class AdminState(Enum):

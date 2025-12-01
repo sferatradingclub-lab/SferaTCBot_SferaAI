@@ -33,10 +33,9 @@ from handlers.common_handlers import (
     start,
     help_command,
     handle_message,
-    show_training_menu,
-    show_psychologist_menu,
 )
-from handlers.user.chatgpt_handler import show_chatgpt_menu, stop_chatgpt_session
+
+from handlers.sfera_handlers import show_sfera_ai
 from handlers.user.support_handler import show_support_menu, escalate_support_to_admin
 from services.notifier import Notifier
 from services.broadcast_scheduler import BroadcastSchedulerService
@@ -54,11 +53,7 @@ from handlers.tools_handlers import (
     show_tools_menu,
     tools_menu_handler,
 )
-from handlers.verification_handlers import (
-    user_actions_handler,
-    support_rejection_handler,
-    support_dm_handler,
-)
+
 
 settings = get_settings()
 logger = settings.logger
@@ -188,12 +183,9 @@ def main() -> Application:
     # Команды
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(CommandHandler("training", show_training_menu))
-    application.add_handler(CommandHandler("psychologist", show_psychologist_menu))
+    application.add_handler(CommandHandler("sfera", show_sfera_ai))
     application.add_handler(CommandHandler("tools", show_tools_menu))
-    application.add_handler(CommandHandler("chatgpt", show_chatgpt_menu))
     application.add_handler(CommandHandler("support", show_support_menu))
-    application.add_handler(CommandHandler("stop_chat", stop_chatgpt_session))
 
     # Команды только для админа
     application.add_handler(CommandHandler("admin", show_admin_panel))
@@ -208,34 +200,13 @@ def main() -> Application:
     application.add_handler(CallbackQueryHandler(admin_menu_handler, pattern='^calendar_'))  # Для календарных команд
     application.add_handler(CallbackQueryHandler(admin_menu_handler, pattern='^scheduled_broadcast'))  # Для команд запланированной рассылки
     application.add_handler(CallbackQueryHandler(tools_menu_handler, pattern='^tool'))
-    application.add_handler(CallbackQueryHandler(user_actions_handler, pattern='^user_'))
-    application.add_handler(CallbackQueryHandler(support_rejection_handler, pattern='^support_from_rejection$'))
-    application.add_handler(CallbackQueryHandler(support_dm_handler, pattern='^support_from_dm$'))
     application.add_handler(CallbackQueryHandler(escalate_support_to_admin, pattern=rf'^{settings.SUPPORT_ESCALATION_CALLBACK}$'))
 
     # Кнопки главного меню (MessageHandler)
     application.add_handler(
         MessageHandler(
-            filters.TEXT & filters.Regex("^Пройти бесплатное обучение$"),
-            show_training_menu,
-        )
-    )
-    application.add_handler(
-        MessageHandler(
-            filters.TEXT & filters.Regex("^ИИ-психолог$"),
-            show_psychologist_menu,
-        )
-    )
-    application.add_handler(
-        MessageHandler(
             filters.TEXT & filters.Regex("^Полезные инструменты$"),
             show_tools_menu,
-        )
-    )
-    application.add_handler(
-        MessageHandler(
-            filters.TEXT & filters.Regex("^Бесплатный ChatGPT$"),
-            show_chatgpt_menu,
         )
     )
     application.add_handler(

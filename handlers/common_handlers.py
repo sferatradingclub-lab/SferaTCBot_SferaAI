@@ -11,8 +11,6 @@ from config import get_safe_url, get_settings, send_video_or_photo_fallback, get
 from keyboards import (
     get_channel_keyboard,
     get_main_menu_keyboard,
-    get_psychologist_keyboard,
-    get_training_keyboard,
 )
 from models.user import User
 from services.notifier import Notifier
@@ -22,11 +20,6 @@ from .admin_handlers import handle_admin_message
 from .decorators import user_bootstrap
 from .error_handler import handle_errors
 from .states import AdminState, UserState
-from .verification_handlers import (
-    handle_id_submission,
-    start_verification_process,
-)
-from .user.chatgpt_handler import handle_chatgpt_message, handle_streaming_state
 from .user.support_handler import handle_manual_support_message, handle_support_llm_message
 
 settings = get_settings()
@@ -45,12 +38,6 @@ async def start(
 ) -> None:
     user = update.effective_user
     state_manager = StateManager(context)
-
-    payload = " ".join(context.args)
-    if payload == "trial_completed":
-        state_manager.set_user_state(UserState.AWAITING_VERIFICATION_ID)
-        await start_verification_process(update, context)
-        return
 
     if user is None or update.message is None:
         return
@@ -73,64 +60,6 @@ async def start(
     await update.message.reply_text(
         FRIENDLY_MAIN_MENU_REMINDER,
         reply_markup=get_main_menu_keyboard(user.id),
-    )
-
-
-@handle_errors
-@user_bootstrap
-async def show_training_menu(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
-    db_user: Optional[User],
-    is_new_user: bool,
-) -> None:
-    is_approved = bool(db_user.is_approved) if db_user else False
-
-    if update.message is None:
-        return
-
-    caption = "Наше бесплатное обучение проходит в специальном чат-боте на платформе ChatGPT."
-    text = "Ты уже получил доступ к полному курсу!"
-
-    if is_approved:
-        await update.message.reply_text(
-            text,
-            reply_markup=get_training_keyboard(is_approved),
-        )
-    else:
-        # Используем отдельные переменные для видео и изображения
-        training_video_url, training_photo_url = get_video_or_photo_urls(settings, "TRAINING")
-        
-        await send_video_or_photo_fallback(
-            message=update.message,
-            video_url=training_video_url,
-            photo_url=training_photo_url,
-            caption=caption,
-            reply_markup=get_training_keyboard(is_approved)
-        )
-
-
-@handle_errors
-@user_bootstrap
-async def show_psychologist_menu(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
-    db_user: Optional[User],
-    is_new_user: bool,
-) -> None:
-    if update.message is None:
-        return
-
-    caption = "Наш ИИ-психолог поможет справиться со стрессом в трейдинге."
-    # Используем отдельные переменные для видео и изображения
-    psychologist_video_url, psychologist_photo_url = get_video_or_photo_urls(settings, "PSYCHOLOGIST")
-    
-    await send_video_or_photo_fallback(
-        message=update.message,
-        video_url=psychologist_video_url,
-        photo_url=psychologist_photo_url,
-        caption=caption,
-        reply_markup=get_psychologist_keyboard()
     )
 
 
@@ -190,14 +119,6 @@ async def handle_message(
 
     state = state_manager.get_user_state()
 
-    if state is UserState.CHATGPT_STREAMING:
-        await handle_streaming_state(update, context)
-        return
-
-    if state is UserState.CHATGPT_ACTIVE:
-        await handle_chatgpt_message(update, context)
-        return
-
     if state is UserState.SUPPORT_LLM_ACTIVE:
         await handle_support_llm_message(update, context)
         return
@@ -206,21 +127,11 @@ async def handle_message(
         await handle_manual_support_message(update, context)
         return
 
-    if state is UserState.AWAITING_VERIFICATION_ID:
-        await handle_id_submission(update, context)
-        return
-
-    if db_user and db_user.awaiting_verification:
-        await handle_id_submission(update, context)
-        return
-
     await _send_main_menu_reminder(update, context, user.id if user else None)
 
 
 __all__ = [
     "start",
-    "show_training_menu",
-    "show_psychologist_menu",
     "help_command",
     "handle_message",
 ]

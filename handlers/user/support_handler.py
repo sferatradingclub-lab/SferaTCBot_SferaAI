@@ -5,9 +5,10 @@ from __future__ import annotations
 
 from typing import Awaitable, Callable
 
-from telegram import Update
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.error import TelegramError
 from telegram.ext import ContextTypes
+from telegram.helpers import escape_markdown
 
 from config import get_safe_url, get_settings, send_video_or_photo_fallback, get_video_or_photo_urls
 from keyboards import (
@@ -16,10 +17,10 @@ from keyboards import (
 )
 from services.chatgpt_service import get_chatgpt_response
 from services.state_manager import StateManager
+from services.notifier import Notifier
 from handlers.decorators import user_bootstrap
 from handlers.error_handler import handle_errors
 from handlers.states import UserState
-from handlers.verification_handlers import handle_support_message
 
 settings = get_settings()
 logger = settings.logger
@@ -168,6 +169,7 @@ async def handle_manual_support_message(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
 ) -> None:
+    """Handle messages from user in manual support mode - forward to admin."""
     message = update.message
     if message is None:
         return
@@ -181,7 +183,45 @@ async def handle_manual_support_message(
         )
         return
 
-    await handle_support_message(update, context)
+    # Forward message to admin
+    user = update.effective_user
+    
+    should_send_thank_you = not context.user_data.get('support_thank_you_sent')
+    if should_send_thank_you:
+        await update.message.reply_text("Спасибо, ваше сообщение отправлено в поддержку. Мы скоро ответим.")
+        context.user_data['support_thank_you_sent'] = True
+
+    try:
+        copied_message = await context.bot.copy_message(
+            chat_id=settings.ADMIN_CHAT_ID, 
+            from_chat_id=user.id, 
+            message_id=update.message.message_id
+        )
+
+        user_fullname = escape_markdown(user.full_name or "Имя не указано", version=2)
+        user_username = f"@{escape_markdown(user.username, version=2)}" if user.username else "Нет"
+        
+        admin_info_text = (
+            f"❗️ Новый вопрос от *{user_fullname}* \\\\({user_username}\\\\)\\\\.\\n"
+            f"User ID: `{user.id}`"
+        )
+        admin_keyboard = [
+            [InlineKeyboardButton("💬 Ответить", callback_data=f'user_reply_{user.id}_{update.message.message_id}')]
+        ]
+
+        notifier = Notifier(context.bot)
+        await notifier.send_admin_notification(
+            admin_info_text,
+            reply_to_message_id=copied_message.message_id,
+            reply_markup=InlineKeyboardMarkup(admin_keyboard),
+            parse_mode='MarkdownV2'
+        )
+    except TelegramError as e:
+        logger.error(f"Не удалось отправить сообщение поддержки админу: {e.message}")
+        raise
+    finally:
+        # Keep user in manual support mode
+        StateManager(context).set_user_state(UserState.AWAITING_SUPPORT_MESSAGE)
 
 
 __all__ = [
