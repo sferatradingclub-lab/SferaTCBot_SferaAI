@@ -30,7 +30,6 @@ class StateManager:
         enum_cls=UserState,
         default=UserState.DEFAULT,
         legacy_map={
-            "chatgpt_active": UserState.CHATGPT_ACTIVE,
             "support_llm_active": UserState.SUPPORT_LLM_ACTIVE,
             "awaiting_support_message": UserState.AWAITING_SUPPORT_MESSAGE,
         },

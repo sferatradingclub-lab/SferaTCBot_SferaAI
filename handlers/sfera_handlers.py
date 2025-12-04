@@ -23,7 +23,7 @@ async def show_sfera_ai(
     if update.message is None:
         return
     
-    mini_app_url = settings.WEBHOOK_URL or "http://localhost:8000"
+    mini_app_url = f"{settings.WEBHOOK_URL}/mini-app/?v=2" if settings.WEBHOOK_URL else "http://localhost:8000/mini-app/"
     
     keyboard = [[
         InlineKeyboardButton(
