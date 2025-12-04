@@ -50,4 +50,10 @@ Thumbs.db
 SferaAI_2/frontend/node_modules/
 SferaAI_2/frontend/.next/
 SferaAI_2/frontend/out/
+SferaAI_2/venv/sferatc_env/
+*.db
 SferaAI_2/venv/
+SferaAI_2/frontend/node_modules/
+SferaAI_2/frontend/.next/
+SferaAI_2/frontend/out/
+.env
