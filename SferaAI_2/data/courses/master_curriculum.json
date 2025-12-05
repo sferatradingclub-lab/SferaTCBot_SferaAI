@@ -1,0 +1,27 @@
+{
+    "courses": [
+        {
+            "id": "scalping_course_v1",
+            "title": "Основы Скальпинга",
+            "description": "Базовый курс по скальпингу: от понимания рынка до первой сделки.",
+            "modules": [
+                {
+                    "id": "module_1_basics",
+                    "title": "Введение и Психология",
+                    "lessons": [
+                        {
+                            "id": "lesson_1_scalping_essence",
+                            "title": "Суть Скальпинга и Системный Подход",
+                            "file_path": "data/courses/lessons/lesson_1_scalping_basics.md",
+                            "tags": [
+                                "basics",
+                                "psychology"
+                            ],
+                            "difficulty": 1
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

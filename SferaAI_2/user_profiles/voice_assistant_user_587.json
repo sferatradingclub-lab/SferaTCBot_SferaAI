@@ -1,0 +1,17 @@
+{
+  "user_id": "voice_assistant_user_587",
+  "created_at": "2025-11-28T13:35:44.109395",
+  "updated_at": "2025-11-28T13:38:03.386771",
+  "basic_info": {
+    "name": "Unknown",
+    "role": "Trader",
+    "language": "Russian"
+  },
+  "bio": "No biography yet.",
+  "health": [],
+  "plans": [
+    "Поездка в Дубай в декабре (28.11.2025)"
+  ],
+  "preferences": [],
+  "topics": []
+}
