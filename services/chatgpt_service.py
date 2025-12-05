@@ -299,16 +299,7 @@ async def get_chatgpt_response(
     history: Sequence[Dict[str, Any]],
     application: Optional[Application],
 ) -> AsyncGenerator[str, None]:
-    client = OpenRouterClient(application)
-    async for chunk in client.stream_chat_completion(history):
-        yield chunk
-
-
-
-async def get_chatgpt_response(
-    history: Sequence[Dict[str, Any]],
-    application: Optional[Application],
-) -> AsyncGenerator[str, None]:
+    """Stream ChatGPT response from OpenRouter API."""
     client = OpenRouterClient(application)
     async for chunk in client.stream_chat_completion(history):
         yield chunk

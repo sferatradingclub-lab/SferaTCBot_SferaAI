@@ -1,62 +1,73 @@
-# Журнал изменений
+# Changelog
 
-Все заметные изменения в проекте будут документироваться в этом файле.
+## [3.1.0] - 2025-12-05
 
-Формат версий: `ГОД.МЕСЯЦ.ДЕНЬ`
+### 🐛 Bug Fixes
 
-## [2025.10.21] - Текущая версия
+#### Critical Bugs Fixed
+1. **agent.py:71** - Fixed `UnboundLocalError` where `unified_state` was used before initialization
+   - Moved `unified_state = get_unified_instance()` before `get_user_name()` call
+   - Also moved `memory_client` initialization to same location for consistency
 
-### Добавлено
-- **Полная документация проекта** - обновлены все файлы документации
-- **Архитектурная документация** - детальное описание системы
-- **API документация** - полное описание всех эндпоинтов и команд
-- **Руководство по установке** - пошаговое руководство для развертывания
-- **Документация для разработчиков** - стандарты разработки и лучшие практики
+2. **chatgpt_service.py** - Removed duplicate `get_chatgpt_response` function definition
+   - Deleted lines 308-314 (duplicate function)
+   - Added docstring to remaining function
 
-### Изменено
-- **README.md** - полностью переписан с учетом реальной структуры проекта
-- **Структура документации** - добавлена папка `docs/` с дополнительными файлами
-- **Описание архитектуры** - обновлено в соответствии с текущей реализацией
+3. **session-view.tsx** - Restored `VideoTrack` component for camera display
+   - Added `VideoTrack` to imports from `@livekit/components-react`
+   - Uncommented VideoTrack component (was commented due to "import error")
 
-### Улучшено
-- **Анализ проекта** - проведен полный анализ всех компонентов
-- **Документирование API** - добавлены примеры использования
-- **Руководства** - детальные инструкции по установке и разработке
+### 📚 Documentation
 
-## [Предыдущие версии]
+#### Complete Documentation Overhaul
+- **README.md** - Completely rewritten based on actual codebase
+  - Removed mentions of deleted features (training, psychologist, ChatGPT buttons)
+  - Added accurate description of existing functionality
+  - Updated technology stack
+  - Added proper setup instructions
+  - Added systemd service examples
+  - Added troubleshooting section for fixed bugs
 
-*Информация о предыдущих версиях будет добавлена при обновлении проекта*
+#### New Documentation Files
+- **complete_code_analysis.md** - Detailed code analysis artifact
+  - ~30,000+ lines of code analyzed
+  - Factual structure breakdown
+  - Actual vs documented features comparison
+  - Critical bugs identified (now fixed)
+  - Prioritized recommendations
+
+### 🔍 Known Issues (Non-Critical)
+
+1. **Empty Tool Categories** - "Скринеры", "Терминалы", "Снизить ping" показывают "скоро наполним"
+   - Not a bug, but planned features
+
+2. **search_internet vs search_web** - Some duplication in agent.py vs tools.py
+   - Both work correctly, but could be refactored for consistency
+
+### 📊 Statistics
+
+- **Files Modified**: 4
+  - `SferaAI_2/agent.py`
+  - `services/chatgpt_service.py`
+  - `SferaAI_2/frontend/components/app/session-view.tsx`
+  - `README.md`
+
+- **Bugs Fixed**: 3 critical
+
+## [3.0.0] - Previous
+
+Initial integration of Sfera AI into Telegram Bot
+Multi-persona system  
+Hybrid Knowledge Base
+Memory system implementation
+Frontend (Next.js 15) integration
 
 ---
 
-### Типы изменений
-
-- `Добавлено` - новые функции
-- `Изменено` - изменения в существующих функциях
-- `Устарело` - функции, которые будут удалены в следующих версиях
-- `Удалено` - удаленные функции
-- `Исправлено` - исправления ошибок
-- `Безопасность` - изменения, связанные с безопасностью
-
-### Как создавать записи в журнале изменений
-
-Каждая запись должна включать:
-1. Дату в формате `ГОД.МЕСЯЦ.ДЕНЬ`
-2. Краткое описание версии
-3. Разделы с типами изменений
-4. Подробное описание каждого изменения
-
-Пример:
-```
-## [2025.10.20] - Название версии
-
-### Добавлено
-- Новая функция для обработки сообщений
-
-### Исправлено
-- Исправлена ошибка в обработчике команд
-```
-
----
-
-*Последнее обновление:* Октябрь 2025
+**Legend:**
+- 🐛 Bug Fixes
+- ✨ New Features
+- 📚 Documentation
+- 🔧 Configuration
+- ⚡ Performance
+- 🔒 Security
