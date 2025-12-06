@@ -235,6 +235,9 @@ async def initiate_cryptobot_payment(update: Update, context: ContextTypes.DEFAU
         
         logger.info(f"CryptoBot invoice created for user {user_id}: ${final_price} {PRO_CURRENCY}, invoice_id={invoice_data['invoice_id']}")
         
+        # Return CONFIRMING_PAYMENT state to keep conversation active
+        return CONFIRMING_PAYMENT
+        
     except Exception as e:
         logger.error(f"Failed to create CryptoBot invoice for user {user_id}: {e}")
         error_text = (
@@ -245,8 +248,8 @@ async def initiate_cryptobot_payment(update: Update, context: ContextTypes.DEFAU
             await update.message.reply_text(error_text)
         else:
             await update.effective_message.reply_text(error_text)
-    
-    return ConversationHandler.END
+        
+        return ConversationHandler.END
 
 
 async def  cancel_payment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -286,6 +289,9 @@ payment_conversation = ConversationHandler(
             CallbackQueryHandler(skip_promo_code, pattern="^no_promo$"),
             MessageHandler(filters.TEXT & ~filters.COMMAND, process_promo_code),
             CommandHandler("skip_promo", skip_promo_code),
+        ],
+        CONFIRMING_PAYMENT: [
+            CallbackQueryHandler(cancel_payment, pattern="^cancel_payment$"),
         ],
     },
     fallbacks=[
