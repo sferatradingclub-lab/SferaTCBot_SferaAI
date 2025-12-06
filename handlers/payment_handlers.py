@@ -11,7 +11,7 @@ from telegram.ext import (
     filters,
 )
 
-from handlers.decorators import user_bootstrap, handle_errors
+from handlers.decorators import user_bootstrap
 from db_session import get_db
 from models.subscription_crud import create_payment
 from models.payment import PaymentMethod, PaymentStatus
@@ -29,7 +29,7 @@ PRO_PRICE = 24.99
 PRO_CURRENCY = "USDT"
 
 
-@handle_errors
+
 @user_bootstrap
 async def show_payment_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, db_user, is_new_user) -> int:
     """Main payment menu - choose what to pay for."""
