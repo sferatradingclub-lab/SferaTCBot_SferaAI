@@ -66,12 +66,20 @@ class Settings:
         """Возвращает API ключ OpenRouter."""
         return self._OPENROUTER_API_KEY
 
+    _CRYPTOBOT_API_TOKEN: Optional[str] = field(init=False, repr=False)
+    
+    @property
+    def CRYPTOBOT_API_TOKEN(self) -> Optional[str]:
+        """Возвращает API токен CryptoBot для платежей."""
+        return self._CRYPTOBOT_API_TOKEN
+
     STREAM_EDIT_INTERVAL_SECONDS: float = field(init=False)
     STREAM_BUFFER_SIZE_WORDS: int = field(init=False)
     
     # Параметры кеширования
     CACHE_TTL_MINUTES: int = field(init=False)
     MAX_CACHE_SIZE: int = field(init=False)
+
 
     TRAINING_BOT_URL: str = field(
         default="https://chatgpt.com/g/g-68d9b0f1d07c8191bba533ecfb9d1689-sferatc-lessons",
@@ -269,6 +277,7 @@ class Settings:
         self.CHATGPT_MODELS = free_models
         self.DISCARDED_PAID_MODELS = discarded
         self._OPENROUTER_API_KEY = self._read_optional("OPENROUTER_API_KEY")
+        self._CRYPTOBOT_API_TOKEN = self._read_optional("CRYPTOBOT_API_TOKEN")
 
     def _load_image_urls(self) -> None:
         """Загрузка URL изображений и видео с валидацией."""
