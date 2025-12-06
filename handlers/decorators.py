@@ -47,6 +47,15 @@ def user_bootstrap(func: HandlerFunc) -> HandlerFunc:
             logger.error(f"get_or_create_user вернул None для пользователя {user.id}")
             handler_kwargs = {**kwargs, "db_user": None, "is_new_user": False}
             return await func(update, context, *args, **handler_kwargs)
+        
+        # NEW: Create free subscription for new users
+        if is_new_user:
+            from models.subscription_crud import get_user_subscription, create_free_subscription
+            with get_db() as db:
+                subscription = get_user_subscription(db, user.id)
+                if not subscription:
+                    create_free_subscription(db, user.id)
+                    logger.info(f"Created Free tier subscription for new user {user.id}")
             
         if db_user.is_banned:
             logger.info(f"Пользователь {user.id} заблокирован, пропускаем обработку")

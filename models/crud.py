@@ -11,7 +11,11 @@ from config import get_settings
 
 settings = get_settings()
 from .user import User
-from .broadcast import ScheduledBroadcast  # Добавляем импорт новой модели
+from .broadcast import ScheduledBroadcast
+from .subscription import Subscription, TierEnum, SubscriptionStatus
+from .usage_tracking import UsageTracking
+from .payment import Payment, PaymentMethod, PaymentStatus
+from .promo_code import PromoCode, PromoCodeUsage
 
 
 logger = logging.getLogger(__name__)
@@ -38,9 +42,7 @@ def create_user(db: Session, user_data: dict):
         full_name=user_data.get('full_name'),
         first_seen=datetime.now(),
         last_seen=datetime.now(),
-        is_approved=False,
-        is_banned=False,
-        awaiting_verification=False
+        is_banned=False
     )
     try:
         db.add(new_user)
@@ -69,50 +71,11 @@ def update_user_last_seen(db: Session, user_id: int):
     db.commit()
 
 
-def set_awaiting_verification(db: Session, user_id: int, status: bool):
-    """Устанавливает флаг ожидания верификации."""
-    db.query(User).filter(User.user_id == user_id).update(
-        {User.awaiting_verification: status},
-        synchronize_session=False,
-    )
-    db.commit()
-
-
-def approve_user_in_db(db: Session, user_id: int) -> bool:
-    """Одобряет пользователя."""
-    updated_rows = db.query(User).filter(User.user_id == user_id).update(
-        {
-            User.is_approved: True,
-            User.awaiting_verification: False,
-            User.approval_date: datetime.now(),
-        },
-        synchronize_session=False,
-    )
-    db.commit()
-    return bool(updated_rows)
-
-
-def reject_user_in_db(db: Session, user_id: int) -> bool:
-    """Отклоняет заявку пользователя."""
-    updated_rows = db.query(User).filter(User.user_id == user_id).update(
-        {User.awaiting_verification: False},
-        synchronize_session=False,
-    )
-    db.commit()
-    return bool(updated_rows)
-
-
-def revoke_user_in_db(db: Session, user_id: int) -> bool:
-    """Отзывает одобрение пользователя."""
-    updated_rows = db.query(User).filter(User.user_id == user_id).update(
-        {
-            User.is_approved: False,
-            User.approval_date: None,
-        },
-        synchronize_session=False,
-    )
-    db.commit()
-    return bool(updated_rows)
+# Removed old approval system functions:
+# - set_awaiting_verification
+# - approve_user_in_db  
+# - reject_user_in_db
+# - revoke_user_in_db
 
 
 def ban_user_in_db(db: Session, user_id: int, ban_status: bool) -> bool:
@@ -203,16 +166,9 @@ def count_total_users(db: Session) -> int:
 
 
 
-def count_approved_users(db: Session) -> int:
-    """Подсчитывает количество одобренных пользователей."""
-    return _count_users(db, User.is_approved.is_(True))
-
-
-
-
-def count_awaiting_verification_users(db: Session) -> int:
-    """Подсчитывает количество пользователей в ожидании верификации."""
-    return _count_users(db, User.awaiting_verification.is_(True))
+# Removed old approval system stats functions:
+# - count_approved_users
+# - count_awaiting_verification_users
 
 
 
@@ -237,13 +193,7 @@ def count_active_users_on_date(db: Session, target_date: date) -> int:
 
 
 
-def count_approved_users_on_date(db: Session, target_date: date) -> int:
-    """Подсчитывает количество пользователей, одобренных в указанную дату."""
-    return _count_users(
-        db,
-        User.approval_date.isnot(None),
-        func.date(User.approval_date) == target_date,
-    )
+# Removed count_approved_users_on_date - approval system deprecated
 
 
 

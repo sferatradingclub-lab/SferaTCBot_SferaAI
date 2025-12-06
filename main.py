@@ -53,6 +53,14 @@ from handlers.tools_handlers import (
     show_tools_menu,
     tools_menu_handler,
 )
+from handlers.payment_handlers import payment_conversation
+from handlers.subscription_admin_handlers import (  # NEW
+    create_promo_command,
+    list_promo_command,
+    deactivate_promo_command,
+    subscription_stats_command,
+    grant_subscription_command,
+)
 
 
 settings = get_settings()
@@ -187,12 +195,19 @@ def main() -> Application:
     application.add_handler(CommandHandler("tools", show_tools_menu))
     application.add_handler(CommandHandler("support", show_support_menu))
 
-    # Команды только для админа
+    # Команды админа
     application.add_handler(CommandHandler("admin", show_admin_panel))
     application.add_handler(CommandHandler("approve", approve_user))
+    application.add_handler(CommandHandler("reset", reset_user))
     application.add_handler(CommandHandler("stats", show_stats))
     application.add_handler(CommandHandler("status", show_status))
-    application.add_handler(CommandHandler("reset_user", reset_user))
+    
+    # NEW: Subscription admin commands
+    application.add_handler(CommandHandler("create_promo", create_promo_command))
+    application.add_handler(CommandHandler("list_promo", list_promo_command))
+    application.add_handler(CommandHandler("deactivate_promo", deactivate_promo_command))
+    application.add_handler(CommandHandler("subscription_stats", subscription_stats_command))
+    application.add_handler(CommandHandler("grant_sub", grant_subscription_command))
 
     # Инлайн-кнопки (CallbackQueryHandler)
     application.add_handler(CallbackQueryHandler(admin_menu_handler, pattern='^admin_'))
@@ -221,6 +236,9 @@ def main() -> Application:
             show_admin_panel,
         )
     )
+    
+    # NEW: Payment conversation handler
+    application.add_handler(payment_conversation)
 
     # Все остальные сообщения пользователя (должен быть последним!)
     media_filters = (
@@ -360,6 +378,78 @@ if settings.WEBHOOK_URL:
             return Response(status_code=200)
         except Exception as error:  # noqa: BLE001
             logger.error("Ошибка обработки обновления: %s", error)
+            return Response(status_code=500)
+    
+    
+    # NEW: CryptoBot payment webhook
+    @asgi_app.post("/api/cryptobot/webhook")
+    async def cryptobot_webhook(request: Request) -> Response:
+        """Process CryptoBot payment webhooks."""
+        from services.cryptobot_payment import CryptoBotClient
+        from services.subscription_activation import activate_subscription_from_payment, send_subscription_activated_notification
+        
+        try:
+            body = await request.body()
+            signature = request.headers.get('Crypto-Pay-API-Signature', '')
+            
+            # Verify signature
+            cryptobot = CryptoBotClient()
+            if not cryptobot.verify_webhook_signature(body, signature):
+                logger.warning("Invalid CryptoBot webhook signature")
+                return Response(status_code=403)
+            
+            # Parse payload
+            payload = json.loads(body)
+            update_type = payload.get('update_type')
+            
+            if update_type == 'invoice_paid':
+                invoice_data = payload.get('payload', {})
+                invoice_id = invoice_data.get('invoice_id')
+                status = invoice_data.get('status')
+                
+                # Parse metadata from payload field
+                invoice_payload = invoice_data.get('payload', '{}')
+                try:
+                    metadata = json.loads(invoice_payload)
+                except json.JSONDecodeError:
+                    metadata = {}
+                
+                user_id = metadata.get('user_id')
+                tier = metadata.get('tier')
+                promo_code = metadata.get('promo_code')
+                
+                logger.info(f"CryptoBot webhook: invoice {invoice_id}, status={status}, user={user_id}")
+                
+                if status == 'paid' and user_id:
+                    # Update payment in DB
+                    from sqlalchemy import text
+                    with get_db() as db:
+                        db.execute(text("""
+                            UPDATE payments 
+                            SET status = 'completed' 
+                            WHERE heleket_payment_id = :invoice_id
+                        """), {"invoice_id": invoice_id})
+                        db.commit()
+                    
+                    # Activate subscription
+                    success = await activate_subscription_from_payment(
+                        user_id=int(user_id),
+                        tier=tier,
+                        payment_id=invoice_id,
+                        promo_code=promo_code
+                    )
+                    
+                    if success:
+                        # Send notification
+                        await send_subscription_activated_notification(application.bot, int(user_id))
+                        logger.info(f"Subscription activated for user {user_id} via CryptoBot")
+                    else:
+                        logger.error(f"Failed to activate subscription for user {user_id}")
+            
+            return Response(status_code=200)
+            
+        except Exception as e:
+            logger.error(f"CryptoBot webhook error: {e}", exc_info=True)
             return Response(status_code=500)
 
     if __name__ == "__main__":

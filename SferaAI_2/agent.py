@@ -4,6 +4,8 @@ import asyncio
 import json
 import logging
 import os
+import sys
+from pathlib import Path
 
 from livekit import agents
 from livekit.agents import AgentSession, function_tool, RunContext, JobContext
@@ -16,13 +18,17 @@ from summary_manager import summary_manager
 from session_registry_redis import get_session_registry
 from unified_user_state import get_unified_instance
 from auth_utils import validate_telegram_data
-from proactive_scheduler import run_proactive_scheduler
-from course_manager import course_manager
+
 from russian_numbers import replace_numbers_in_text
 from models.tool_params import SearchInternetParams, SearchVideoParams
 from duckduckgo_search import DDGS
 import aiohttp
 
+# Add parent directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+# Import subscription service - NEW
+from services.subscription_service import track_session_start, track_session_end
 
 # Import modular components
 from agent.assistant import Assistant
@@ -60,6 +66,32 @@ async def entrypoint(ctx: JobContext):
             if user_data:
                 user_id = str(user_data['id'])
                 logging.info(f"Telegram auth: {user_id}")
+    
+    # NEW: Check subscription and track session start
+    try:
+        user_id_int = int(user_id)
+        can_start, reason = await track_session_start(user_id_int)
+        
+        if not can_start:
+            # Send error to frontend
+            logging.warning(f"User {user_id} blocked from starting session: {reason}")
+            await ctx.room.local_participant.publish_data(
+                json.dumps({
+                    "error": "subscription_limit", 
+                    "message": reason
+                }).encode(),
+                topic="sfera-error"
+            )
+            # Wait a bit for message to be delivered
+            await asyncio.sleep(2)
+            return
+        
+        session_start_time = datetime.now()
+        logging.info(f"Session started for user {user_id}, tracking enabled")
+    except (ValueError, TypeError) as e:
+        logging.error(f"Failed to parse user_id {user_id}: {e}")
+        user_id_int = None
+        session_start_time = None
     
     config.memory.user_name = user_id
     
@@ -187,26 +219,6 @@ async def entrypoint(ctx: JobContext):
     # Start proactive scheduler
     scheduler_task = asyncio.create_task(run_proactive_scheduler())
     
-    # Start session
-    session = AgentSession()
-    await session.start(agent, room=ctx.room)
-    
-    # Shutdown callback
-    async def on_shutdown():
-        session_registry = get_session_registry()
-        await session_registry.unregister(user_id)
-        await shutdown_hook(agent.chat_ctx, memory_client, user_id)
-        scheduler_task.cancel()
-        try:
-            await scheduler_task
-        except asyncio.CancelledError:
-            logging.info("Scheduler cancelled")
-    
-    ctx.add_shutdown_callback(on_shutdown)
-
-
-if __name__ == "__main__":
-    agents.cli.run_app(agents.WorkerOptions(
         entrypoint_fnc=entrypoint,
         initialize_process_timeout=30  # Increase timeout for Qdrant+Redis init
     ))
