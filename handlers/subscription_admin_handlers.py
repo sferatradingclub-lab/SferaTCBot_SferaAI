@@ -88,7 +88,22 @@ async def create_promo_command(update: Update, context: ContextTypes.DEFAULT_TYP
         
         logger.info(f"Admin {user_id} created promo code: {code} ({discount}%)")
         
+        
     except ValueError:
+        await update.message.reply_text("❌ Неверный формат чисел")
+    except Exception as e:
+        logger.error(f"Error creating promo code: {e}")
+        await update.message.reply_text(f"❌ Ошибка создания промокода: {str(e)}")
+
+
+@user_bootstrap
+async def list_promo_command(update: Update, context: ContextTypes.DEFAULT_TYPE, db_user, is_new_user) -> None:
+    """List all promo codes."""
+    user_id = update.effective_user.id
+    
+    if not is_admin(user_id):
+        await update.message.reply_text("❌ Только для администраторов")
+        return
     
     with get_db() as db:
         promos = get_all_promo_codes(db)
@@ -176,7 +191,7 @@ async def subscription_stats_command(update: Update, context: ContextTypes.DEFAU
     await update.message.reply_text(message, parse_mode="HTML")
 
 
-@handle_errors
+
 @user_bootstrap
 async def grant_subscription_command(update: Update, context: ContextTypes.DEFAULT_TYPE, db_user, is_new_user) -> None:
     """
