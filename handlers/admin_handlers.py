@@ -21,6 +21,9 @@ from keyboards import get_admin_panel_keyboard
 from models.crud import (
     count_active_users_on_date,
     count_active_users_since,
+    count_approved_users,
+    count_approved_users_on_date,
+    count_awaiting_verification_users,
     count_new_users_on_date,
     count_total_users,
     get_user,
@@ -267,13 +270,13 @@ async def admin_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
             await query.answer()
 
 
+@handle_errors
 async def show_stats(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
     query=None,
     period: str = "all",
 ) -> None:
-    # Temporary stub - replace with subscription stats
     await stats_show_stats(
         update,
         context,
@@ -281,11 +284,11 @@ async def show_stats(
         period=period,
         get_db_fn=get_db,
         count_new_users_fn=count_new_users_on_date,
-        count_approved_today_fn=lambda db, date: 0,  # Stub
+        count_approved_today_fn=count_approved_users_on_date,
         count_active_today_fn=count_active_users_on_date,
-        count_awaiting_fn=lambda db: 0,  # Stub
+        count_awaiting_fn=count_awaiting_verification_users,
         count_total_fn=count_total_users,
-        count_approved_fn=lambda db: 0,  # Stub
+        count_approved_fn=count_approved_users,
         datetime_module=datetime,
     )
 
@@ -308,13 +311,13 @@ async def show_status(
     )
 
 
+@handle_errors
 async def daily_stats_job(context: ContextTypes.DEFAULT_TYPE) -> None:
-    # Temporary stub - replace with subscription stats
     await stats_daily_stats_job(
         context,
         get_db_fn=get_db,
         count_new_users_fn=count_new_users_on_date,
-        count_approved_users_fn=lambda db, date: 0,  # Stub
+        count_approved_users_fn=count_approved_users_on_date,
         datetime_module=datetime,
         timedelta_cls=timedelta,
     )
@@ -346,6 +349,9 @@ __all__ = [
     "get_user_by_username",
     "count_active_users_on_date",
     "count_active_users_since",
+    "count_approved_users",
+    "count_approved_users_on_date",
+    "count_awaiting_verification_users",
     "count_new_users_on_date",
     "count_total_users",
     "iter_broadcast_targets",

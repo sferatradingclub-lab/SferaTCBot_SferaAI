@@ -14,9 +14,6 @@ from db_session import get_db
 from models.crud import (
     count_active_users_on_date,
     count_active_users_since,
-    count_approved_users,
-    count_approved_users_on_date,
-    count_awaiting_verification_users,
     count_new_users_on_date,
     count_total_users,
 )
@@ -32,11 +29,11 @@ async def show_stats(
     *,
     get_db_fn=get_db,
     count_new_users_fn=count_new_users_on_date,
-    count_approved_today_fn=count_approved_users_on_date,
+    count_approved_today_fn=None,  # Deprecated
     count_active_today_fn=count_active_users_on_date,
-    count_awaiting_fn=count_awaiting_verification_users,
+    count_awaiting_fn=None,  # Deprecated
     count_total_fn=count_total_users,
-    count_approved_fn=count_approved_users,
+    count_approved_fn=None,  # Deprecated
     datetime_module=datetime,
 ) -> None:
     if str(update.effective_user.id) != settings.ADMIN_CHAT_ID:
@@ -47,9 +44,9 @@ async def show_stats(
     with get_db_fn() as db:
         if period == "today":
             new_today = count_new_users_fn(db, today)
-            approved_today = count_approved_today_fn(db, today)
+            approved_today = count_approved_today_fn(db, today) if count_approved_today_fn else 0
             active_today = count_active_today_fn(db, today)
-            awaiting = count_awaiting_fn(db)
+            awaiting = count_awaiting_fn(db) if count_awaiting_fn else 0
             stats_text = (
                 "📊 *Статистика за сегодня*\n\n"
                 f"➕ Новых: *{new_today}*\n"
@@ -59,8 +56,8 @@ async def show_stats(
             )
         else:
             total = count_total_fn(db)
-            approved = count_approved_fn(db)
-            awaiting = count_awaiting_fn(db)
+            approved = count_approved_fn(db) if count_approved_fn else 0
+            awaiting = count_awaiting_fn(db) if count_awaiting_fn else 0
             stats_text = (
                 "📊 *Статистика за все время*\n\n"
                 f"👤 Всего: *{total}*\n"
@@ -118,7 +115,7 @@ async def daily_stats_job(
     context: ContextTypes.DEFAULT_TYPE,
     *,
     count_new_users_fn=count_new_users_on_date,
-    count_approved_users_fn=count_approved_users_on_date,
+    count_approved_users_fn=None,  # Deprecated
     get_db_fn=get_db,
     datetime_module=datetime,
     timedelta_cls=timedelta,
@@ -127,7 +124,7 @@ async def daily_stats_job(
     safe_date = escape_markdown(yesterday.strftime("%d.%m.%Y"), version=2)
     with get_db_fn() as db:
         new_yesterday = count_new_users_fn(db, yesterday)
-        approved_yesterday = count_approved_users_fn(db, yesterday)
+        approved_yesterday = count_approved_users_fn(db, yesterday) if count_approved_users_fn else 0
     report_text = (
         "🗓️ *Отчет за {date}*\n\n➕ Новых: *{new}*\n✅ Одобрено: *{approved}*"
     ).format(
