@@ -14,7 +14,6 @@ from telegram.helpers import escape_markdown
 from config import get_settings
 from db_session import get_db
 from models.crud import (
-    approve_user_in_db,
     get_user,
     get_user_by_username,
 )
@@ -93,43 +92,15 @@ async def handle_direct_message(update: Update, context: ContextTypes.DEFAULT_TY
 
 
 async def approve_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Deprecated - use subscription system instead."""
     if str(update.effective_user.id) != settings.ADMIN_CHAT_ID:
         return
-
-    try:
-        user_id_to_approve = int(context.args[0])
-    except (IndexError, ValueError):
-        await update.message.reply_text("Ошибка! Используйте: /approve <user_id>")
-        return
-
-    with get_db() as db:
-        was_updated = approve_user_in_db(db, user_id_to_approve)
-        if was_updated:
-            logger.info(
-                "Админ (%s) одобрил %s",
-                update.effective_user.id,
-                user_id_to_approve,
-            )
-            await update.message.reply_text(
-                f"✅ Пользователь {user_id_to_approve} успешно одобрен."
-            )
-            notifier = Notifier(context.bot)
-            result = await notifier.send_message(
-                chat_id=user_id_to_approve,
-                text="🎉 Поздравляем! Ваша заявка одобрена! Теперь вам доступен полный курс.",
-                reply_markup=InlineKeyboardMarkup(
-                    [[InlineKeyboardButton("🎉 Перейти к полному курсу!", url=settings.FULL_COURSE_URL)]]
-                ),
-            )
-            if result is None:
-                logger.warning(
-                    "Не удалось отправить уведомление об одобрении пользователю %s",
-                    user_id_to_approve,
-                )
-        else:
-            await update.message.reply_text(
-                f"Ошибка! Пользователь с ID {user_id_to_approve} не найден."
-            )
+    
+    await update.message.reply_text(
+        "⚠️ Функция /approve устарела.\n\n"
+        "Используйте систему подписок:\n"
+        "/grant_sub <user_id> <days>"
+    )
 
 
 async def reset_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -157,14 +128,11 @@ async def display_user_card(
             )
         return
 
+    # Subscription-based status
     status = (
         "🚫 Заблокирован"
         if db_user.is_banned
-        else "⏳ Ожидает"
-        if db_user.awaiting_verification
-        else "✅ Одобрен"
-        if db_user.is_approved
-        else "Новый"
+        else "✅ Активен"
     )
 
     first_seen_str = (
@@ -192,14 +160,7 @@ async def display_user_card(
     allow_sensitive_actions = admin_chat_id is None or user_id != admin_chat_id
 
     action_buttons = []
-    if db_user.awaiting_verification:
-        action_buttons.append(
-            InlineKeyboardButton("✅ Одобрить", callback_data=f"user_approve_{user_id}")
-        )
-    elif db_user.is_approved:
-        action_buttons.append(
-            InlineKeyboardButton("❌ Отозвать", callback_data=f"user_revoke_{user_id}")
-        )
+    # Deprecated: approval system removed
 
     if allow_sensitive_actions:
         if db_user.is_banned:
