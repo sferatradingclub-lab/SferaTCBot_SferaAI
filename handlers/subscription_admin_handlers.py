@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from handlers.decorators import user_bootstrap, handle_errors
+from handlers.decorators import user_bootstrap
 from db_session import get_db
 from models.subscription_crud import (
     create_promo_code,
@@ -25,7 +25,8 @@ def is_admin(user_id: int) -> bool:
     return str(user_id) == settings.ADMIN_CHAT_ID
 
 
-@handle_errors
+
+
 @user_bootstrap
 async def create_promo_command(update: Update, context: ContextTypes.DEFAULT_TYPE, db_user, is_new_user) -> None:
     """
@@ -88,21 +89,6 @@ async def create_promo_command(update: Update, context: ContextTypes.DEFAULT_TYP
         logger.info(f"Admin {user_id} created promo code: {code} ({discount}%)")
         
     except ValueError:
-        await update.message.reply_text("❌ Неверный формат чисел")
-    except Exception as e:
-        logger.error(f"Error creating promo code: {e}")
-        await update.message.reply_text(f"❌ Ошибка создания промокода: {str(e)}")
-
-
-@handle_errors
-@user_bootstrap
-async def list_promo_command(update: Update, context: ContextTypes.DEFAULT_TYPE, db_user, is_new_user) -> None:
-    """List all promo codes."""
-    user_id = update.effective_user.id
-    
-    if not is_admin(user_id):
-        await update.message.reply_text("❌ Только для администраторов")
-        return
     
     with get_db() as db:
         promos = get_all_promo_codes(db)
@@ -129,7 +115,8 @@ async def list_promo_command(update: Update, context: ContextTypes.DEFAULT_TYPE,
     await update.message.reply_text("".join(message_lines), parse_mode="HTML")
 
 
-@handle_errors
+
+
 @user_bootstrap
 async def deactivate_promo_command(update: Update, context: ContextTypes.DEFAULT_TYPE, db_user, is_new_user) -> None:
     """
@@ -159,7 +146,8 @@ async def deactivate_promo_command(update: Update, context: ContextTypes.DEFAULT
         await update.message.reply_text(f"❌ Промокод <code>{code}</code> не найден", parse_mode="HTML")
 
 
-@handle_errors
+
+
 @user_bootstrap
 async def subscription_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE, db_user, is_new_user) -> None:
     """Show subscription statistics."""
