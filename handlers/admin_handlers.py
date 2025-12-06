@@ -21,9 +21,6 @@ from keyboards import get_admin_panel_keyboard
 from models.crud import (
     count_active_users_on_date,
     count_active_users_since,
-    count_approved_users,
-    count_approved_users_on_date,
-    count_awaiting_verification_users,
     count_new_users_on_date,
     count_total_users,
     get_user,
